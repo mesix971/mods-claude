@@ -1,0 +1,17 @@
+{
+  "name": "mods-claude",
+  "owner": { "name": "mesix971" },
+  "description": "Mods pour Claude Code : Clawd, le compagnon en pixel art qui vit au-dessus du prompt, et atelier, le garde-fou du dev Android.",
+  "plugins": [
+    {
+      "name": "clawd",
+      "source": "./clawd",
+      "description": "Le petit Claude orange en pixel art, à droite du bandeau : il se balade, bosse, fait la fête ou boude selon ce qui se passe dans ta session."
+    },
+    {
+      "name": "atelier",
+      "source": "./atelier",
+      "description": "Bandeau projet (APK vs tel, git, jauges de quotas) et garde-fous pour le dev Android : commandes destructrices, secrets, JBR cassé."
+    }
+  ]
+}

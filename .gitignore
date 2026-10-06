@@ -1,0 +1,17 @@
+# Secrets
+local.properties
+**/google-services.json
+*.jks
+*.keystore
+key.properties
+.env
+.env.*
+!.env.example
+
+# Généré
+/build/
+*.apk
+*.aab
+node_modules/
+# Types que le moteur Claude Code régénère à chaque chargement
+.claude-plugin/types/

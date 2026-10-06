@@ -1,0 +1,7 @@
+{
+  "name": "clawd",
+  "version": "0.3.0",
+  "description": "Le petit Claude orange à droite du bandeau, qui réagit en silence à ce qui se passe dans la session",
+  "author": { "name": "mesix971" },
+  "types": "./types/index.d.ts"
+}
