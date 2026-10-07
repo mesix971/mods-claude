@@ -31,6 +31,13 @@ const PAL: Record<string, string> = {
   V: '#4CC38A', // vert
   v: '#2E8B57', // vert foncé
   L: '#C39BFF', // lilas
+  // carton (kraft)
+  H: '#E8C792', // dessus, éclairé
+  C: '#D2A46B', // face avant
+  c: '#A97B46', // côté, à l'ombre
+  D: '#6B4522', // arêtes
+  S: '#F7E6BF', // scotch
+  s: '#EAD3A2', // scotch sur la face avant
 }
 
 // Toile : 180×96, Clawd posé au milieu, de la place au-dessus pour les
@@ -185,15 +192,16 @@ function corps(p: Pose = {}): string {
 }
 
 // Profil avec la canne (première capture), mis à l'échelle de la vue de face
-// et centré sur le même axe (x = 90) pour passer de face à profil sans saut
-function profil(pas: '' | 'vite' | 'lent' = 'vite'): string {
+// et centré sur le même axe (x = 90) pour passer de face à profil sans saut.
+// Sans la canne (ni la patte qui la tient), il a les pattes libres pour porter.
+function profil(pas: '' | 'vite' | 'lent' = 'vite', canne = true): string {
   const r = (x: number, y: number, w: number, h: number) => `<rect x="${x}" y="${y}" width="${w}" height="${h}"/>`
   const patte = (x: number) => r(x, 91, 7, 4) + r(x + 4, 95, 7, 7) + r(x, 95, 4, 3)
   return (
     `<g transform="translate(${X0 - 25.7} 7.5) scale(.857)"><g class="${pas}">` +
-    `<g fill="${PAL.G}">${r(10, 80, 3, 8)}${r(13, 84, 4, 7)}${r(16, 88, 4, 3)}${r(17, 91, 7, 4)}${r(21, 95, 7, 3)}${r(24, 98, 22, 4)}</g>` +
+    (canne ? `<g fill="${PAL.G}">${r(10, 80, 3, 8)}${r(13, 84, 4, 7)}${r(16, 88, 4, 3)}${r(17, 91, 7, 4)}${r(21, 95, 7, 3)}${r(24, 98, 22, 4)}</g>` : '') +
     `<g class="corps"><g fill="${PAL.O}">${r(49, 53, 43, 38)}${r(38, 70, 11, 14)}</g>` +
-    `<g fill="${PAL.o}">${r(92, 53, 14, 38)}${r(35, 88, 14, 10)}</g>` +
+    `<g fill="${PAL.o}">${r(92, 53, 14, 38)}${canne ? r(35, 88, 14, 10) : ''}</g>` +
     `<g fill="${PAL.K}" class="cligne">${r(49, 62, 7, 7)}${r(76, 62, 7, 7)}</g></g>` +
     `<g class="pA"><g fill="${PAL.O}">${patte(49)}${patte(85)}</g></g>` +
     `<g class="pB"><g fill="${PAL.O}">${patte(63)}</g><g fill="${PAL.o}">${patte(98)}</g></g>` +
@@ -247,7 +255,25 @@ const NUAGE = ['..GGG...', '.GGGGGG.', 'GGGGGGGG', '.GGGGGG.']
 const BONNET = ['.......W', '.....bb.', '...bbbb.', '.bbbbbb.', 'bbbbbbbb']
 const ETOILE = ['.Y.', 'YYY', '.Y.']
 const NOTE = ['..YY', '..Y.', '..Y.', 'YYY.', 'YYY.']
-const CARTON = ['nNNNNNNNNn', 'NNNNyyNNNN', 'NnNNNNNNnN', 'nNNNNNNNNn']
+// Carton de déménagement vu de trois quarts : dessus éclairé, côté à l'ombre,
+// scotch sur la fente des rabats, étiquette d'expédition (pixels de 2)
+const CARTON = [
+  '...DDDDDDSSDDDDDD',
+  '..DHHHHHSSHHHHHDD',
+  '.DHHHHHSSHHHHHDcD',
+  'DDDDDDSSDDDDDDccD',
+  'DCCCCCssCCCCCDccD',
+  'DCCCCCssCCCCCDccD',
+  'DCCCCCssCCCCCDccD',
+  'DCCCCCCCCCCCCDccD',
+  'DCCCCCCCCCCCCDccD',
+  'DCCCCCCCCWWWCDccD',
+  'DCCCCCCCCwwWCDccD',
+  'DCCCCCCCCCCCCDccD',
+  'DCCCCCCCCCCCCDcD.',
+  'DCCCCCCCCCCCCDD..',
+  'DDDDDDDDDDDDDD...',
+]
 
 // ---------------------------------------------------------- effets en CSS
 
@@ -293,6 +319,15 @@ type Segment = {
   a?: number
 }
 
+/** Un élément du décor de sa petite scène. */
+type Decor = {
+  svg: string
+  /** caché pendant [début, fin] (s), visible le reste du temps */
+  cache?: [number, number]
+  /** dessiné devant lui : il passe derrière (un carton posé à ses pieds) */
+  devant?: boolean
+}
+
 type Scene = {
   images: string[]
   duree: number
@@ -300,8 +335,8 @@ type Scene = {
   fx?: string
   /** scène chorégraphiée : il se déplace sur sa petite scène */
   choreo?: Segment[]
-  /** dessin fixe du décor, visible tout le temps sauf pendant [debut, fin] (s) */
-  decor?: { svg: string; cache: [number, number] }
+  /** décor fixe de sa petite scène (chorégraphies) */
+  decor?: Decor[]
 }
 
 const rep = (n: number, f: (i: number) => string) => Array.from({ length: n }, (_, i) => f(i))
@@ -314,12 +349,20 @@ const choreo = (segments: Segment[], extra: Partial<Scene> = {}): Scene => ({
   ...extra,
 })
 
-// Carton porté sur la tête (de profil), tenu devant, posé par terre, au-dessus de la tête
-const carton = (dx: number, dy: number) => A(CARTON, dx, dy)
-const CARTON_TETE = carton(21, -5)
-const CARTON_VENTRE = carton(21, 14)
-const CARTON_SOL = carton(21, 36)
-const CARTON_HAUT = carton(21, -12)
+// Le carton (34×30) : posé à ses pieds, tenu devant lui à deux pinces (une de
+// chaque côté, ses yeux dépassent juste au-dessus), ou de profil en marchant :
+// il lâche alors sa canne et le carton cahote à chaque pas.
+// Son dessin n'est écrit qu'une fois par SVG (voir `reutilises`), puis repris.
+const CARTON_DEF = `<g id="carton">${art(CARTON, 0, 0, 2)}</g>`
+const carton = (dx: number, dy: number) => `<use href="#carton" x="${X0 + dx}" y="${Y0 + dy}"/>`
+const CARTON_X = 19
+const CARTON_SOL = carton(CARTON_X, 18)
+const ombreSol = (dx: number, l: number) => `<rect class="ombre" x="${X0 + dx}" y="${Y0 + 48}" width="${l}" height="2"/>`
+const pinces = (dy: number) => R(X0 + CARTON_X - 3, Y0 + dy, 6, 6, PAL.O!) + R(X0 + CARTON_X + 31, Y0 + dy, 6, 6, PAL.O!)
+const porteFace = (p: Pose = {}) => corps({ g: 'devant', d: 'devant', ...p }) + carton(CARTON_X, 12 + (p.dy ?? 0)) + pinces(24 + (p.dy ?? 0))
+const porteSol = (yeux: Yeux = 'bas') => corps({ g: 'devant', d: 'devant', jambes: 'replie', dy: 3, yeux }) + CARTON_SOL + pinces(28)
+const PINCE_PROFIL = R(X0 + 10, Y0 + 22, 10, 6, PAL.O!)
+const porteProfil = () => profil('lent', false) + `<g class="cahote">${carton(-18, 6)}${PINCE_PROFIL}</g>`
 
 const SCENES: Record<ClawdAnim, () => Scene> = {
   // ------------------------------------------------------------- repos
@@ -369,23 +412,36 @@ const SCENES: Record<ClawdAnim, () => Scene> = {
       { duree: 2.5, images: [f(), f(), f({ yeux: 'ferme' }), f(), f({ yeux: 'droite' }), f()] },
     ])
   },
-  // Au travail : il fait des allers-retours en transportant des cartons
+  // Au travail : il déménage des cartons. Il soulève celui qui l'attend, le
+  // porte jusqu'à la pile en cahotant (plus lentement : c'est lourd), le pose
+  // à côté, souffle un coup, puis repart en chercher un autre.
   boulot: () => {
     const f = corps
-    return choreo(
-      [
-        { duree: 3, images: [profil('vite') + CARTON_TETE], de: 0, a: -90 },
-        {
-          duree: 0.9,
-          images: [f({ g: 'devant', d: 'devant', yeux: 'bas' }) + CARTON_VENTRE, f({ g: 'pend', d: 'pend', jambes: 'replie', dy: 3, yeux: 'bas' }) + CARTON_SOL],
-        },
-        { duree: 0.9, images: [f({ d: 'tete', yeux: 'ferme' }), f({ d: 'tete', yeux: 'ferme', dy: 1 }), f({ yeux: 'heureux' })] },
-        { duree: 3, images: [miroir(profil('vite'))], de: -90, a: 0 },
-        { duree: 1, images: [f({ g: 'pend', d: 'pend', jambes: 'replie', dy: 3, yeux: 'bas' }) + CARTON_SOL, f({ g: 'haut', d: 'haut', yeux: 'heureux' }) + CARTON_HAUT] },
+    const labas = (svg: string) => `<g transform="translate(-64 0)">${svg}</g>`
+    // de profil, il descend le carton devant lui jusqu'au sol, puis le lâche
+    const posant = (dy: number, pince = true) => profil('', false) + carton(-18, dy) + (pince ? PINCE_PROFIL : '')
+    const segments: Segment[] = [
+      { duree: 0.6, images: [f({ yeux: 'bas' }) + CARTON_SOL] },
+      { duree: 0.9, images: [porteSol(), porteFace({ jambes: 'replie', dy: 3, yeux: 'ferme' }), porteFace({ yeux: 'haut' })] },
+      { duree: 3, images: [porteProfil()], de: 0, a: -64 },
+      { duree: 1.1, images: [posant(12), posant(18), posant(18, false)] },
+      { duree: 1, images: [f({ d: 'tete', yeux: 'ferme' }), f({ d: 'tete', yeux: 'ferme', dy: 1 }), f({ yeux: 'heureux' })] },
+      { duree: 1.8, images: [miroir(profil('vite', false))], de: -64, a: 0 },
+      { duree: 0.6, images: [f({ yeux: 'heureux' })] },
+    ]
+    // le carton qu'il vient de poser, et le suivant qui l'attend chez lui :
+    // ils apparaissent quand il lâche le sien, et s'effacent quand il soulève
+    // le prochain (à chaque fois, à l'autre bout de la scène)
+    const lache = segments.slice(0, 4).reduce((t, s) => t + s.duree, 0)
+    const pose = ombreSol(-18, 34) + carton(-18, 18)
+    const chezLui = ombreSol(CARTON_X, 34) + CARTON_SOL
+    return choreo(segments, {
+      decor: [
+        // la pile déjà livrée, là-bas
+        { svg: labas(ombreSol(-56, 38) + carton(-56, 18) + carton(-52, -12)) },
+        { svg: labas(pose) + chezLui, cache: [0, lache], devant: true },
       ],
-      // la pile de cartons qu'il a déposée reste là-bas (sauf pendant qu'il en pose un)
-      { decor: { svg: `<g transform="translate(-90 0)">${CARTON_SOL}</g>`, cache: [3, 3.9] } },
-    )
+    })
   },
   coucou: () => ({
     duree: 1.6,
@@ -736,6 +792,10 @@ const CSS = `
 .vite .pA,.vite .pB{animation:pas .4s steps(1) infinite}
 .vite .pB{animation-delay:.2s}
 @keyframes pas{0%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+.lent .pA,.lent .pB{animation:pas .6s steps(1) infinite}
+.lent .pB{animation-delay:.3s}
+.cahote{animation:cahote .3s steps(1) infinite}
+@keyframes cahote{50%{transform:translateY(2px)}}
 .balade{animation:balade 8s ease-in-out infinite}
 @keyframes balade{0%,100%{transform:translateX(0)}50%{transform:translateX(-14px)}}
 .promene{transform-box:fill-box;transform-origin:center;animation:promene 9s linear infinite}
@@ -792,6 +852,9 @@ const ombre = (s: Scene) =>
 const entete = () =>
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${VUE.x} ${VUE.y} ${VUE.w} ${VUE.h}" shape-rendering="crispEdges">`
 
+/** Les dessins repris plusieurs fois (<use>) dont ce contenu a besoin. */
+const reutilises = (contenu: string) => (contenu.includes('href="#carton"') ? `<defs>${CARTON_DEF}</defs>` : '')
+
 /**
  * Keyframes d'opacité : visible pendant chaque fenêtre [début, fin] (en
  * secondes sur une boucle de T secondes), caché le reste du temps.
@@ -844,14 +907,21 @@ function choreographie(nom: string, s: Scene): { css: string; svg: string } {
     css += `.${id}{opacity:0;animation:${id} ${T}s infinite steps(1,end)}@keyframes ${id}{${fenetres(ws, T)}}`
     corps += `<g class="${id}">${img}</g>`
   }
-  let decor = ''
-  if (s.decor) {
-    const id = `v-${nom}-decor`
-    const [a, b] = s.decor.cache
-    css += `.${id}{opacity:0;animation:${id} ${T}s infinite steps(1,end)}@keyframes ${id}{${fenetres([[0, a], [b, T]], T)}}`
-    decor = `<g class="${id}">${s.decor.svg}</g>`
-  }
-  return { css, svg: `${decor}<g class="ch-${nom}">${OMBRE}${corps}</g>` }
+  let derriere = ''
+  let devant = ''
+  s.decor?.forEach((d, i) => {
+    let svg = d.svg
+    if (d.cache) {
+      const id = `v-${nom}-decor${i}`
+      const [a, b] = d.cache
+      const vu = ([[0, a], [b, T]] as [number, number][]).filter(([x, y]) => y > x)
+      css += `.${id}{opacity:0;animation:${id} ${T}s infinite steps(1,end)}@keyframes ${id}{${fenetres(vu, T)}}`
+      svg = `<g class="${id}">${svg}</g>`
+    }
+    if (d.devant) devant += svg
+    else derriere += svg
+  })
+  return { css, svg: `${derriere}<g class="ch-${nom}">${OMBRE}${corps}</g>${devant}` }
 }
 
 /** Durée naturelle d'une scène au repos : une chorégraphie entière, ou quelques cycles. */
@@ -881,8 +951,8 @@ function mini(i: number, fait: MiniFait): { css: string; svg: string } {
       ? {
           duree: 0.5,
           images: [
-            corps({ jambes: 'pasA', g: 'haut', d: 'haut', yeux: 'heureux' }) + CARTON_HAUT,
-            corps({ jambes: 'pasB', g: 'haut', d: 'haut', dy: -2 }) + carton(21, -14),
+            porteFace({ jambes: 'pasA', yeux: 'heureux' }),
+            porteFace({ jambes: 'pasB', dy: -2, yeux: 'haut' }),
           ],
         }
       : SCENES[fait]()
@@ -917,7 +987,7 @@ export function svgScene(anim: ClawdAnim, copains: readonly MiniFait[] = []): st
     const c = choreographie(anim, s)
     return (
       entete() +
-      `<style>${CSS}${THEME}${c.css}</style>${FILTRE}` +
+      `<style>${CSS}${THEME}${c.css}</style>${FILTRE}${reutilises(c.svg)}` +
       `<g filter="url(#contour)">${c.svg}${s.fx ?? ''}</g></svg>`
     )
   }
@@ -941,7 +1011,7 @@ export function svgScene(anim: ClawdAnim, copains: readonly MiniFait[] = []): st
   const minis = equipe(copains)
   return (
     entete() +
-    `<style>${css}${minis.css}</style>${FILTRE}${ombre(s)}` +
+    `<style>${css}${minis.css}</style>${FILTRE}${reutilises(minis.svg + images)}${ombre(s)}` +
     `<g filter="url(#contour)">${minis.svg}<g class="${s.cls ?? ''}">${images}</g>${s.fx ?? ''}</g></svg>`
   )
 }
@@ -951,7 +1021,7 @@ export function imagesScene(anim: ClawdAnim): string[] {
   const s = SCENES[anim]()
   return s.images.map(
     img =>
-      entete() + `<style>${THEME}</style>${FILTRE}${ombre(s)}<g filter="url(#contour)">${img}${s.fx ?? ''}</g></svg>`,
+      entete() + `<style>${THEME}</style>${FILTRE}${reutilises(img)}${ombre(s)}<g filter="url(#contour)">${img}${s.fx ?? ''}</g></svg>`,
   )
 }
 

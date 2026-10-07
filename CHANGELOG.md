@@ -9,6 +9,9 @@
 
 ## présentation
 
+- **2026-10-07** — Film et bande-annonce régénérés avec les nouveaux cartons.
+  Dans la bande-annonce, la scène est décalée vers la droite pour que la pile
+  de cartons ne touche pas le texte des jauges.
 - **2026-10-06** — Film « Adopte un Clawd » (`promo/`) :
   - nouvelle scène sur les jauges de quotas ;
   - mise en page refaite pour qu'aucun texte ne chevauche l'interface, à
@@ -18,6 +21,14 @@
 
 ## clawd
 
+- **0.3.1** — 2026-10-07 — De vrais cartons :
+  - carton de déménagement vu de trois quarts : couleur kraft, dessus
+    éclairé, côté à l'ombre, scotch sur les rabats, étiquette ;
+  - il le soulève en s'accroupissant, le tient à deux pinces devant lui et le
+    porte plus lentement (le carton cahote à chaque pas) ;
+  - il le pose à côté de la pile déjà livrée, souffle, puis repart en
+    chercher un autre ;
+  - les mini-Clawds portent leur carton devant eux.
 - **0.3.0** — 2026-10-06 — Plus vivant :
   - au repos, une vraie balade chorégraphiée sur sa petite scène : il marche,
     regarde autour, saute, s'assoit en balançant les pattes, fait coucou,

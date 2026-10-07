@@ -578,7 +578,7 @@ ${BA.map((_, i) => `.ba${i}{opacity:0;animation:ba${i} ${TOTAL}s infinite steps(
 <text class="t" x="40" y="80">Adopte un <tspan class="o">Clawd</tspan>.</text>
 <text class="s" x="42" y="112">Deux mods pour Claude Code : un compagnon en pixel art, un garde-fou.</text>
 ${BA.map(
-  (b, i) => `<g class="ba${i}"><text class="h" x="42" y="166">${b.heure}</text><text class="c" x="42" y="198">${b.texte}</text>${integre(svgScene(b.anim, b.copains ?? []), 430, 108, 510, 184)}</g>`,
+  (b, i) => `<g class="ba${i}"><text class="h" x="42" y="166">${b.heure}</text><text class="c" x="42" y="198">${b.texte}</text>${integre(svgScene(b.anim, b.copains ?? []), 452, 112, 488, 176)}</g>`,
 ).join('\n')}
 <text class="j" x="42" y="246">atelier : jauges de quotas, garde-fous, APK ↔ tel</text>
 ${integre(dessinJauges.svg, 42, 254, dessinJauges.largeur, 18)}

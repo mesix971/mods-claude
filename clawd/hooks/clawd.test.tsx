@@ -71,7 +71,13 @@ test('au repos il se balade, au travail il transporte des cartons', async ($, on
 
   const boulot = await $.ui.mount({ ...BAND(true), surface: 'desktop' })
   expect(await scene(boulot as never)).toContain('boulot')
-  expect(String((await svg(boulot as never)).source)).toContain('class="vite"')
+  const dessin = String((await svg(boulot as never)).source)
+  // chargé, il marche plus lentement et le carton cahote ; à vide, il trottine
+  expect(dessin).toContain('class="lent"')
+  expect(dessin).toContain('class="cahote"')
+  expect(dessin).toContain('class="vite"')
+  // la pile livrée et les cartons posés font partie du décor
+  expect(dessin).toContain('v-boulot-decor1')
   await boulot.unmount()
 })
 
