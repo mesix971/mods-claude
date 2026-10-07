@@ -155,9 +155,54 @@ test('jauges : le rythme de consommation alerte avant le seuil', async () => {
   expect(Math.round((calme.ecoule ?? 0) * 100)).toBe(60)
   // tout début de fenêtre : pas de fausse alerte sur des miettes
   expect(jauges(u(8), fin - 4.8 * 3600_000)[0]!.niveau).toBe('ok')
-  expect(jauges(u(95), fin)[0]!.niveau).toBe('critique')
+  expect(jauges(u(95), fin - 60_000)[0]!.niveau).toBe('critique')
+  // l'heure du reset est passée : la fenêtre repart de zéro, sans attendre l'API
+  const neuve = jauges(u(95), fin + 60_000)[0]!
+  expect(neuve.pct).toBe(0)
+  expect(neuve.niveau).toBe('ok')
+  expect(neuve.ecoule).toBe(null)
   // contexte
   expect(jauges({ fiveHour: null, sevenDay: null, contextPercent: 80 }, fin)[0]!.niveau).toBe('attention')
+})
+
+test('↻ relit les quotas, et une fenêtre déjà réinitialisée repart à 0 %', async ($, on) => {
+  // 08:00 à Paris
+  mock.clock(on as never, { now: Date.UTC(2026, 9, 7, 6, 0) })
+  mock.env(on as never, {})
+  on('session.cwd', () => ({ value: 'C:/vide' }))
+  on('fs.exists', () => ({ value: false }))
+  on('process.run', () => ({ value: { exitCode: 1, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
+  on('ui.toast', () => ({ value: undefined }))
+  on('session.measure', ($, e) => ({ changed: e.changed }))
+  on('ui.render', ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    return <Text>moteur</Text>
+  })
+  // ce que la dernière réponse de l'API a dit (le test le change plus bas)
+  let api: { kind: string; percentUsed: number; resetsAt: string }[] = []
+  on('session.usage', () => ({ value: { startedAt: 0, context: { tokens: 920_000, window: 1_000_000, percent: 92 }, rateLimits: api } }))
+  // ancienne lecture : la fenêtre de 5 h s'est terminée à 07:00, la semaine court encore
+  await $.session.measure({
+    context: { tokens: 920_000, window: 1_000_000, percent: 92 },
+    rateLimits: [
+      { kind: 'five_hour', percentUsed: 5, resetsAt: '2026-10-07T05:00:00Z' },
+      { kind: 'seven_day', percentUsed: 66, resetsAt: '2026-10-07T06:30:00Z' },
+    ],
+    changed: ['context', 'rateLimits'],
+  })
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  const alt = async () => String((await ui.find({ type: 'Svg' }))?.props?.alt ?? '')
+  expect(await alt()).toContain('5 h 0 %')
+  expect(await alt()).toContain('7 j 66 %')
+  // la dernière réponse de l'API dit 0 % partout : le bouton ↻ va la relire
+  api = [
+    { kind: 'five_hour', percentUsed: 0, resetsAt: '2026-10-07T11:00:00Z' },
+    { kind: 'seven_day', percentUsed: 0, resetsAt: '2026-10-14T06:00:00Z' },
+  ]
+  await ui.press({ key: 'refresh' })
+  expect(await alt()).toContain('7 j 0 %')
+  expect(await alt()).toContain('contexte 92 %')
+  await ui.unmount()
 })
 
 // ------------------------------------------------------------ garde-fous

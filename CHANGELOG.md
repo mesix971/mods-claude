@@ -44,6 +44,11 @@
 
 ## atelier
 
+- **0.3.1** — 2026-10-07 — Jauges à jour :
+  - le bouton ↻ relit aussi les quotas ;
+  - mise à jour automatique chaque minute et dès l'ouverture de session ;
+  - une fenêtre dont l'heure de reset est passée affiche 0 % au lieu de
+    l'ancien pourcentage.
 - **0.3.0** — 2026-10-06 — Prêt pour tout le monde :
   - adb et le JBR d'Android Studio sont détectés tout seuls (Windows,
     macOS, Linux) au lieu de chemins codés en dur ;

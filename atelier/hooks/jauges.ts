@@ -40,8 +40,15 @@ export function jauges(u: AtelierUsage, maintenant: number): Jauge[] {
   const l: Jauge[] = []
   const quota = (nom: string, w: { percent: number; resetsAt?: string } | null, fenetre: number) => {
     if (!w) return
-    const ecoule = partEcoulee(w.resetsAt, fenetre, maintenant)
     const reset = w.resetsAt ? Date.parse(w.resetsAt) : NaN
+    // l'heure du reset est passée : la fenêtre est repartie de zéro, même si
+    // aucune réponse de l'API ne l'a encore confirmé (sinon on afficherait
+    // l'ancien pourcentage jusqu'à la prochaine réponse)
+    if (!Number.isNaN(reset) && reset <= maintenant) {
+      l.push({ nom, pct: 0, ecoule: null, niveau: 'ok', reset: null })
+      return
+    }
+    const ecoule = partEcoulee(w.resetsAt, fenetre, maintenant)
     l.push({ nom, pct: w.percent, ecoule, niveau: niveauQuota(w.percent, ecoule), reset: Number.isNaN(reset) ? null : reset })
   }
   quota('5 h', u.fiveHour, CINQ_H)

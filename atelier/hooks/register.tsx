@@ -22,6 +22,8 @@ type $ = EngineInterface
 const android = atom({ plugin: 'atelier', key: 'android' } as const, null)
 const git = atom({ plugin: 'atelier', key: 'git' } as const, null)
 const usage = atom({ plugin: 'atelier', key: 'usage' } as const, null)
+/** Avance d'un cran par minute : le bandeau se redessine même sans nouvelle donnée */
+const minute = atom({ plugin: 'atelier', key: 'minute' } as const, 0)
 const busy = atom({ plugin: 'atelier', key: 'busy' } as const, null)
 const isHidden = atom({ plugin: 'atelier', key: 'isHidden' } as const, false)
 
@@ -274,11 +276,35 @@ async function refreshGit($: $, cwd: string): Promise<AtelierGit | null> {
 
 // ----------------------------------------------------------------- refresh
 
+/** Les quotas et le contexte, tels que la dernière réponse de l'API les a donnés. */
+function usageDepuis(
+  rateLimits: readonly { kind: string; percentUsed: number; resetsAt?: string }[],
+  contextPercent: number | null,
+): AtelierUsage {
+  const pick = (kind: string) => {
+    const w = rateLimits.find(r => r.kind === kind)
+    return w ? { percent: w.percentUsed, resetsAt: w.resetsAt } : null
+  }
+  return { fiveHour: pick('five_hour'), sevenDay: pick('seven_day'), contextPercent }
+}
+
+/** Relit les quotas à la demande (gratuit) : bouton ↻, chaque minute, ouverture de session. */
+async function rafraichirUsage($: $) {
+  try {
+    const u = await $.session.usage()
+    if (u.rateLimits.length === 0 && u.context.percent === undefined) return
+    await update($, usage, () => usageDepuis(u.rateLimits, u.context.percent ?? null))
+  } catch {
+    // pas encore de réponse de l'API dans cette session : rien à afficher
+  }
+}
+
 let refreshing: Promise<void> | null = null
 
 function refresh($: $) {
   // un seul rafraîchissement à la fois : les suivants attendent le même
   refreshing ??= (async () => {
+    await rafraichirUsage($)
     try {
       const cwd = slash(await $.session.cwd())
       const [a, g] = await Promise.all([refreshAndroid($, cwd), refreshGit($, cwd)])
@@ -510,6 +536,13 @@ export const register: Register = on => {
     await $.command.register({ name: 'atelier', description: 'Affiche/masque le bandeau atelier et le rafraîchit' })
     const ran = await next(e)
     void refresh($)
+    // chaque minute : quotas relus, et le bandeau redessiné (une fenêtre qui
+    // vient de se réinitialiser repasse à 0 %, le trait du temps avance)
+    $.clock.every(60_000, () => {
+      void rafraichirUsage($)
+        .then(() => update($, minute, n => n + 1))
+        .catch(() => {})
+    })
     return ran
   })
 
@@ -572,15 +605,7 @@ export const register: Register = on => {
   })
 
   on('session.measure', async ($, e, next) => {
-    const pick = (kind: string) => {
-      const w = e.rateLimits.find(r => r.kind === kind)
-      return w ? { percent: w.percentUsed, resetsAt: w.resetsAt } : null
-    }
-    const u: AtelierUsage = {
-      fiveHour: pick('five_hour'),
-      sevenDay: pick('seven_day'),
-      contextPercent: e.context.percent ?? null,
-    }
+    const u = usageDepuis(e.rateLimits, e.context.percent ?? null)
     await update($, usage, () => u)
 
     for (const [label, w] of [['5 h', u.fiveHour], ['7 j', u.sevenDay]] as const) {
@@ -604,6 +629,7 @@ export const register: Register = on => {
     const a = await read($, android)
     const g = await read($, git)
     const u = await read($, usage)
+    await read($, minute) // redessin chaque minute
     const enCours = await read($, busy)
     if (!a && !g && !u) return next(e)
     // on compose au lieu de remplacer : ce que dessinent les autres mods

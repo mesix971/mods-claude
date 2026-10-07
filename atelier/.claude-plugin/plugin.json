@@ -1,6 +1,6 @@
 {
   "name": "atelier",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Bandeau projet (APK vs tel, git, jauges de quotas) et garde-fous pour le dev Android avec Claude Code",
   "author": { "name": "mesix971" },
   "types":"./types/index.d.ts"

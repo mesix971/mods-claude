@@ -38,6 +38,8 @@ declare module 'claude-code' {
       android: AtelierAndroid | null
       git: AtelierGit | null
       usage: AtelierUsage | null
+      /** Avance d'un cran par minute, pour redessiner le bandeau */
+      minute: number
       busy: string | null
       isHidden: boolean
     }
