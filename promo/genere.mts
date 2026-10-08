@@ -121,6 +121,12 @@ const scenes: Scene[] = [
     scene: sprite('chef', 'gros', '', ['marche', 'cherche', 'ecrit']),
   },
   {
+    duree: 6, heure: '17:46', chapitre: 'Compactage',
+    titre: 'La conversation déborde&nbsp;?', sous: 'Il tasse la pile en sautant dessus. Elle rebondit. Il insiste.',
+    ui: `<div class="term"><p>/compact</p><p class="ok p2" style="--x:3.4s">✓ Conversation compactée</p></div>`,
+    scene: sprite('tasse', 'gros p1', '--x:3.4s') + sprite('paquet', 'gros p2', '--x:3.4s'),
+  },
+  {
     duree: 7, heure: '18:05', chapitre: 'Pause',
     titre: 'Tu fais une pause&nbsp;?', sous: 'Lui aussi.',
     scene: `<div class="mosaique">${(
@@ -406,6 +412,7 @@ a { color: var(--orange-texte); }
         <li>${Object.keys(EMOJI).length} scènes animées image par image, sans un mot.</li>
         <li>Il se balade sur sa petite scène, boit son café, pêche, jongle, joue de la guitare quand tu fais une pause.</li>
         <li>Pendant que ça bosse, il déménage ses cartons, et une bulle au-dessus de sa tête montre ce que fait Claude : loupe, crayon…</li>
+        <li>Sa couleur suit le modèle : pistache pour Haiku, abricot pour Sonnet, terracotta pour Opus, corail pour Fable.</li>
         <li>Confettis quand ça passe, petit nuage quand ça casse.</li>
         <li>Un mini-Clawd par sous-agent, et lui en chef de chantier.</li>
         <li>Fond transparent, contour et ombre qui suivent ton thème clair ou sombre.</li>

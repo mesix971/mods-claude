@@ -9,6 +9,7 @@
 
 ## présentation
 
+- **2026-10-08** — Film : nouveau chapitre « Compactage ».
 - **2026-10-08** — Film et bande-annonce régénérés : la boucle des trois
   cartons, et la bulle au-dessus de Clawd dans la scène du boulot. Textes du
   film et du README mis à jour.
@@ -24,6 +25,19 @@
 
 ## clawd
 
+- **0.5.0** — 2026-10-08 — De nouvelles réactions :
+  - compactage : quand la conversation se compacte (`/compact` ou
+    automatiquement), il saute sur une pile de feuilles pour la tasser, et
+    elle rebondit à chaque fois, tant que ça dure. Ensuite, il montre le
+    petit paquet ficelé qu'il en a fait, et pourra de nouveau avoir le vertige ;
+  - permission : quand Claude attend ta réponse, il lève la patte et tape du
+    pied, un petit cadenas à côté, jusqu'à ce que l'action soit faite. Les
+    commandes qui durent (build, tests…) gardent leur scène ;
+  - question : il brandit une pancarte « ? » tant que tu n'as pas répondu ;
+  - installation de dépendances (`flutter pub get`, `npm install`,
+    `pip install`…) : il déballe un carton et lance ce qu'il y trouve ;
+  - sa couleur suit le modèle : Haiku en vert pistache, Sonnet en abricot
+    pâle, Opus dans le terracotta d'origine, Fable en corail vif.
 - **0.4.1** — 2026-10-08 — On voit tout :
   - bulles plus grosses (une fois et demie, toute la hauteur libre au-dessus
     de sa tête) et bordées de gris, pour bien les voir aussi sur un thème

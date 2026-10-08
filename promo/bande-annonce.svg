@@ -56,6 +56,16 @@
 @keyframes confetti{0%{transform:translateY(0) rotate(0);opacity:1}100%{transform:translateY(80px) rotate(200deg);opacity:0}}
 .scintille{animation:scintille .8s steps(2) infinite}
 @keyframes scintille{50%{opacity:.2}}
+.vole-g,.vole-d{transform-box:fill-box;transform-origin:center;opacity:0}
+.vole-g{animation:vole-g 1.5s ease-out infinite}
+.vole-d{animation:vole-d 1.5s ease-out infinite}
+@keyframes vole-g{0%{opacity:1;transform:translate(0,0) rotate(0)}55%{opacity:0;transform:translate(-20px,-16px) rotate(-200deg)}100%{opacity:0}}
+@keyframes vole-d{0%{opacity:1;transform:translate(0,0) rotate(0)}55%{opacity:0;transform:translate(20px,-14px) rotate(200deg)}100%{opacity:0}}
+.lance-d,.lance-h{transform-box:fill-box;transform-origin:center;opacity:0}
+.lance-d{animation:lance-d 1.6s ease-out infinite}
+.lance-h{animation:lance-h 1.6s ease-out infinite}
+@keyframes lance-d{0%{opacity:1;transform:translate(0,0) rotate(0)}30%{transform:translate(16px,-24px) rotate(120deg)}60%{opacity:1;transform:translate(30px,-4px) rotate(260deg)}61%,100%{opacity:0}}
+@keyframes lance-h{0%{opacity:1;transform:translate(0,0) rotate(0)}30%{transform:translate(-6px,-28px) rotate(-90deg)}60%{opacity:1;transform:translate(-18px,-6px) rotate(-200deg)}61%,100%{opacity:0}}
 
 .ombre{fill:#000;fill-opacity:.38}
 .contour{flood-color:#2a1810;flood-opacity:.55}
@@ -98,6 +108,16 @@
 @keyframes confetti{0%{transform:translateY(0) rotate(0);opacity:1}100%{transform:translateY(80px) rotate(200deg);opacity:0}}
 .scintille{animation:scintille .8s steps(2) infinite}
 @keyframes scintille{50%{opacity:.2}}
+.vole-g,.vole-d{transform-box:fill-box;transform-origin:center;opacity:0}
+.vole-g{animation:vole-g 1.5s ease-out infinite}
+.vole-d{animation:vole-d 1.5s ease-out infinite}
+@keyframes vole-g{0%{opacity:1;transform:translate(0,0) rotate(0)}55%{opacity:0;transform:translate(-20px,-16px) rotate(-200deg)}100%{opacity:0}}
+@keyframes vole-d{0%{opacity:1;transform:translate(0,0) rotate(0)}55%{opacity:0;transform:translate(20px,-14px) rotate(200deg)}100%{opacity:0}}
+.lance-d,.lance-h{transform-box:fill-box;transform-origin:center;opacity:0}
+.lance-d{animation:lance-d 1.6s ease-out infinite}
+.lance-h{animation:lance-h 1.6s ease-out infinite}
+@keyframes lance-d{0%{opacity:1;transform:translate(0,0) rotate(0)}30%{transform:translate(16px,-24px) rotate(120deg)}60%{opacity:1;transform:translate(30px,-4px) rotate(260deg)}61%,100%{opacity:0}}
+@keyframes lance-h{0%{opacity:1;transform:translate(0,0) rotate(0)}30%{transform:translate(-6px,-28px) rotate(-90deg)}60%{opacity:1;transform:translate(-18px,-6px) rotate(-200deg)}61%,100%{opacity:0}}
 
 .ombre{fill:#000;fill-opacity:.38}
 .contour{flood-color:#2a1810;flood-opacity:.55}
@@ -140,6 +160,16 @@
 @keyframes confetti{0%{transform:translateY(0) rotate(0);opacity:1}100%{transform:translateY(80px) rotate(200deg);opacity:0}}
 .scintille{animation:scintille .8s steps(2) infinite}
 @keyframes scintille{50%{opacity:.2}}
+.vole-g,.vole-d{transform-box:fill-box;transform-origin:center;opacity:0}
+.vole-g{animation:vole-g 1.5s ease-out infinite}
+.vole-d{animation:vole-d 1.5s ease-out infinite}
+@keyframes vole-g{0%{opacity:1;transform:translate(0,0) rotate(0)}55%{opacity:0;transform:translate(-20px,-16px) rotate(-200deg)}100%{opacity:0}}
+@keyframes vole-d{0%{opacity:1;transform:translate(0,0) rotate(0)}55%{opacity:0;transform:translate(20px,-14px) rotate(200deg)}100%{opacity:0}}
+.lance-d,.lance-h{transform-box:fill-box;transform-origin:center;opacity:0}
+.lance-d{animation:lance-d 1.6s ease-out infinite}
+.lance-h{animation:lance-h 1.6s ease-out infinite}
+@keyframes lance-d{0%{opacity:1;transform:translate(0,0) rotate(0)}30%{transform:translate(16px,-24px) rotate(120deg)}60%{opacity:1;transform:translate(30px,-4px) rotate(260deg)}61%,100%{opacity:0}}
+@keyframes lance-h{0%{opacity:1;transform:translate(0,0) rotate(0)}30%{transform:translate(-6px,-28px) rotate(-90deg)}60%{opacity:1;transform:translate(-18px,-6px) rotate(-200deg)}61%,100%{opacity:0}}
 
 .ombre{fill:#000;fill-opacity:.38}
 .contour{flood-color:#2a1810;flood-opacity:.55}
@@ -182,6 +212,16 @@
 @keyframes confetti{0%{transform:translateY(0) rotate(0);opacity:1}100%{transform:translateY(80px) rotate(200deg);opacity:0}}
 .scintille{animation:scintille .8s steps(2) infinite}
 @keyframes scintille{50%{opacity:.2}}
+.vole-g,.vole-d{transform-box:fill-box;transform-origin:center;opacity:0}
+.vole-g{animation:vole-g 1.5s ease-out infinite}
+.vole-d{animation:vole-d 1.5s ease-out infinite}
+@keyframes vole-g{0%{opacity:1;transform:translate(0,0) rotate(0)}55%{opacity:0;transform:translate(-20px,-16px) rotate(-200deg)}100%{opacity:0}}
+@keyframes vole-d{0%{opacity:1;transform:translate(0,0) rotate(0)}55%{opacity:0;transform:translate(20px,-14px) rotate(200deg)}100%{opacity:0}}
+.lance-d,.lance-h{transform-box:fill-box;transform-origin:center;opacity:0}
+.lance-d{animation:lance-d 1.6s ease-out infinite}
+.lance-h{animation:lance-h 1.6s ease-out infinite}
+@keyframes lance-d{0%{opacity:1;transform:translate(0,0) rotate(0)}30%{transform:translate(16px,-24px) rotate(120deg)}60%{opacity:1;transform:translate(30px,-4px) rotate(260deg)}61%,100%{opacity:0}}
+@keyframes lance-h{0%{opacity:1;transform:translate(0,0) rotate(0)}30%{transform:translate(-6px,-28px) rotate(-90deg)}60%{opacity:1;transform:translate(-18px,-6px) rotate(-200deg)}61%,100%{opacity:0}}
 
 .ombre{fill:#000;fill-opacity:.38}
 .contour{flood-color:#2a1810;flood-opacity:.55}
@@ -224,6 +264,16 @@
 @keyframes confetti{0%{transform:translateY(0) rotate(0);opacity:1}100%{transform:translateY(80px) rotate(200deg);opacity:0}}
 .scintille{animation:scintille .8s steps(2) infinite}
 @keyframes scintille{50%{opacity:.2}}
+.vole-g,.vole-d{transform-box:fill-box;transform-origin:center;opacity:0}
+.vole-g{animation:vole-g 1.5s ease-out infinite}
+.vole-d{animation:vole-d 1.5s ease-out infinite}
+@keyframes vole-g{0%{opacity:1;transform:translate(0,0) rotate(0)}55%{opacity:0;transform:translate(-20px,-16px) rotate(-200deg)}100%{opacity:0}}
+@keyframes vole-d{0%{opacity:1;transform:translate(0,0) rotate(0)}55%{opacity:0;transform:translate(20px,-14px) rotate(200deg)}100%{opacity:0}}
+.lance-d,.lance-h{transform-box:fill-box;transform-origin:center;opacity:0}
+.lance-d{animation:lance-d 1.6s ease-out infinite}
+.lance-h{animation:lance-h 1.6s ease-out infinite}
+@keyframes lance-d{0%{opacity:1;transform:translate(0,0) rotate(0)}30%{transform:translate(16px,-24px) rotate(120deg)}60%{opacity:1;transform:translate(30px,-4px) rotate(260deg)}61%,100%{opacity:0}}
+@keyframes lance-h{0%{opacity:1;transform:translate(0,0) rotate(0)}30%{transform:translate(-6px,-28px) rotate(-90deg)}60%{opacity:1;transform:translate(-18px,-6px) rotate(-200deg)}61%,100%{opacity:0}}
 
 .ombre{fill:#000;fill-opacity:.38}
 .contour{flood-color:#2a1810;flood-opacity:.55}
@@ -266,6 +316,16 @@
 @keyframes confetti{0%{transform:translateY(0) rotate(0);opacity:1}100%{transform:translateY(80px) rotate(200deg);opacity:0}}
 .scintille{animation:scintille .8s steps(2) infinite}
 @keyframes scintille{50%{opacity:.2}}
+.vole-g,.vole-d{transform-box:fill-box;transform-origin:center;opacity:0}
+.vole-g{animation:vole-g 1.5s ease-out infinite}
+.vole-d{animation:vole-d 1.5s ease-out infinite}
+@keyframes vole-g{0%{opacity:1;transform:translate(0,0) rotate(0)}55%{opacity:0;transform:translate(-20px,-16px) rotate(-200deg)}100%{opacity:0}}
+@keyframes vole-d{0%{opacity:1;transform:translate(0,0) rotate(0)}55%{opacity:0;transform:translate(20px,-14px) rotate(200deg)}100%{opacity:0}}
+.lance-d,.lance-h{transform-box:fill-box;transform-origin:center;opacity:0}
+.lance-d{animation:lance-d 1.6s ease-out infinite}
+.lance-h{animation:lance-h 1.6s ease-out infinite}
+@keyframes lance-d{0%{opacity:1;transform:translate(0,0) rotate(0)}30%{transform:translate(16px,-24px) rotate(120deg)}60%{opacity:1;transform:translate(30px,-4px) rotate(260deg)}61%,100%{opacity:0}}
+@keyframes lance-h{0%{opacity:1;transform:translate(0,0) rotate(0)}30%{transform:translate(-6px,-28px) rotate(-90deg)}60%{opacity:1;transform:translate(-18px,-6px) rotate(-200deg)}61%,100%{opacity:0}}
 
 .ombre{fill:#000;fill-opacity:.38}
 .contour{flood-color:#2a1810;flood-opacity:.55}
@@ -308,6 +368,16 @@
 @keyframes confetti{0%{transform:translateY(0) rotate(0);opacity:1}100%{transform:translateY(80px) rotate(200deg);opacity:0}}
 .scintille{animation:scintille .8s steps(2) infinite}
 @keyframes scintille{50%{opacity:.2}}
+.vole-g,.vole-d{transform-box:fill-box;transform-origin:center;opacity:0}
+.vole-g{animation:vole-g 1.5s ease-out infinite}
+.vole-d{animation:vole-d 1.5s ease-out infinite}
+@keyframes vole-g{0%{opacity:1;transform:translate(0,0) rotate(0)}55%{opacity:0;transform:translate(-20px,-16px) rotate(-200deg)}100%{opacity:0}}
+@keyframes vole-d{0%{opacity:1;transform:translate(0,0) rotate(0)}55%{opacity:0;transform:translate(20px,-14px) rotate(200deg)}100%{opacity:0}}
+.lance-d,.lance-h{transform-box:fill-box;transform-origin:center;opacity:0}
+.lance-d{animation:lance-d 1.6s ease-out infinite}
+.lance-h{animation:lance-h 1.6s ease-out infinite}
+@keyframes lance-d{0%{opacity:1;transform:translate(0,0) rotate(0)}30%{transform:translate(16px,-24px) rotate(120deg)}60%{opacity:1;transform:translate(30px,-4px) rotate(260deg)}61%,100%{opacity:0}}
+@keyframes lance-h{0%{opacity:1;transform:translate(0,0) rotate(0)}30%{transform:translate(-6px,-28px) rotate(-90deg)}60%{opacity:1;transform:translate(-18px,-6px) rotate(-200deg)}61%,100%{opacity:0}}
 
 .ombre{fill:#000;fill-opacity:.38}
 .contour{flood-color:#2a1810;flood-opacity:.55}

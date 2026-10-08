@@ -12,7 +12,7 @@ const BAND = (isWorking = false) =>
 
 type On = Parameters<Parameters<typeof test>[1] extends infer F ? (F extends ($: never, on: infer O) => unknown ? (o: O) => void : never) : never>[0]
 
-function moteur(on: On, sortieBash: { isError: boolean; text: string } = { isError: false, text: 'ok' }) {
+function moteur(on: On, sortieBash: { isError: boolean; text: string; attente?: number } = { isError: false, text: 'ok' }) {
   const stockage = new Map<string, unknown>()
   const horloge = mock.clock(on as never)
   on('ui.render', ($, e) => {
@@ -25,11 +25,12 @@ function moteur(on: On, sortieBash: { isError: boolean; text: string } = { isErr
     return { value: undefined }
   })
   on('prompt.submit', ($, e) => ({ text: e.text }))
-  on('tool.call', { tool: 'Bash' }, () =>
-    sortieBash.isError
+  on('tool.call', { tool: 'Bash' }, async () => {
+    if (sortieBash.attente) await horloge.sleep(sortieBash.attente)
+    return sortieBash.isError
       ? { result: { stdout: '', stderr: 'FAILED', interrupted: false }, isError: true as const, text: sortieBash.text }
-      : { result: { stdout: sortieBash.text, stderr: '', interrupted: false }, text: sortieBash.text },
-  )
+      : { result: { stdout: sortieBash.text, stderr: '', interrupted: false }, text: sortieBash.text }
+  })
   return { stockage, horloge }
 }
 
@@ -196,5 +197,108 @@ test('sous-agents : un mini-Clawd chacun, Clawd chef de chantier, ils repartent'
   // terminal : un petit compteur
   ui = await $.ui.mount({ ...BAND(true), surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: /▪/ })).toBeDefined()
+  await ui.unmount()
+})
+
+// une conversation d'un message, et son résumé
+const CONVERSATION = [{ role: 'user' as const, text: 'corrige le minuteur', toolUses: [] }]
+const RESUME = [{ role: 'user' as const, text: 'Résumé : le minuteur est corrigé.', toolUses: [] }]
+
+test('compactage : il tasse la pile de feuilles tant que ça dure, puis montre le paquet', async ($, on) => {
+  const { horloge } = moteur(on)
+  // le compactage du moteur prend 10 s
+  on('session.compact', async () => {
+    await horloge.sleep(10_000)
+    return { messages: RESUME }
+  })
+  const fini = $.session.compact({ trigger: 'manual', messages: CONVERSATION })
+  await horloge.settle()
+  let ui = await $.ui.mount({ ...BAND(true), surface: 'desktop' })
+  expect(await scene(ui as never)).toContain('tasse')
+  await ui.unmount()
+  await horloge.advance(10_000)
+  await fini
+  ui = await $.ui.mount({ ...BAND(true), surface: 'desktop' })
+  expect(await scene(ui as never)).toContain('paquet')
+  await ui.unmount()
+})
+
+test('un compactage calculé d’avance ne le dérange pas', async ($, on) => {
+  moteur(on)
+  on('session.compact', () => ({ messages: RESUME }))
+  await $.session.compact({ trigger: 'precompute', messages: CONVERSATION })
+  const ui = await $.ui.mount({ ...BAND(true), surface: 'desktop' })
+  expect(await scene(ui as never)).toContain('boulot')
+  await ui.unmount()
+})
+
+test('il attend ta permission, patte levée, jusqu’à ce que l’action soit faite', async ($, on) => {
+  moteur(on)
+  on('classic.PermissionRequest', () => ({}))
+  await $.classic.PermissionRequest({ tool_name: 'Bash', tool_input: { command: 'rm -rf build' } } as never)
+  let ui = await $.ui.mount({ ...BAND(true), surface: 'desktop' })
+  expect(await scene(ui as never)).toContain('attend')
+  await ui.unmount()
+  // l'action autorisée se termine : il baisse la patte
+  await $.tool.call({ tool: 'Bash', command: 'ls' })
+  ui = await $.ui.mount({ ...BAND(true), surface: 'desktop' })
+  expect(await scene(ui as never)).not.toContain('attend')
+  await ui.unmount()
+})
+
+test('une permission déjà tranchée par une règle : il n’attend rien', async ($, on) => {
+  moteur(on)
+  on('classic.PermissionRequest', () => ({ decision: { behavior: 'allow' as const } }))
+  await $.classic.PermissionRequest({ tool_name: 'Edit', tool_input: {} } as never)
+  const ui = await $.ui.mount({ ...BAND(true), surface: 'desktop' })
+  expect(await scene(ui as never)).toContain('boulot')
+  await ui.unmount()
+})
+
+test('une question pour toi : pancarte « ? » tant que tu n’as pas répondu', async ($, on) => {
+  const { horloge } = moteur(on)
+  on('tool.call', { tool: 'AskUserQuestion' }, async () => {
+    await horloge.sleep(5000)
+    return { result: {}, text: 'Oui' } as never
+  })
+  const reponse = $.tool.call({ tool: 'AskUserQuestion', questions: [] } as never)
+  await horloge.settle()
+  let ui = await $.ui.mount({ ...BAND(true), surface: 'desktop' })
+  expect(await scene(ui as never)).toContain('question')
+  await ui.unmount()
+  await horloge.advance(5000)
+  await reponse
+  ui = await $.ui.mount({ ...BAND(true), surface: 'desktop' })
+  expect(await scene(ui as never)).not.toContain('question')
+  await ui.unmount()
+})
+
+test('des dépendances s’installent : il déballe un carton', async ($, on) => {
+  const { horloge } = moteur(on, { isError: false, text: 'Got dependencies!', attente: 5000 })
+  const fini = $.tool.call({ tool: 'Bash', command: 'flutter pub get' })
+  await horloge.settle()
+  let ui = await $.ui.mount({ ...BAND(true), surface: 'desktop' })
+  expect(await scene(ui as never)).toContain('deballe')
+  await ui.unmount()
+  await horloge.advance(5000)
+  await fini
+  ui = await $.ui.mount({ ...BAND(true), surface: 'desktop' })
+  expect(await scene(ui as never)).toContain('boulot')
+  await ui.unmount()
+})
+
+test('sa couleur suit le modèle : Haiku pistache, puis Fable corail', async ($, on) => {
+  moteur(on)
+  on('session.model', () => ({ value: 'claude-haiku-5-5' }))
+  on('classic.PostModelSwitch', () => ({}))
+  let ui = await $.ui.mount({ ...BAND(), surface: 'desktop' })
+  let dessin = String((await svg(ui as never)).source)
+  expect(dessin).toContain('#9CB86A')
+  expect(dessin).not.toContain('#D97758')
+  await ui.unmount()
+  await $.classic.PostModelSwitch({ from_model: 'claude-haiku-5-5', to_model: 'claude-fable-5-1', requested_model: 'fable', source: 'command' } as never)
+  ui = await $.ui.mount({ ...BAND(), surface: 'desktop' })
+  dessin = String((await svg(ui as never)).source)
+  expect(dessin).toContain('#E2604A')
   await ui.unmount()
 })

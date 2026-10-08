@@ -68,6 +68,13 @@ suivent ton thème clair ou sombre. Pas un mot : tout passe par ses gestes.
 - **Il réagit à la session.** Il saute quand tu envoies un message. Pendant
   un build, il tape au marteau ; pendant les tests, il coche une liste. Pour
   un push, il lance un avion en papier ; pour une install, il tient le tel.
+  Quand la conversation se compacte, il saute sur la pile de feuilles pour
+  la tasser (elle rebondit…), puis te montre le petit paquet ficelé. Quand
+  Claude attend ta permission, il lève la patte et tape du pied ; quand il te
+  pose une question, il brandit une pancarte « ? » ; quand des dépendances
+  s'installent, il déballe un carton.
+- **Sa couleur suit le modèle** : Haiku en vert pistache, Sonnet en abricot
+  pâle, Opus dans le terracotta d'origine, Fable en corail vif.
 - **Les sous-agents** arrivent chacun en mini-Clawd, qui mime ce que fait son
   agent (carton, loupe, écriture, marteau). Clawd dirige le chantier,
   planchette en main, et leur fait coucou quand ils repartent.

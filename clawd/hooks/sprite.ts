@@ -88,7 +88,7 @@ type Yeux =
   | 'normal' | 'ferme' | 'heureux' | 'mi' | 'grand' | 'croix' | 'coeur'
   | 'etoile' | 'gauche' | 'droite' | 'haut' | 'bas' | 'clin'
 type Bras = 'bas' | 'haut' | 'ciel' | 'tendu' | 'devant' | 'pend' | 'tete' | 'cache'
-type Jambes = 'normal' | 'pasA' | 'pasB' | 'replie' | 'assis' | 'assis2' | 'ecarte'
+type Jambes = 'normal' | 'pasA' | 'pasB' | 'replie' | 'assis' | 'assis2' | 'ecarte' | 'tape'
 type Pose = {
   yeux?: Yeux
   g?: Bras
@@ -158,6 +158,8 @@ function corps(p: Pose = {}): string {
     // assis en balançant les pattes : une sur deux remonte
     if (j === 'assis2') h = i % 2 ? 4 : 2
     if ((j === 'pasA' && i % 2 === 0) || (j === 'pasB' && i % 2 === 1)) h = 8
+    // il tape du pied : la patte de droite seulement
+    if (j === 'tape' && i === 3) h = 8
     s += R(x0 + lx, y0 + 36, 6, h, O)
   })
 
@@ -255,6 +257,70 @@ const NUAGE = ['..GGG...', '.GGGGGG.', 'GGGGGGGG', '.GGGGGG.']
 const BONNET = ['.......W', '.....bb.', '...bbbb.', '.bbbbbb.', 'bbbbbbbb']
 const ETOILE = ['.Y.', 'YYY', '.Y.']
 const NOTE = ['..YY', '..Y.', '..Y.', 'YYY.', 'YYY.']
+// Compactage : la conversation est une pile de feuilles en vrac, vue de côté
+// (`n` feuilles, une ligne blanche et une grise chacune, décalées), qu'il
+// écrase en sautant dessus, et dont il fait un petit paquet ficelé.
+function feuilles(n: number): string[] {
+  const decale = [3, 0, 4, 1, 5, 2, 3]
+  return Array.from({ length: n }, (_, i) => {
+    const o = decale[i % decale.length]!
+    const l = 24 - (i % 3)
+    return ['.'.repeat(o) + 'W'.repeat(l), '.'.repeat(o) + 'w'.repeat(l)]
+  }).flat()
+}
+const PILE_ECRASEE = ['.WWWWWWWWWWWWWWWWWWWWWWWWWW.', 'wwwwwwwwwwwwwwwwwwwwwwwwwwww', 'WWWWWWWWWWWWWWWWWWWWWWWWWWWW', '.wwwwwwwwwwwwwwwwwwwwwwwwww.']
+const PAQUET = [
+  '.....RR.RR.....',
+  '......RRR......',
+  'WWWWWWWRWWWWWWW',
+  'wwwwwwwRwwwwwww',
+  'WWWWWWWRWWWWWWW',
+  'RRRRRRRRRRRRRRR',
+  'WWWWWWWRWWWWWWW',
+  'wwwwwwwRwwwwwww',
+]
+const FEUILLE = ['WWW', 'www']
+// Une question pour toi : il brandit une pancarte « ? »
+const PANCARTE = [
+  'GGGGGGGGGGGGG',
+  'GWWWWWWWWWWWG',
+  'GWWWbbbbbWWWG',
+  'GWWbbWWWbbWWG',
+  'GWWWWWWWbbWWG',
+  'GWWWWWbbbWWWG',
+  'GWWWWWbbWWWWG',
+  'GWWWWWWWWWWWG',
+  'GWWWWWbbWWWWG',
+  'GWWWWWWWWWWWG',
+  'GGGGGGGGGGGGG',
+  '......NN.....',
+  '......NN.....',
+  '......NN.....',
+]
+// Il attend ta permission : un petit cadenas à côté de sa patte levée
+const CADENAS = ['.GGG.', 'G...G', 'G...G', 'YYYYY', 'YYKYY', 'YYYYY']
+// Des dépendances s'installent : il déballe un carton ouvert (rabats levés,
+// sans scotch), d'où sortent des petits paquets de toutes les couleurs
+const CARTON_OUVERT = [
+  '..HH.........HH..',
+  '..HH.........HH..',
+  '..HHDDDDDDDDDHHDD',
+  '..DnnnnnnnnnnnnDD',
+  '.DnnnnnnnnnnnnDcD',
+  'DDDDDDDDDDDDDDccD',
+  'DCCCCCCCCCCCCDccD',
+  'DCCCCCCCCCCCCDccD',
+  'DCCCCCCCCCCCCDccD',
+  'DCCCCCCCCCCCCDccD',
+  'DCCCCCCCCCCCCDccD',
+  'DCCCCCCCCWWWCDccD',
+  'DCCCCCCCCwwWCDccD',
+  'DCCCCCCCCCCCCDccD',
+  'DCCCCCCCCCCCCDcD.',
+  'DCCCCCCCCCCCCDD..',
+  'DDDDDDDDDDDDDD...',
+]
+const PETIT_PAQUET = (c: string) => [c + c, c + c]
 // Carton de déménagement vu de trois quarts : dessus éclairé, côté à l'ombre,
 // scotch sur la fente des rabats, étiquette d'expédition (pixels de 2)
 const CARTON = [
@@ -301,6 +367,17 @@ const effets = {
     [[56, -26, 0], [70, -20, 0.7], [62, -30, 1.4]]
       .map(([x, y, d]) => `<g class="monte" style="animation-delay:${d}s">${A(BULLE, x!, y!, 2)}</g>`)
       .join(''),
+  // au moment où il retombe sur la pile (0,5 s dans sa boucle de 1,5 s)
+  feuilles: () =>
+    ([[4, 30, 'g'], [62, 30, 'd'], [26, 28, 'g'], [44, 29, 'd']] as const)
+      .map(([x, y, sens], i) => `<g class="vole-${sens}" style="animation-delay:${(0.5 + i * 0.04).toFixed(2)}s">${A(FEUILLE, x, y, 2)}</g>`)
+      .join(''),
+  // ce qu'il sort du carton et lance par-dessus son épaule (0,8 s dans sa boucle)
+  deballe: () =>
+    ([['d', 'B', 0.8], ['h', 'V', 0.86], ['d', 'R', 0.92]] as const)
+      .map(([sens, c, d]) => `<g class="lance-${sens}" style="animation-delay:${d}s">${A(PETIT_PAQUET(c), 34, 14, 2)}</g>`)
+      .join(''),
+  cadenas: () => `<g class="scintille">${A(CADENAS, 76, -22, 2)}</g>`,
 }
 
 // --------------------------------------------------------------- scènes
@@ -352,6 +429,8 @@ const choreo = (segments: Segment[], extra: Partial<Scene> = {}): Scene => ({
 // dépassent juste au-dessus) ; de profil, il lâche sa canne pour le porter.
 // Son dessin n'est écrit qu'une fois par SVG (voir `reutilises`), puis repris.
 const CARTON_DEF = `<g id="carton">${art(CARTON, 0, 0, 2)}</g>`
+const CARTON_OUVERT_DEF = `<g id="carton-ouvert">${art(CARTON_OUVERT, 0, 0, 2)}</g>`
+const cartonOuvert = (dx: number, dy: number) => `<use href="#carton-ouvert" x="${X0 + dx}" y="${Y0 + dy}"/>`
 const carton = (dx: number, dy: number) => `<use href="#carton" x="${X0 + dx}" y="${Y0 + dy}"/>`
 const CARTON_X = 19
 const ombreSol = (dx: number, l: number) => `<rect class="ombre" x="${X0 + dx}" y="${Y0 + 48}" width="${l}" height="2"/>`
@@ -900,6 +979,81 @@ const SCENES: Record<ClawdAnim, () => Scene> = {
       corps({ yeux: 'ferme', g: 'bas' }) + A(BONNET, 10, -4),
     ],
   }),
+  // La conversation se compacte : il saute sur la pile de feuilles pour la
+  // tasser… et elle rebondit à chaque fois. Il insiste tant que ça dure.
+  tasse: () => {
+    // ses pattes sur le dessus de la pile : n feuilles font 4n de haut
+    const pile = (n: number) => A(feuilles(n), 8, 48 - 4 * n, 2)
+    const ecrasee = A(PILE_ECRASEE, 8, 40, 2)
+    const tasse = corps({ dy: -2, jambes: 'replie', g: 'tendu', d: 'tendu', yeux: 'ferme', bouche: 'o' }) + ecrasee
+    return {
+      duree: 1.5,
+      fx: effets.feuilles(),
+      images: [
+        corps({ dy: -24, g: 'haut', d: 'haut', yeux: 'bas' }) + pile(6),
+        corps({ dy: -32, jambes: 'replie', g: 'haut', d: 'haut', yeux: 'heureux' }) + pile(6),
+        corps({ dy: -12, g: 'tendu', d: 'tendu', yeux: 'ferme' }) + pile(3),
+        tasse,
+        tasse,
+        corps({ dy: -20, g: 'haut', d: 'haut', yeux: 'grand' }) + pile(5),
+      ],
+    }
+  },
+  // … et quand c'est fini : tout tient dans un petit paquet ficelé. Fier de lui.
+  paquet: () => {
+    const paquet = A(PAQUET, 21, 32, 2)
+    return {
+      duree: 2.4,
+      fx: effets.etincelles(),
+      images: [
+        corps({ yeux: 'bas' }) + paquet,
+        corps({ g: 'haut', d: 'haut', yeux: 'heureux' }) + paquet,
+        corps({ g: 'haut', d: 'ciel', yeux: 'clin' }) + paquet,
+        corps({ d: 'tete', yeux: 'heureux' }) + paquet,
+      ],
+    }
+  },
+  // Claude attend ta permission : il se tourne vers toi, lève la patte et
+  // tape du pied, un petit cadenas à côté, jusqu'à ce que tu répondes
+  attend: () => ({
+    duree: 1.2,
+    fx: effets.cadenas(),
+    images: [
+      corps({ d: 'ciel' }),
+      corps({ d: 'ciel', jambes: 'tape' }),
+      corps({ d: 'haut' }),
+      corps({ d: 'ciel', jambes: 'tape', yeux: 'ferme' }),
+    ],
+  }),
+  // Une question pour toi : il brandit sa pancarte « ? » et attend ta réponse
+  question: () => {
+    const pancarte = (dy: number) => A(PANCARTE, 53, -28 + dy, 2)
+    return {
+      duree: 2,
+      images: [
+        corps({ d: 'haut' }) + pancarte(0),
+        corps({ d: 'haut', dy: 1 }) + pancarte(1),
+        corps({ d: 'haut', yeux: 'ferme' }) + pancarte(0),
+        corps({ d: 'haut', yeux: 'heureux' }) + pancarte(0),
+      ],
+    }
+  },
+  // Des dépendances s'installent : il fouille un carton ouvert et lance ce
+  // qu'il trouve par-dessus son épaule
+  deballe: () => {
+    const boite = cartonOuvert(CARTON_X, 14)
+    const fouille = corps({ g: 'devant', d: 'devant', yeux: 'bas', dy: 2 }) + boite + pinces(22)
+    return {
+      duree: 1.6,
+      fx: effets.deballe(),
+      images: [
+        fouille,
+        corps({ g: 'devant', d: 'haut', yeux: 'bas' }) + boite + A(PETIT_PAQUET('B'), 62, -4, 2),
+        corps({ g: 'devant', d: 'ciel', yeux: 'heureux' }) + boite,
+        corps({ g: 'devant', d: 'devant', yeux: 'droite' }) + boite + pinces(24),
+      ],
+    }
+  },
 }
 
 // ------------------------------------------------------------------- CSS
@@ -938,6 +1092,16 @@ const CSS = `
 @keyframes confetti{0%{transform:translateY(0) rotate(0);opacity:1}100%{transform:translateY(80px) rotate(200deg);opacity:0}}
 .scintille{animation:scintille .8s steps(2) infinite}
 @keyframes scintille{50%{opacity:.2}}
+.vole-g,.vole-d{transform-box:fill-box;transform-origin:center;opacity:0}
+.vole-g{animation:vole-g 1.5s ease-out infinite}
+.vole-d{animation:vole-d 1.5s ease-out infinite}
+@keyframes vole-g{0%{opacity:1;transform:translate(0,0) rotate(0)}55%{opacity:0;transform:translate(-20px,-16px) rotate(-200deg)}100%{opacity:0}}
+@keyframes vole-d{0%{opacity:1;transform:translate(0,0) rotate(0)}55%{opacity:0;transform:translate(20px,-14px) rotate(200deg)}100%{opacity:0}}
+.lance-d,.lance-h{transform-box:fill-box;transform-origin:center;opacity:0}
+.lance-d{animation:lance-d 1.6s ease-out infinite}
+.lance-h{animation:lance-h 1.6s ease-out infinite}
+@keyframes lance-d{0%{opacity:1;transform:translate(0,0) rotate(0)}30%{transform:translate(16px,-24px) rotate(120deg)}60%{opacity:1;transform:translate(30px,-4px) rotate(260deg)}61%,100%{opacity:0}}
+@keyframes lance-h{0%{opacity:1;transform:translate(0,0) rotate(0)}30%{transform:translate(-6px,-28px) rotate(-90deg)}60%{opacity:1;transform:translate(-18px,-6px) rotate(-200deg)}61%,100%{opacity:0}}
 `
 
 // ----------------------------------------------------------- intégration
@@ -949,6 +1113,29 @@ const CSS = `
  */
 const VUE = { x: -70, y: 8, w: 244, h: 88 }
 export const TAILLE = { largeur: 116, hauteur: 42 }
+
+/**
+ * Sa couleur selon le modèle qui tourne, du plus frais au plus vif : Haiku en
+ * vert pistache, Sonnet en abricot pâle, Opus dans le terracotta d'origine,
+ * Fable en corail vif. Ni ocre (il se fondrait dans ses cartons kraft), ni
+ * rouge franc (celui des alertes).
+ */
+export const TEINTES = {
+  haiku: { O: '#9CB86A', o: '#84A052' },
+  sonnet: { O: '#E9A27F', o: '#CF8A68' },
+  opus: { O: '#D97758', o: '#BF694F' },
+  fable: { O: '#E2604A', o: '#C44D39' },
+} as const
+export type Teinte = (typeof TEINTES)[keyof typeof TEINTES]
+
+/** La teinte d'un modèle d'après son id (`claude-haiku-5-5`…) ; celle d'Opus sinon. */
+export function teinte(modele: string | null | undefined): Teinte {
+  const famille = /haiku|sonnet|opus|fable/i.exec(modele ?? '')?.[0]?.toLowerCase() as keyof typeof TEINTES | undefined
+  return famille ? TEINTES[famille] : TEINTES.opus
+}
+
+/** Le même dessin, avec Clawd dans une autre teinte (son corps et son ombré). */
+const recolore = (svg: string, c: Teinte) => (c === TEINTES.opus ? svg : svg.replaceAll(PAL.O!, c.O).replaceAll(PAL.o!, c.o))
 
 // Contour fin comme sur le sprite d'origine, et ombre au sol, réglés selon le
 // thème (prefers-color-scheme) : discrets en sombre, plus marqués en clair
@@ -978,7 +1165,7 @@ const entete = () =>
 
 /** Les dessins repris plusieurs fois (<use>) dont ce contenu a besoin. */
 const reutilises = (contenu: string) => {
-  const defs = Object.entries({ carton: CARTON_DEF, profil: PROFIL_DEF })
+  const defs = Object.entries({ carton: CARTON_DEF, 'carton-ouvert': CARTON_OUVERT_DEF, profil: PROFIL_DEF })
     .filter(([id]) => contenu.includes(`href="#${id}"`))
     .map(([, def]) => def)
   return defs.length ? `<defs>${defs.join('')}</defs>` : ''
@@ -1124,7 +1311,11 @@ function equipe(copains: readonly MiniFait[]): { css: string; svg: string } {
  * mini-Clawds des sous-agents en cours à côté de lui. Une chorégraphie
  * reprend à `deja` secondes : le temps qu'elle a déjà joué.
  */
-export function svgScene(anim: ClawdAnim, copains: readonly MiniFait[] = [], deja = 0): string {
+export function svgScene(anim: ClawdAnim, copains: readonly MiniFait[] = [], deja = 0, couleur: Teinte = TEINTES.opus): string {
+  return recolore(dessineScene(anim, copains, deja), couleur)
+}
+
+function dessineScene(anim: ClawdAnim, copains: readonly MiniFait[], deja: number): string {
   const s = SCENES[anim]()
   if (s.choreo) {
     const c = choreographie(anim, s, deja)
@@ -1236,7 +1427,8 @@ export const EMOJI: Record<ClawdAnim, string> = {
   papillon: '🦋', promenade: '🚶', pirouette: '🌀', gratte: '🤔', meditation: '🧘', cookie: '🍪',
   balade: '', boulot: '📦', ecoute: '^^', marche: '…', ecrit: '✎', cherche: '🔍', build: '🔨', tests: '📋', push: '🚀',
   tel: '📱', copain: '👾', chef: '📋', fete: '🎉', triste: '🌧', alerte: '❗', surpris: '❓', dodo: '💤',
-  fatigue: '😓', vertige: '😵', coeur: '♥', nuit: '🌙',
+  fatigue: '😓', vertige: '😵', coeur: '♥', nuit: '🌙', tasse: '🗜', paquet: '✨', attend: '✋',
+  question: '❔', deballe: '📥',
 }
 
 /** Les activités tirées au sort quand rien ne se passe. */

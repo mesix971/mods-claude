@@ -43,6 +43,13 @@ export type ClawdAnim =
   | 'dodo'
   | 'fatigue'
   | 'vertige'
+  // quand la conversation se compacte : il tasse la pile, puis montre le paquet
+  | 'tasse'
+  | 'paquet'
+  // Claude attend ta permission, te pose une question, installe des dépendances
+  | 'attend'
+  | 'question'
+  | 'deballe'
   | 'coeur'
   | 'nuit'
 
@@ -66,6 +73,8 @@ declare module 'claude-code' {
       caresses: number
       /** Sous-agents en cours (un mini-Clawd chacun) */
       copains: ClawdCopain[]
+      /** Le modèle qui tourne (sa couleur en dépend), null tant qu'on ne l'a pas lu */
+      modele: string | null
     }
   }
 }

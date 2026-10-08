@@ -15,7 +15,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, ToolCallResult } from 'claude-code'
 
 import type { ClawdAnim, ClawdCopain } from '../types'
-import { ACTIVITES, CLAWD_TEXTE, EMOJI, EN_BULLE, TAILLE, dureeScene, svgBulle, svgScene } from './sprite'
+import { ACTIVITES, CLAWD_TEXTE, EMOJI, EN_BULLE, TAILLE, dureeScene, svgBulle, svgScene, teinte } from './sprite'
 import type { Bulle } from './sprite'
 
 type $ = EngineInterface
@@ -26,6 +26,7 @@ const dort = atom({ plugin: 'clawd', key: 'dort' } as const, false)
 const fatigue = atom({ plugin: 'clawd', key: 'fatigue' } as const, false)
 const caresses = atom({ plugin: 'clawd', key: 'caresses' } as const, 0)
 const copains = atom({ plugin: 'clawd', key: 'copains' } as const, [])
+const modele = atom({ plugin: 'clawd', key: 'modele' } as const, null)
 
 const SOMMEIL_MS = 10 * 60_000
 const LONG_TOUR_MS = 2 * 60_000
@@ -59,6 +60,7 @@ async function scene($: $, anim: ClawdAnim, ms = 4000) {
   $.clock.after(ms, () => {
     void update($, passage, p => (p?.id === id ? null : p)).catch(() => {})
   })
+  return id
 }
 
 async function reveil($: $) {
@@ -121,17 +123,28 @@ async function occupe($: $, prochaine: { anim: ClawdAnim } | null) {
 
 const BUILD = /gradlew\S*\s+.*\b(assemble|bundle|build)\w*|flutter\s+build|release\.ps1/i
 const TESTS = /gradlew\S*\s+.*\btest\w*|flutter\s+test|pytest|npm\s+(run\s+)?test|plugin\s+test/i
+const DEPENDANCES =
+  /\b(npm|pnpm|bun)\s+(install|i|ci|add)\b|\byarn(\s+(install|add)\b|\s*$)|\b(flutter|dart)\s+pub\s+(get|add|upgrade)\b|\bpip3?\s+install\b|\buv\s+(sync|add|pip\s+install)\b|\bpoetry\s+(install|add)\b/i
+/** Les scènes des commandes qui durent : une demande de permission ne les remplace pas */
+const LONGUES: readonly ClawdAnim[] = ['build', 'tests', 'deballe', 'push', 'tel']
 
 async function avantShell($: $, cmd: string) {
   if (BUILD.test(cmd)) return scene($, 'build', LONG)
   if (TESTS.test(cmd)) return scene($, 'tests', LONG)
   if (/\bgit\s+push\b/.test(cmd)) return scene($, 'push', 60_000)
   if (/\badb\b.*\binstall\b/.test(cmd)) return scene($, 'tel', 3 * 60_000)
+  if (DEPENDANCES.test(cmd)) return scene($, 'deballe', LONG)
 }
 
 async function finEnCours($: $) {
   const p = await read($, passage)
-  if (p && ['build', 'tests', 'push', 'tel'].includes(p.anim)) await update($, passage, () => null)
+  if (p && LONGUES.includes(p.anim)) await update($, passage, () => null)
+}
+
+/** L'action qu'il attendait est faite (ou refusée) : il baisse la patte. */
+async function finAttente($: $) {
+  const p = await read($, passage)
+  if (p?.anim === 'attend') await update($, passage, q => (q?.id === p.id ? null : q))
 }
 
 async function apresShell($: $, cmd: string, r: ToolCallResult) {
@@ -178,6 +191,9 @@ export const register: Register = on => {
     boulotLu = false
     boulotDepuis = null
     await relitBoulot($)
+    // sa couleur suit le modèle qui tourne
+    const m = await $.session.model().catch(() => null)
+    if (m) await update($, modele, () => m)
     const total = await $.store.get('caresses')
     await update($, caresses, () => (typeof total === 'number' ? total : 0))
     await scene($, 'coucou', 4000)
@@ -260,8 +276,69 @@ export const register: Register = on => {
     else {
       const p = await read($, passage)
       // ne pas écraser une fête de build/push qui vient d'arriver
-      if (!p || p.anim === 'cherche' || p.anim === 'ecrit') await scene($, 'ecoute', 2500)
+      if (!p || ['cherche', 'ecrit', 'attend', 'question'].includes(p.anim)) await scene($, 'ecoute', 2500)
     }
+    return ran
+  })
+
+  // La conversation se compacte : il saute sur la pile de feuilles pour la
+  // tasser tant que ça dure, puis montre le petit paquet qu'il en a fait
+  on('session.compact', async ($, e, next) => {
+    // ni les calculs faits d'avance, ni les compactages des sous-agents
+    if (e.trigger === 'precompute' || e.agentId !== undefined) return next(e)
+    await reveil($)
+    const id = await scene($, 'tasse', LONG)
+    try {
+      const r = await next(e)
+      if (r.skip === undefined) {
+        // le contexte est redescendu : il pourra de nouveau avoir le vertige
+        vertigeMontre = false
+        await scene($, 'paquet', 6000)
+      } else await update($, passage, p => (p?.id === id ? null : p))
+      return r
+    } catch (err) {
+      await scene($, 'triste', 6000)
+      throw err
+    }
+  })
+
+  // Une action se termine (autorisée ou refusée) : il n'attend plus ta réponse
+  on('tool.call', async ($, e, next) => {
+    try {
+      return await next(e)
+    } finally {
+      await finAttente($).catch(() => {})
+    }
+  })
+
+  // Claude attend ta permission : il se tourne vers toi, lève la patte et tape
+  // du pied. Une commande qui dure (build, tests…) garde sa scène : le mod ne
+  // sait pas quand tu réponds, il resterait la patte levée pendant tout le build.
+  on('classic.PermissionRequest', async ($, e, next) => {
+    const r = await next(e)
+    // une règle a déjà tranché : pas de boîte de dialogue, rien à attendre
+    if (r.decision !== undefined || r.block !== undefined) return r
+    await reveil($)
+    const p = await read($, passage)
+    if (!p || !LONGUES.includes(p.anim)) await scene($, 'attend', LONG)
+    return r
+  })
+
+  // Claude te pose une question : il brandit sa pancarte « ? » jusqu'à ta réponse
+  on('tool.call', { tool: 'AskUserQuestion' }, async ($, e, next) => {
+    await reveil($)
+    const id = await scene($, 'question', LONG)
+    try {
+      return await next(e)
+    } finally {
+      await update($, passage, p => (p?.id === id ? null : p)).catch(() => {})
+    }
+  })
+
+  // Le modèle change : sa couleur avec
+  on('classic.PostModelSwitch', async ($, e, next) => {
+    const ran = await next(e)
+    await update($, modele, () => e.to_model)
     return ran
   })
 
@@ -296,6 +373,7 @@ export const register: Register = on => {
     const bulle: Bulle | null =
       p && (fond === 'boulot' || fond === 'chef') && (EN_BULLE as readonly ClawdAnim[]).includes(p.anim) ? (p.anim as Bulle) : null
     const anim: ClawdAnim = bulle ? fond : (p?.anim ?? fond)
+    const couleur = teinte((await read($, modele)) ?? (await $.session.model().catch(() => null)))
     await relitBoulot($)
     const maintenant = await $.clock.now()
     const deja = reprise(anim, maintenant)
@@ -335,7 +413,7 @@ export const register: Register = on => {
           </Box>
           <Box key="clawd" flexShrink={0}>
             <Svg
-              source={svgScene(anim, faits, anim === 'boulot' ? deja : 0)}
+              source={svgScene(anim, faits, anim === 'boulot' ? deja : 0, couleur)}
               alt={`Clawd : ${anim}${faits.length ? ` (+${faits.length} copains)` : ''}`}
               width={TAILLE.largeur}
               height={TAILLE.hauteur}
@@ -364,11 +442,11 @@ export const register: Register = on => {
           {dessous}
         </Box>
         <Box key="clawd" flexShrink={0} flexDirection="row" alignItems="center">
-          {faits.length > 0 && <Text color="#D97758">{`${'▪'.repeat(Math.min(faits.length, 5))} `}</Text>}
+          {faits.length > 0 && <Text color={couleur.O}>{`${'▪'.repeat(Math.min(faits.length, 5))} `}</Text>}
           {EMOJI[bulle ?? anim] !== '' && <Text dimColor>{`${EMOJI[bulle ?? anim]} `}</Text>}
           <Box flexDirection="column">
             {CLAWD_TEXTE.map(l => (
-              <Text color="#D97758">{l}</Text>
+              <Text color={couleur.O}>{l}</Text>
             ))}
           </Box>
           {boutons}
