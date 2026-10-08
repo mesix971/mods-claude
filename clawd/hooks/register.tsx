@@ -37,9 +37,16 @@ let derniereScene: ClawdAnim | null = null
 let finActivite = 0
 let vertigeMontre = false
 let couchePropose = false
-/** Temps déjà joué de son déménagement : après une grosse réaction, il reprend là où il en était */
+/**
+ * Temps déjà joué de son déménagement (ms). Après une grosse réaction, un
+ * rechargement du mod ou une nouvelle session, il reprend là où il en était :
+ * il finit toujours ses allers-retours au lieu de recommencer par l'aller.
+ */
 let boulotJoue = 0
 let boulotDepuis: number | null = null
+/** Relu une fois par chargement ; noté au plus toutes les 5 s pendant qu'il bosse */
+let boulotLu = false
+let boulotNote = 0
 /** La bulle affichée, et où en était sa scène quand elle est apparue (s) */
 let bulleVue: { id: number; deja: number } | null = null
 
@@ -87,6 +94,22 @@ function reprise(anim: ClawdAnim, maintenant: number) {
 
 /** Où en est son déménagement à cet instant (s), pour qu'une bulle le suive. */
 const boulotEnCours = (maintenant: number) => (boulotJoue + (boulotDepuis === null ? 0 : maintenant - boulotDepuis)) / 1000
+
+/** Relit où en était son déménagement (une fois par chargement du mod). */
+async function relitBoulot($: $) {
+  if (boulotLu) return
+  boulotLu = true
+  const sauve = await $.store.get('boulot')
+  if (typeof sauve === 'number' && sauve >= 0) boulotJoue = boulotNote = sauve
+}
+
+/** Note où il en est : dès qu'il s'arrête, sinon toutes les 5 s au plus. */
+function noteBoulot($: $, maintenant: number) {
+  const progres = Math.round(boulotEnCours(maintenant) * 1000)
+  if (progres === boulotNote || (boulotDepuis !== null && progres - boulotNote < 5000)) return
+  boulotNote = progres
+  void $.store.set('boulot', progres).catch(() => {})
+}
 
 /** Lance une activité (ou la balade si `null`) pour sa durée naturelle. */
 async function occupe($: $, prochaine: { anim: ClawdAnim } | null) {
@@ -151,8 +174,10 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const ran = await next(e)
     derniereActivite = await $.clock.now()
-    boulotJoue = 0
+    // son déménagement reprend où il l'avait laissé à la dernière session
+    boulotLu = false
     boulotDepuis = null
+    await relitBoulot($)
     const total = await $.store.get('caresses')
     await update($, caresses, () => (typeof total === 'number' ? total : 0))
     await scene($, 'coucou', 4000)
@@ -271,8 +296,10 @@ export const register: Register = on => {
     const bulle: Bulle | null =
       p && (fond === 'boulot' || fond === 'chef') && (EN_BULLE as readonly ClawdAnim[]).includes(p.anim) ? (p.anim as Bulle) : null
     const anim: ClawdAnim = bulle ? fond : (p?.anim ?? fond)
+    await relitBoulot($)
     const maintenant = await $.clock.now()
     const deja = reprise(anim, maintenant)
+    noteBoulot($, maintenant)
     // la bulle part d'où en est sa scène quand elle apparaît, puis la suit
     if (!bulle || !p) bulleVue = null
     else if (bulleVue?.id !== p.id) bulleVue = { id: p.id, deja: boulotEnCours(maintenant) }

@@ -501,12 +501,12 @@ const SCENES: Record<ClawdAnim, () => Scene> = {
   boulot: () => {
     const f = corps
     // vitesse de marche, chargé ou à vide (unités de la toile par seconde)
-    const CHARGE = 25
-    const VIDE = 40
-    // un demi-tour : une image toutes les 0,12 s
+    const CHARGE = 32
+    const VIDE = 52
+    // un demi-tour : une image toutes les 0,1 s
     const demiTour = (de: Orientation, vers: Orientation, avecCarton: boolean): Etape => {
       const images = tourne(de, vers, avecCarton)
-      return { duree: 0.12 * images.length, images }
+      return { duree: 0.1 * images.length, images }
     }
     /** Un voyage : il prend le carton, le porte, le pose, puis repart à vide vers `ensuite` */
     const voyage = (de: Place, vers: Place, ensuite?: Place): Etape[] => {
@@ -516,7 +516,7 @@ const SCENES: Record<ClawdAnim, () => Scene> = {
       const x1 = devantPlace(vers)
       const etapes: Etape[] = [
         {
-          duree: 0.8,
+          duree: 0.7,
           images: p.haut
             ? [hisse(p.cote, -12), hisse(p.cote, -6), hisse(p.cote, 0), tient(p.cote, 6)]
             : [tient(p.cote, 18), tient(p.cote, 14), tient(p.cote, 10), tient(p.cote, 6)],
@@ -527,7 +527,7 @@ const SCENES: Record<ClawdAnim, () => Scene> = {
         demiTour(p.cote, q.cote, true),
         { duree: Math.abs(x1 - x0) / CHARGE, images: [charge(q.cote)], de: x0, a: x1 },
         {
-          duree: 1,
+          duree: 0.8,
           images: q.haut
             ? [hisse(q.cote, 0), hisse(q.cote, -6), hisse(q.cote, -12), tient(q.cote, -12, false)]
             : [tient(q.cote, 10), tient(q.cote, 14), tient(q.cote, 18), tient(q.cote, 18, false)],
@@ -543,7 +543,7 @@ const SCENES: Record<ClawdAnim, () => Scene> = {
     }
     const ouf = (cote: Cote): Etape[] => [
       demiTour(cote, 'f', false),
-      { duree: 1.4, images: [f({ d: 'tete', yeux: 'ferme' }), f({ d: 'tete', yeux: 'ferme', dy: 1 }), f({ yeux: 'heureux' })] },
+      { duree: 1.2, images: [f({ d: 'tete', yeux: 'ferme' }), f({ d: 'tete', yeux: 'ferme', dy: 1 }), f({ yeux: 'heureux' })] },
       demiTour('f', cote, false),
     ]
     const etapes: Etape[] = [
@@ -1163,20 +1163,21 @@ export function svgScene(anim: ClawdAnim, copains: readonly MiniFait[] = [], dej
 
 // Au travail, les petites réactions s'affichent dans une bulle de pensée
 // au-dessus de sa tête : il continue sa scène au lieu de s'arrêter.
+// En pixels de 3, elle prend toute la hauteur libre au-dessus de sa tête
+// (45×36), avec un liseré gris pour se détacher aussi sur un thème clair.
 const PENSEE = [
-  '.WWWWWWWWWWWWW.',
-  'WWWWWWWWWWWWWWW',
-  'WWWWWWWWWWWWWWW',
-  'WWWWWWWWWWWWWWW',
-  'WWWWWWWWWWWWWWW',
-  'WWWWWWWWWWWWWWW',
-  'WWWWWWWWWWWWWWW',
-  'WWWWWWWWWWWWWWW',
-  'WWWWWWWWWWWWWWW',
-  '.WWWWWWWWWWWWW.',
-  '...WW..........',
-  '...WW..........',
-  '.W.............',
+  '..GGGGGGGGGGG..',
+  '.GWWWWWWWWWWWG.',
+  'GWWWWWWWWWWWWWG',
+  'GWWWWWWWWWWWWWG',
+  'GWWWWWWWWWWWWWG',
+  'GWWWWWWWWWWWWWG',
+  'GWWWWWWWWWWWWWG',
+  'GWWWWWWWWWWWWWG',
+  '.GWWWWWWWWWWWG.',
+  '..GGGGGGGGGGG..',
+  '...GWG.........',
+  '....G..........',
 ]
 const ICONES = {
   // loupe (Claude cherche), crayon (il écrit), ?! (une commande a échoué),
@@ -1195,7 +1196,7 @@ export const EN_BULLE = Object.keys(ICONES) as Bulle[]
 const CSS_BULLE =
   `.pop{transform-box:fill-box;transform-origin:20% 100%;animation:pop .25s ease-out}` +
   `@keyframes pop{0%{transform:scale(.3);opacity:0}100%{transform:scale(1);opacity:1}}` +
-  `.plane{animation:plane 2.4s ease-in-out infinite}@keyframes plane{50%{transform:translateY(-2px)}}`
+  `.plane{animation:plane 2.4s ease-in-out infinite}@keyframes plane{50%{transform:translateY(-1.5px)}}`
 
 /**
  * La bulle, dans un SVG à part posé sur sa scène (même cadrage) : elle suit
@@ -1205,9 +1206,10 @@ const CSS_BULLE =
 export function svgBulle(anim: ClawdAnim, bulle: Bulle, deja = 0): string {
   const s = SCENES[anim]()
   const icone = ICONES[bulle]
-  const w = icone[0]!.length * 2
-  const h = icone.length * 2
-  const dessin = `<g class="pop"><g class="plane">${A(PENSEE, 30, -32, 2)}${A(icone, 30 + (30 - w) / 2, -32 + (20 - h) / 2, 2)}</g></g>`
+  // centrée sur sa tête, la pointe juste au-dessus ; l'icône au milieu du blanc
+  const w = icone[0]!.length * 3
+  const h = icone.length * 3
+  const dessin = `<g class="pop"><g class="plane">${A(PENSEE, 14, -36, 3)}${A(icone, 14 + Math.round((45 - w) / 2), -33 + Math.round((24 - h) / 2), 3)}</g></g>`
   const nom = `${anim}-bulle`
   return (
     entete() +

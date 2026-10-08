@@ -99,7 +99,7 @@ test('au travail, une petite réaction est une bulle : il ne lâche pas ses cart
 })
 
 test('après une grosse réaction, il reprend ses cartons là où il les avait laissés', async ($, on) => {
-  const { horloge } = moteur(on, { isError: false, text: 'BUILD SUCCESSFUL' })
+  const { stockage, horloge } = moteur(on, { isError: false, text: 'BUILD SUCCESSFUL' })
   // il déménage 5 s…
   let ui = await $.ui.mount({ ...BAND(true), surface: 'desktop' })
   expect(String((await svg(ui as never)).source)).not.toContain('animation-delay:-')
@@ -110,12 +110,27 @@ test('après une grosse réaction, il reprend ses cartons là où il les avait l
   ui = await $.ui.mount({ ...BAND(true), surface: 'desktop' })
   expect(await scene(ui as never)).toContain('fete')
   expect(await ui.find({ key: 'bulle' })).toBeUndefined()
+  // (où il en est est noté, pour la prochaine session)
+  expect(stockage.get('boulot')).toBe(5000)
   await ui.unmount()
   // … puis il reprend à 5 s, pas au début (sinon ses cartons sauteraient)
   await horloge.advance(7000)
   ui = await $.ui.mount({ ...BAND(true), surface: 'desktop' })
   expect(await scene(ui as never)).toContain('boulot')
   expect(String((await svg(ui as never)).source)).toContain('animation-delay:-5.000s')
+  await ui.unmount()
+})
+
+test('une nouvelle session reprend son déménagement où il en était', async ($, on) => {
+  const { stockage, horloge } = moteur(on)
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  // la dernière fois, il en était à 20 s : sur le retour
+  stockage.set('boulot', 20_000)
+  await $.session.start({ cwd: '/projet', surface: 'desktop', isInteractive: true })
+  await horloge.advance(5000)
+  const ui = await $.ui.mount({ ...BAND(true), surface: 'desktop' })
+  expect(await scene(ui as never)).toContain('boulot')
+  expect(String((await svg(ui as never)).source)).toContain('animation-delay:-20.000s')
   await ui.unmount()
 })
 

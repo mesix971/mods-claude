@@ -24,6 +24,15 @@
 
 ## clawd
 
+- **0.4.1** — 2026-10-08 — On voit tout :
+  - bulles plus grosses (une fois et demie, toute la hauteur libre au-dessus
+    de sa tête) et bordées de gris, pour bien les voir aussi sur un thème
+    clair ;
+  - il retient où en est son déménagement, même après un rechargement du
+    mod ou dans une nouvelle session : il finit ses allers-retours au lieu
+    de toujours recommencer par l'aller ;
+  - boucle un peu plus rapide (39 s au lieu de 48) : le retour commence au
+    bout de 19 s.
 - **0.4.0** — 2026-10-08 — Une boucle sans couture, et des bulles :
   - une vraie boucle : trois cartons en pyramide chez lui, qu'il apporte un
     par un de l'autre côté (le dernier hissé sur les deux autres), puis
