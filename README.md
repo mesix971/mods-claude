@@ -61,12 +61,13 @@ suivent ton thème clair ou sombre. Pas un mot : tout passe par ses gestes.
   deux balades, il s'occupe : café, jonglage, pêche, guitare, corde à sauter,
   lecture, papillon, arrosage, yoyo, ballon, bulles, pirouette, méditation,
   cookie… Il s'endort après 10 min sans rien.
-- **Au travail**, il fait des allers-retours avec des cartons.
-- **Il réagit à la session.** Il saute quand tu envoies un message. Quand
-  Claude édite, il écrit au crayon ; quand il cherche, il sort la loupe.
-  Pendant un build, il tape au marteau ; pendant les tests, il coche une
-  liste. Pour un push, il lance un avion en papier ; pour une install, il
-  tient le tel.
+- **Au travail**, il déménage trois cartons d'une pile à l'autre, un par un,
+  puis les rapporte, en boucle. Une bulle au-dessus de sa tête montre ce que
+  fait Claude (loupe quand il cherche, crayon quand il écrit…) sans
+  l'interrompre.
+- **Il réagit à la session.** Il saute quand tu envoies un message. Pendant
+  un build, il tape au marteau ; pendant les tests, il coche une liste. Pour
+  un push, il lance un avion en papier ; pour une install, il tient le tel.
 - **Les sous-agents** arrivent chacun en mini-Clawd, qui mime ce que fait son
   agent (carton, loupe, écriture, marteau). Clawd dirige le chantier,
   planchette en main, et leur fait coucou quand ils repartent.

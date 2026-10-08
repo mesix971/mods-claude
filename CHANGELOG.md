@@ -9,6 +9,9 @@
 
 ## présentation
 
+- **2026-10-08** — Film et bande-annonce régénérés : la boucle des trois
+  cartons, et la bulle au-dessus de Clawd dans la scène du boulot. Textes du
+  film et du README mis à jour.
 - **2026-10-07** — Film et bande-annonce régénérés avec les nouveaux cartons.
   Dans la bande-annonce, la scène est décalée vers la droite pour que la pile
   de cartons ne touche pas le texte des jauges.
@@ -21,6 +24,18 @@
 
 ## clawd
 
+- **0.4.0** — 2026-10-08 — Une boucle sans couture, et des bulles :
+  - une vraie boucle : trois cartons en pyramide chez lui, qu'il apporte un
+    par un de l'autre côté (le dernier hissé sur les deux autres), puis
+    qu'il rapporte un par un, et ainsi de suite ;
+  - des gestes qui s'enchaînent : il se retourne image par image (profil,
+    trois quarts, face) avec le carton qui le suit au lieu de sauter, et
+    soulève ou pose en quatre temps ;
+  - au travail, les petites réactions (loupe, crayon, ?!, note, cœur)
+    s'affichent en bulle au-dessus de sa tête, sans l'interrompre ; les
+    grosses (build, tests, push, install, fête, nuage…) gardent leur scène ;
+  - après une grosse réaction, il reprend là où il en était au lieu de tout
+    recommencer : ses cartons restent où il les a laissés.
 - **0.3.1** — 2026-10-07 — De vrais cartons :
   - carton de déménagement vu de trois quarts : couleur kraft, dessus
     éclairé, côté à l'ombre, scotch sur les rabats, étiquette ;

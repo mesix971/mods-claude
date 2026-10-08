@@ -14,7 +14,7 @@ type On = Parameters<Parameters<typeof test>[1] extends infer F ? (F extends ($:
 
 function moteur(on: On, sortieBash: { isError: boolean; text: string } = { isError: false, text: 'ok' }) {
   const stockage = new Map<string, unknown>()
-  mock.clock(on as never)
+  const horloge = mock.clock(on as never)
   on('ui.render', ($, e) => {
     const { Text } = $.ui.resolve(e)
     return <Text>dessous</Text>
@@ -30,7 +30,7 @@ function moteur(on: On, sortieBash: { isError: boolean; text: string } = { isErr
       ? { result: { stdout: '', stderr: 'FAILED', interrupted: false }, isError: true as const, text: sortieBash.text }
       : { result: { stdout: sortieBash.text, stderr: '', interrupted: false }, text: sortieBash.text },
   )
-  return stockage
+  return { stockage, horloge }
 }
 
 type Monte = { find: (q: { type?: string; key?: string }) => Promise<{ props?: Record<string, unknown> } | undefined> }
@@ -76,9 +76,47 @@ test('au repos il se balade, au travail il transporte des cartons', async ($, on
   expect(dessin).toContain('class="lent"')
   expect(dessin).toContain('class="cahote"')
   expect(dessin).toContain('class="vite"')
-  // la pile livrée et les cartons posés font partie du décor
-  expect(dessin).toContain('v-boulot-decor1')
+  // ses deux pyramides de trois places (chez lui, là-bas) font partie du décor
+  expect(dessin).toContain('v-boulot-decor5')
   await boulot.unmount()
+})
+
+test('au travail, une petite réaction est une bulle : il ne lâche pas ses cartons', async ($, on) => {
+  const { horloge } = moteur(on)
+  await horloge.advance(3000)
+  // un commit, pendant qu'il déménage
+  await $.tool.call({ tool: 'Bash', command: 'git commit -m essai' })
+  const ui = await $.ui.mount({ ...BAND(true), surface: 'desktop' })
+  // sa scène continue, sans redémarrer…
+  expect(await scene(ui as never)).toContain('boulot')
+  expect(String((await svg(ui as never)).source)).not.toContain('animation-delay:-')
+  // … et la bulle, posée par-dessus, suit son trajet au-dessus de sa tête
+  const bulle = (await ui.find({ key: 'bulle' }))?.children[0] as { type: string; props: { alt: string; source: string } } | undefined
+  expect(bulle?.type).toBe('Svg')
+  expect(bulle?.props.alt).toContain('ecoute')
+  expect(bulle?.props.source).toContain('ch-boulot-bulle')
+  await ui.unmount()
+})
+
+test('après une grosse réaction, il reprend ses cartons là où il les avait laissés', async ($, on) => {
+  const { horloge } = moteur(on, { isError: false, text: 'BUILD SUCCESSFUL' })
+  // il déménage 5 s…
+  let ui = await $.ui.mount({ ...BAND(true), surface: 'desktop' })
+  expect(String((await svg(ui as never)).source)).not.toContain('animation-delay:-')
+  await ui.unmount()
+  await horloge.advance(5000)
+  // … un build passe : la fête a sa scène entière…
+  await $.tool.call({ tool: 'Bash', command: './gradlew assembleDebug' })
+  ui = await $.ui.mount({ ...BAND(true), surface: 'desktop' })
+  expect(await scene(ui as never)).toContain('fete')
+  expect(await ui.find({ key: 'bulle' })).toBeUndefined()
+  await ui.unmount()
+  // … puis il reprend à 5 s, pas au début (sinon ses cartons sauteraient)
+  await horloge.advance(7000)
+  ui = await $.ui.mount({ ...BAND(true), surface: 'desktop' })
+  expect(await scene(ui as never)).toContain('boulot')
+  expect(String((await svg(ui as never)).source)).toContain('animation-delay:-5.000s')
+  await ui.unmount()
 })
 
 test('build qui plante : il est triste', async ($, on) => {
@@ -99,12 +137,14 @@ test('build qui passe : il fait la fête', async ($, on) => {
 })
 
 test('une caresse : cœur et compteur gardé entre les sessions', async ($, on) => {
-  const stockage = moteur(on)
+  const { stockage } = moteur(on)
   const ui = await $.ui.mount({ ...BAND(), surface: 'desktop' })
   await ui.press({ key: 'caresse' })
   await ui.press({ key: 'caresse' })
   expect(stockage.get('caresses')).toBe(2)
+  // au repos, la réaction a toute sa scène (pas de bulle)
   expect(await scene(ui as never)).toContain('coeur')
+  expect(await ui.find({ key: 'bulle' })).toBeUndefined()
   await ui.unmount()
 })
 

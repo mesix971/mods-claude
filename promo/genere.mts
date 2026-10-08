@@ -9,14 +9,20 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 
 import { jauges, svgJauges } from '../atelier/hooks/jauges.ts'
-import { EMOJI, svgScene } from '../clawd/hooks/sprite.ts'
+import { EMOJI, svgBulle, svgScene } from '../clawd/hooks/sprite.ts'
+import type { Bulle } from '../clawd/hooks/sprite.ts'
 
 type Anim = Parameters<typeof svgScene>[0]
 type Copains = Parameters<typeof svgScene>[1]
 
 const base64 = (svg: string) => 'data:image/svg+xml;base64,' + Buffer.from(svg).toString('base64')
-const sprite = (anim: Anim, cls = '', style = '', copains: Copains = []) =>
-  `<img class="clawd ${cls}" style="${style}" src="${base64(svgScene(anim, copains))}" alt="Clawd : ${anim}">`
+// une scène et sa bulle dans un seul dessin (dans l'app, deux images superposées)
+const avecBulle = (scene: string, bulle: string) =>
+  scene.replace(/<\/svg>$/, bulle.replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '') + '</svg>')
+const sprite = (anim: Anim, cls = '', style = '', copains: Copains = [], bulle?: Bulle) => {
+  const dessin = bulle ? avecBulle(svgScene(anim, copains), svgBulle(anim, bulle)) : svgScene(anim, copains)
+  return `<img class="clawd ${cls}" style="${style}" src="${base64(dessin)}" alt="Clawd : ${anim}">`
+}
 const tuile = (anim: Anim, nom: string, i: number) =>
   `<figure class="tuile" style="--i:${i}"><img src="${base64(svgScene(anim))}" alt="Clawd : ${nom}"><figcaption>${nom}</figcaption></figure>`
 
@@ -59,7 +65,7 @@ const scenes: Scene[] = [
     titre: 'Tu lui files du boulot…', sous: '…il porte les cartons. Sans râler.',
     scene:
       `<div class="saisie-film"><span class="tape" style="--n:27">corrige le bug du minuteur ⏎</span></div>` +
-      sprite('ecoute', 'gros p1', '--x:2.2s') + sprite('boulot', 'gros p2', '--x:2.2s'),
+      sprite('ecoute', 'gros p1', '--x:2.2s') + sprite('boulot', 'gros p2', '--x:2.2s', [], 'cherche'),
   },
   {
     duree: 6, heure: '10:31', chapitre: 'Build',
@@ -399,7 +405,7 @@ a { color: var(--orange-texte); }
       <ul>
         <li>${Object.keys(EMOJI).length} scènes animées image par image, sans un mot.</li>
         <li>Il se balade sur sa petite scène, boit son café, pêche, jongle, joue de la guitare quand tu fais une pause.</li>
-        <li>Il écrit quand Claude édite, sort la loupe quand il cherche, porte des cartons pendant que ça bosse.</li>
+        <li>Pendant que ça bosse, il déménage ses cartons, et une bulle au-dessus de sa tête montre ce que fait Claude : loupe, crayon…</li>
         <li>Confettis quand ça passe, petit nuage quand ça casse.</li>
         <li>Un mini-Clawd par sous-agent, et lui en chef de chantier.</li>
         <li>Fond transparent, contour et ombre qui suivent ton thème clair ou sombre.</li>

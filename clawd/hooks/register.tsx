@@ -2,10 +2,11 @@
 // prompt. Pas un mot : tout passe par ses gestes.
 //
 // Au repos, il se balade sur sa petite scène, puis s'occupe (café, jonglage,
-// pêche, guitare, lecture…). Au travail, il transporte des cartons. Il réagit
-// à la session : il écrit quand j'édite, sort la loupe quand je cherche, tape
-// au marteau pendant un build, fait la fête quand ça passe, s'assoit sous son
-// nuage quand ça casse, s'endort quand tu ne fais rien… Chaque sous-agent
+// pêche, guitare, lecture…). Au travail, il déménage ses cartons, et une
+// bulle au-dessus de sa tête montre ce que je fais (loupe, crayon…) sans
+// l'interrompre. Les grosses réactions ont leur scène : il tape au marteau
+// pendant un build, fait la fête quand ça passe, s'assoit sous son nuage quand
+// ça casse… Il s'endort quand tu ne fais rien. Chaque sous-agent
 // arrive en mini-Clawd qui mime ce que fait son agent, sous l'œil de Clawd,
 // chef de chantier. Survole-le : ♥ pour le caresser, 🎲 pour qu'il change
 // d'activité.
@@ -14,7 +15,8 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, ToolCallResult } from 'claude-code'
 
 import type { ClawdAnim, ClawdCopain } from '../types'
-import { ACTIVITES, CLAWD_TEXTE, EMOJI, TAILLE, dureeScene, svgScene } from './sprite'
+import { ACTIVITES, CLAWD_TEXTE, EMOJI, EN_BULLE, TAILLE, dureeScene, svgBulle, svgScene } from './sprite'
+import type { Bulle } from './sprite'
 
 type $ = EngineInterface
 
@@ -35,6 +37,11 @@ let derniereScene: ClawdAnim | null = null
 let finActivite = 0
 let vertigeMontre = false
 let couchePropose = false
+/** Temps déjà joué de son déménagement : après une grosse réaction, il reprend là où il en était */
+let boulotJoue = 0
+let boulotDepuis: number | null = null
+/** La bulle affichée, et où en était sa scène quand elle est apparue (s) */
+let bulleVue: { id: number; deja: number } | null = null
 
 const pioche = <T,>(l: readonly T[]) => l[Math.floor(Math.random() * l.length)]!
 
@@ -58,6 +65,28 @@ function tirage() {
   derniereScene = anim
   return { anim }
 }
+
+/**
+ * Compte le temps passé à déménager et dit où reprendre la scène (en
+ * secondes) : ses cartons restent où il les a laissés.
+ */
+function reprise(anim: ClawdAnim, maintenant: number) {
+  // l'horloge est repartie de zéro : on recommence au début
+  if (boulotDepuis !== null && maintenant < boulotDepuis) {
+    boulotDepuis = null
+    boulotJoue = 0
+  }
+  if (anim === 'boulot') {
+    if (boulotDepuis === null) boulotDepuis = maintenant
+  } else if (boulotDepuis !== null) {
+    boulotJoue += maintenant - boulotDepuis
+    boulotDepuis = null
+  }
+  return boulotJoue / 1000
+}
+
+/** Où en est son déménagement à cet instant (s), pour qu'une bulle le suive. */
+const boulotEnCours = (maintenant: number) => (boulotJoue + (boulotDepuis === null ? 0 : maintenant - boulotDepuis)) / 1000
 
 /** Lance une activité (ou la balade si `null`) pour sa durée naturelle. */
 async function occupe($: $, prochaine: { anim: ClawdAnim } | null) {
@@ -122,6 +151,8 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const ran = await next(e)
     derniereActivite = await $.clock.now()
+    boulotJoue = 0
+    boulotDepuis = null
     const total = await $.store.get('caresses')
     await update($, caresses, () => (typeof total === 'number' ? total : 0))
     await scene($, 'coucou', 4000)
@@ -231,18 +262,20 @@ export const register: Register = on => {
     const épuisé = await read($, fatigue)
     const faits = (await read($, copains)).map(c => c.fait)
 
-    // des sous-agents tournent : il dirige le chantier (et ne s'endort pas)
-    const anim: ClawdAnim =
-      p?.anim ??
-      (faits.length > 0
-        ? 'chef'
-        : endormi
-          ? 'dodo'
-          : e.props.isWorking
-            ? 'boulot'
-            : épuisé
-              ? 'fatigue'
-              : (a?.anim ?? 'balade'))
+    // ce qu'il fait en fond ; des sous-agents tournent : il dirige le chantier
+    // (et ne s'endort pas)
+    const fond: ClawdAnim =
+      faits.length > 0 ? 'chef' : endormi ? 'dodo' : e.props.isWorking ? 'boulot' : épuisé ? 'fatigue' : (a?.anim ?? 'balade')
+    // au travail, une petite réaction s'affiche en bulle au-dessus de sa tête :
+    // il continue sa scène au lieu de s'interrompre (les grosses gardent la leur)
+    const bulle: Bulle | null =
+      p && (fond === 'boulot' || fond === 'chef') && (EN_BULLE as readonly ClawdAnim[]).includes(p.anim) ? (p.anim as Bulle) : null
+    const anim: ClawdAnim = bulle ? fond : (p?.anim ?? fond)
+    const maintenant = await $.clock.now()
+    const deja = reprise(anim, maintenant)
+    // la bulle part d'où en est sa scène quand elle apparaît, puis la suit
+    if (!bulle || !p) bulleVue = null
+    else if (bulleVue?.id !== p.id) bulleVue = { id: p.id, deja: boulotEnCours(maintenant) }
 
     const caresser = async () => {
       const n = (await update($, caresses, c => c + 1)) ?? 0
@@ -275,11 +308,22 @@ export const register: Register = on => {
           </Box>
           <Box key="clawd" flexShrink={0}>
             <Svg
-              source={svgScene(anim, faits)}
+              source={svgScene(anim, faits, anim === 'boulot' ? deja : 0)}
               alt={`Clawd : ${anim}${faits.length ? ` (+${faits.length} copains)` : ''}`}
               width={TAILLE.largeur}
               height={TAILLE.hauteur}
             />
+            {bulle && bulleVue && (
+              // posée sur sa scène, dans son propre dessin : la scène ne redémarre pas
+              <Box key="bulle" position="absolute" top={0} left={0}>
+                <Svg
+                  source={svgBulle(anim, bulle, bulleVue.deja)}
+                  alt={`Bulle : ${bulle}`}
+                  width={TAILLE.largeur}
+                  height={TAILLE.hauteur}
+                />
+              </Box>
+            )}
             {boutons}
           </Box>
         </Box>
@@ -294,7 +338,7 @@ export const register: Register = on => {
         </Box>
         <Box key="clawd" flexShrink={0} flexDirection="row" alignItems="center">
           {faits.length > 0 && <Text color="#D97758">{`${'▪'.repeat(Math.min(faits.length, 5))} `}</Text>}
-          {EMOJI[anim] !== '' && <Text dimColor>{`${EMOJI[anim]} `}</Text>}
+          {EMOJI[bulle ?? anim] !== '' && <Text dimColor>{`${EMOJI[bulle ?? anim]} `}</Text>}
           <Box flexDirection="column">
             {CLAWD_TEXTE.map(l => (
               <Text color="#D97758">{l}</Text>
