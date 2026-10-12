@@ -9,13 +9,19 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 
 import { jauges, svgJauges } from '../atelier/hooks/jauges.ts'
-import { EMOJI, svgBulle, svgScene } from '../clawd/hooks/sprite.ts'
+import { EMOJI, TEINTES, svgBulle, svgScene } from '../clawd/hooks/sprite.ts'
 import type { Bulle } from '../clawd/hooks/sprite.ts'
 
 type Anim = Parameters<typeof svgScene>[0]
 type Copains = Parameters<typeof svgScene>[1]
 
 const base64 = (svg: string) => 'data:image/svg+xml;base64,' + Buffer.from(svg).toString('base64')
+// trois sous-agents sur trois modèles : un mini en Haiku, un en Sonnet, un en Fable
+const EQUIPE = [
+  { fait: 'marche', couleur: TEINTES.haiku },
+  { fait: 'cherche', couleur: TEINTES.sonnet },
+  { fait: 'ecrit', couleur: TEINTES.fable },
+] as const
 // une scène et sa bulle dans un seul dessin (dans l'app, deux images superposées)
 const avecBulle = (scene: string, bulle: string) =>
   scene.replace(/<\/svg>$/, bulle.replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '') + '</svg>')
@@ -116,9 +122,9 @@ const scenes: Scene[] = [
   },
   {
     duree: 6, heure: '17:30', chapitre: 'Sous-agents',
-    titre: 'Trois sous-agents&nbsp;?', sous: 'Trois mini-Clawds. Lui passe chef de chantier.',
+    titre: 'Trois sous-agents&nbsp;?', sous: 'Trois mini-Clawds, chacun à la couleur de son modèle. Lui passe chef de chantier.',
     ui: `<div class="term"><p>⏵ 3 agents lancés en parallèle</p></div>`,
-    scene: sprite('chef', 'gros', '', ['marche', 'cherche', 'ecrit']),
+    scene: sprite('chef', 'gros', '', EQUIPE),
   },
   {
     duree: 6, heure: '17:46', chapitre: 'Compactage',
@@ -412,7 +418,7 @@ a { color: var(--orange-texte); }
         <li>${Object.keys(EMOJI).length} scènes animées image par image, sans un mot.</li>
         <li>Il se balade sur sa petite scène, boit son café, pêche, jongle, joue de la guitare quand tu fais une pause.</li>
         <li>Pendant que ça bosse, il déménage ses cartons, et une bulle au-dessus de sa tête montre ce que fait Claude : loupe, crayon…</li>
-        <li>Sa couleur suit le modèle : pistache pour Haiku, abricot pour Sonnet, terracotta pour Opus, corail pour Fable.</li>
+        <li>Sa couleur suit le modèle : pistache pour Haiku, abricot pour Sonnet, terracotta pour Opus, corail pour Fable. Ses mini-Clawds aussi.</li>
         <li>Confettis quand ça passe, petit nuage quand ça casse.</li>
         <li>Un mini-Clawd par sous-agent, et lui en chef de chantier.</li>
         <li>Fond transparent, contour et ombre qui suivent ton thème clair ou sombre.</li>
@@ -561,7 +567,7 @@ const BA: { anim: Anim; heure: string; texte: string; copains?: Copains }[] = [
   { anim: 'boulot', heure: '09:15', texte: 'Tu bosses ? Il porte les cartons' },
   { anim: 'fete', heure: '10:31', texte: 'Build qui passe : confettis' },
   { anim: 'triste', heure: '11:07', texte: 'Build qui casse : petit nuage' },
-  { anim: 'chef', heure: '17:30', texte: '3 sous-agents : 3 mini-Clawds', copains: ['marche', 'cherche', 'ecrit'] },
+  { anim: 'chef', heure: '17:30', texte: '3 sous-agents : 3 mini-Clawds', copains: EQUIPE },
   { anim: 'cafe', heure: '18:05', texte: 'Tu fais une pause ? Lui aussi' },
   { anim: 'nuit', heure: '01:58', texte: 'À 2 h du mat’, il te dit d’aller dormir' },
 ]

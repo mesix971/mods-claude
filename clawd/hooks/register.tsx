@@ -15,7 +15,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, ToolCallResult } from 'claude-code'
 
 import type { ClawdAnim, ClawdCopain } from '../types'
-import { ACTIVITES, CLAWD_TEXTE, EMOJI, EN_BULLE, TAILLE, dureeScene, svgBulle, svgScene, teinte } from './sprite'
+import { ACTIVITES, CLAWD_TEXTE, EMOJI, EN_BULLE, TAILLE, dureeScene, svgBulle, svgScene, teinte, teinteConnue } from './sprite'
 import type { Bulle } from './sprite'
 
 type $ = EngineInterface
@@ -48,6 +48,8 @@ let boulotDepuis: number | null = null
 /** Relu une fois par chargement ; noté au plus toutes les 5 s pendant qu'il bosse */
 let boulotLu = false
 let boulotNote = 0
+/** Le modèle de chaque sous-agent lancé, par id (agent.spawn le dit, SubagentStart non) */
+const modelesCopains = new Map<string, string>()
 /** La bulle affichée, et où en était sa scène quand elle est apparue (s) */
 let bulleVue: { id: number; deja: number } | null = null
 
@@ -190,6 +192,7 @@ export const register: Register = on => {
     // son déménagement reprend où il l'avait laissé à la dernière session
     boulotLu = false
     boulotDepuis = null
+    modelesCopains.clear()
     await relitBoulot($)
     // sa couleur suit le modèle qui tourne
     const m = await $.session.model().catch(() => null)
@@ -252,13 +255,31 @@ export const register: Register = on => {
   // Un sous-agent démarre : un mini-Clawd arrive et se met au boulot
   on('classic.SubagentStart', async ($, e, next) => {
     await reveil($)
-    await update($, copains, l => [...l.filter(c => c.id !== e.agent_id), { id: e.agent_id, type: e.agent_type, fait: 'marche' as const }])
+    const modele = modelesCopains.get(e.agent_id)
+    await update($, copains, l => [...l.filter(c => c.id !== e.agent_id), { id: e.agent_id, type: e.agent_type, fait: 'marche' as const, modele }])
     return next(e)
+  })
+
+  // Un sous-agent démarre sur un modèle : son mini-Clawd en prendra la couleur.
+  // Selon l'ordre des événements, le mini est déjà là ou pas encore.
+  on('agent.spawn', async ($, e, next) => {
+    const r = await next(e)
+    if (r.deny === undefined && r.agentId && r.model) {
+      const { agentId, model } = r
+      modelesCopains.set(agentId, model)
+      // des agents sans SubagentStop (workflows, agents tués) : on ne garde que les derniers
+      if (modelesCopains.size > 50) modelesCopains.delete(modelesCopains.keys().next().value!)
+      if ((await read($, copains)).some(c => c.id === agentId)) {
+        await update($, copains, l => l.map(c => (c.id === agentId ? { ...c, modele: model } : c)))
+      }
+    }
+    return r
   })
 
   // Il a fini : son mini-Clawd repart, et Clawd lui fait coucou
   on('classic.SubagentStop', async ($, e, next) => {
     const ran = await next(e)
+    modelesCopains.delete(e.agent_id)
     if ((await read($, copains)).some(c => c.id === e.agent_id)) {
       await update($, copains, l => l.filter(c => c.id !== e.agent_id))
       await scene($, 'coucou', 1500)
@@ -362,18 +383,20 @@ export const register: Register = on => {
     const a = await read($, activite)
     const endormi = await read($, dort)
     const épuisé = await read($, fatigue)
-    const faits = (await read($, copains)).map(c => c.fait)
+    const equipe = await read($, copains)
 
     // ce qu'il fait en fond ; des sous-agents tournent : il dirige le chantier
     // (et ne s'endort pas)
     const fond: ClawdAnim =
-      faits.length > 0 ? 'chef' : endormi ? 'dodo' : e.props.isWorking ? 'boulot' : épuisé ? 'fatigue' : (a?.anim ?? 'balade')
+      equipe.length > 0 ? 'chef' : endormi ? 'dodo' : e.props.isWorking ? 'boulot' : épuisé ? 'fatigue' : (a?.anim ?? 'balade')
     // au travail, une petite réaction s'affiche en bulle au-dessus de sa tête :
     // il continue sa scène au lieu de s'interrompre (les grosses gardent la leur)
     const bulle: Bulle | null =
       p && (fond === 'boulot' || fond === 'chef') && (EN_BULLE as readonly ClawdAnim[]).includes(p.anim) ? (p.anim as Bulle) : null
     const anim: ClawdAnim = bulle ? fond : (p?.anim ?? fond)
     const couleur = teinte((await read($, modele)) ?? (await $.session.model().catch(() => null)))
+    // chaque mini dans la teinte du modèle de son sous-agent
+    const minis = equipe.map(c => ({ fait: c.fait, couleur: teinteConnue(c.modele) }))
     await relitBoulot($)
     const maintenant = await $.clock.now()
     const deja = reprise(anim, maintenant)
@@ -413,8 +436,8 @@ export const register: Register = on => {
           </Box>
           <Box key="clawd" flexShrink={0}>
             <Svg
-              source={svgScene(anim, faits, anim === 'boulot' ? deja : 0, couleur)}
-              alt={`Clawd : ${anim}${faits.length ? ` (+${faits.length} copains)` : ''}`}
+              source={svgScene(anim, minis, anim === 'boulot' ? deja : 0, couleur)}
+              alt={`Clawd : ${anim}${equipe.length ? ` (+${equipe.length} copains)` : ''}`}
               width={TAILLE.largeur}
               height={TAILLE.hauteur}
             />
@@ -442,7 +465,11 @@ export const register: Register = on => {
           {dessous}
         </Box>
         <Box key="clawd" flexShrink={0} flexDirection="row" alignItems="center">
-          {faits.length > 0 && <Text color={couleur.O}>{`${'▪'.repeat(Math.min(faits.length, 5))} `}</Text>}
+          {minis.slice(0, 5).map((m, i) => (
+            <Text key={`mini-${i}`} color={(m.couleur ?? couleur).O}>
+              {i === Math.min(minis.length, 5) - 1 ? '▪ ' : '▪'}
+            </Text>
+          ))}
           {EMOJI[bulle ?? anim] !== '' && <Text dimColor>{`${EMOJI[bulle ?? anim]} `}</Text>}
           <Box flexDirection="column">
             {CLAWD_TEXTE.map(l => (

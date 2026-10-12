@@ -9,6 +9,8 @@
 
 ## présentation
 
+- **2026-10-11** — Film et bande-annonce : dans le chapitre « Sous-agents »,
+  chaque mini-Clawd a la couleur de son modèle (Haiku, Sonnet, Fable).
 - **2026-10-08** — Film : nouveau chapitre « Compactage ».
 - **2026-10-08** — Film et bande-annonce régénérés : la boucle des trois
   cartons, et la bulle au-dessus de Clawd dans la scène du boulot. Textes du
@@ -25,6 +27,11 @@
 
 ## clawd
 
+- **0.6.0** — 2026-10-11 — Chaque mini-Clawd prend la couleur du modèle de son
+  sous-agent (pistache pour Haiku, abricot pour Sonnet, terracotta pour Opus,
+  corail pour Fable), même quand il n'utilise pas celui de la conversation.
+  Sans modèle connu, il garde la couleur de Clawd. En terminal, chaque mini
+  devient un ▪ à sa couleur.
 - **0.5.0** — 2026-10-08 — De nouvelles réactions :
   - compactage : quand la conversation se compacte (`/compact` ou
     automatiquement), il saute sur une pile de feuilles pour la tasser, et

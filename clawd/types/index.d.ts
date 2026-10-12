@@ -60,7 +60,13 @@ export type ClawdScene = { anim: ClawdAnim }
 export type ClawdPassage = ClawdScene & { id: number }
 
 /** Un sous-agent en cours, représenté par un mini-Clawd qui mime ce qu'il fait. */
-export type ClawdCopain = { id: string; type: string; fait: 'marche' | 'cherche' | 'ecrit' | 'build' }
+export type ClawdCopain = {
+  id: string
+  type: string
+  fait: 'marche' | 'cherche' | 'ecrit' | 'build'
+  /** Le modèle de son sous-agent (sa couleur en dépend), s'il est connu */
+  modele?: string
+}
 
 declare module 'claude-code' {
   interface PluginState {

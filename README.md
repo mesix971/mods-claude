@@ -74,7 +74,8 @@ suivent ton thème clair ou sombre. Pas un mot : tout passe par ses gestes.
   pose une question, il brandit une pancarte « ? » ; quand des dépendances
   s'installent, il déballe un carton.
 - **Sa couleur suit le modèle** : Haiku en vert pistache, Sonnet en abricot
-  pâle, Opus dans le terracotta d'origine, Fable en corail vif.
+  pâle, Opus dans le terracotta d'origine, Fable en corail vif. Chaque
+  mini-Clawd prend celle du modèle de son sous-agent.
 - **Les sous-agents** arrivent chacun en mini-Clawd, qui mime ce que fait son
   agent (carton, loupe, écriture, marteau). Clawd dirige le chantier,
   planchette en main, et leur fait coucou quand ils repartent.

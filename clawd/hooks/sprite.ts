@@ -1128,11 +1128,14 @@ export const TEINTES = {
 } as const
 export type Teinte = (typeof TEINTES)[keyof typeof TEINTES]
 
-/** La teinte d'un modèle d'après son id (`claude-haiku-5-5`…) ; celle d'Opus sinon. */
-export function teinte(modele: string | null | undefined): Teinte {
+/** La teinte d'un modèle d'après son id (`claude-haiku-5-5`…), s'il est reconnu. */
+export function teinteConnue(modele: string | null | undefined): Teinte | undefined {
   const famille = /haiku|sonnet|opus|fable/i.exec(modele ?? '')?.[0]?.toLowerCase() as keyof typeof TEINTES | undefined
-  return famille ? TEINTES[famille] : TEINTES.opus
+  return famille ? TEINTES[famille] : undefined
 }
+
+/** La teinte de Clawd : celle de son modèle, celle d'Opus sinon. */
+export const teinte = (modele: string | null | undefined): Teinte => teinteConnue(modele) ?? TEINTES.opus
 
 /** Le même dessin, avec Clawd dans une autre teinte (son corps et son ombré). */
 const recolore = (svg: string, c: Teinte) => (c === TEINTES.opus ? svg : svg.replaceAll(PAL.O!, c.O).replaceAll(PAL.o!, c.o))
@@ -1297,12 +1300,23 @@ function mini(i: number, fait: MiniFait): { css: string; svg: string } {
   return { css, svg: `<g transform="translate(${tx} ${ty}) scale(.5)">${images}</g>` }
 }
 
-function equipe(copains: readonly MiniFait[]): { css: string; svg: string } {
-  const visibles = copains.slice(0, MINIS_MAX).map((fait, i) => mini(i, fait))
+/**
+ * Un mini-Clawd : ce que fait son sous-agent et, si on le connaît, la teinte
+ * de son modèle. Sans teinte, il a celle de Clawd (un sous-agent tourne par
+ * défaut sur le modèle de la conversation).
+ */
+export type Mini = MiniFait | { fait: MiniFait; couleur?: Teinte }
+
+function equipe(copains: readonly Mini[], couleur: Teinte): { css: string; svg: string } {
+  const visibles = copains.slice(0, MINIS_MAX).map((c, i) => {
+    const { fait, couleur: sienne } = typeof c === 'string' ? { fait: c, couleur: undefined } : c
+    const m = mini(i, fait)
+    return { css: m.css, svg: recolore(m.svg, sienne ?? couleur) }
+  })
   const reste = copains.length - MINIS_MAX
   return {
     css: visibles.map(m => m.css).join(''),
-    svg: visibles.map(m => m.svg).join('') + (reste > 0 ? glyphe(`+${reste}`, -122, 6, 10, PAL.O!) : ''),
+    svg: visibles.map(m => m.svg).join('') + (reste > 0 ? recolore(glyphe(`+${reste}`, -122, 6, 10, PAL.O!), couleur) : ''),
   }
 }
 
@@ -1311,18 +1325,16 @@ function equipe(copains: readonly MiniFait[]): { css: string; svg: string } {
  * mini-Clawds des sous-agents en cours à côté de lui. Une chorégraphie
  * reprend à `deja` secondes : le temps qu'elle a déjà joué.
  */
-export function svgScene(anim: ClawdAnim, copains: readonly MiniFait[] = [], deja = 0, couleur: Teinte = TEINTES.opus): string {
-  return recolore(dessineScene(anim, copains, deja), couleur)
-}
-
-function dessineScene(anim: ClawdAnim, copains: readonly MiniFait[], deja: number): string {
+export function svgScene(anim: ClawdAnim, copains: readonly Mini[] = [], deja = 0, couleur: Teinte = TEINTES.opus): string {
   const s = SCENES[anim]()
   if (s.choreo) {
+    // une chorégraphie n'a pas de mini : tout le dessin prend sa teinte
     const c = choreographie(anim, s, deja)
-    return (
+    return recolore(
       entete() +
-      `<style>${CSS}${THEME}${c.css}</style>${FILTRE}${reutilises(c.svg)}` +
-      `<g filter="url(#contour)">${c.svg}${s.fx ?? ''}</g></svg>`
+        `<style>${CSS}${THEME}${c.css}</style>${FILTRE}${reutilises(c.svg)}` +
+        `<g filter="url(#contour)">${c.svg}${s.fx ?? ''}</g></svg>`,
+      couleur,
     )
   }
   const n = s.images.length
@@ -1341,12 +1353,13 @@ function dessineScene(anim: ClawdAnim, copains: readonly MiniFait[], deja: numbe
       })
       .join('')
   }
-  // les mini-Clawds bossent à sa gauche (lui reste à sa place, au bord droit)
-  const minis = equipe(copains)
+  // les mini-Clawds bossent à sa gauche (lui reste à sa place, au bord droit),
+  // chacun dans la teinte de son modèle
+  const minis = equipe(copains, couleur)
   return (
     entete() +
     `<style>${css}${minis.css}</style>${FILTRE}${reutilises(minis.svg + images)}${ombre(s)}` +
-    `<g filter="url(#contour)">${minis.svg}<g class="${s.cls ?? ''}">${images}</g>${s.fx ?? ''}</g></svg>`
+    `<g filter="url(#contour)">${minis.svg}<g class="${s.cls ?? ''}">${recolore(images, couleur)}</g>${recolore(s.fx ?? '', couleur)}</g></svg>`
   )
 }
 

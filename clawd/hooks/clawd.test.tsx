@@ -302,3 +302,38 @@ test('sa couleur suit le modèle : Haiku pistache, puis Fable corail', async ($,
   expect(dessin).toContain('#E2604A')
   await ui.unmount()
 })
+
+test('chaque mini-Clawd prend la couleur du modèle de son sous-agent', async ($, on) => {
+  moteur(on)
+  // le moteur lance l'éclaireur sur Haiku et le relecteur sur Fable
+  on('agent.spawn', ($, e) =>
+    e.subagentType === 'eclaireur' ? { model: 'claude-haiku-5-5', agentId: 'a1' } : { model: 'claude-fable-5-1', agentId: 'a2' },
+  )
+  on('classic.SubagentStart', () => ({}))
+  // le modèle peut être connu avant l'arrivée du mini (a1)… ou après (a2)
+  await $.agent.spawn({ prompt: 'fouille le projet', subagentType: 'eclaireur' })
+  await $.classic.SubagentStart({ agent_id: 'a1', agent_type: 'eclaireur' } as never)
+  await $.classic.SubagentStart({ agent_id: 'a2', agent_type: 'relecteur' } as never)
+  await $.agent.spawn({ prompt: 'relis le diff', subagentType: 'relecteur' })
+  const ui = await $.ui.mount({ ...BAND(true), surface: 'desktop' })
+  expect(await scene(ui as never)).toContain('chef')
+  const dessin = String((await svg(ui as never)).source)
+  expect(dessin).toContain('#9CB86A') // le mini de l'éclaireur, en Haiku
+  expect(dessin).toContain('#E2604A') // celui du relecteur, en Fable
+  expect(dessin).toContain('#D97758') // et Clawd, sur le modèle de la conversation
+  await ui.unmount()
+})
+
+test('un sous-agent sur un modèle inconnu garde la couleur de Clawd', async ($, on) => {
+  moteur(on)
+  on('session.model', () => ({ value: 'claude-sonnet-5-5' }))
+  on('agent.spawn', () => ({ model: 'modele-maison-7b', agentId: 'a9' }))
+  on('classic.SubagentStart', () => ({}))
+  await $.agent.spawn({ prompt: 'aide-moi', subagentType: 'general-purpose' })
+  await $.classic.SubagentStart({ agent_id: 'a9', agent_type: 'general-purpose' } as never)
+  const ui = await $.ui.mount({ ...BAND(true), surface: 'desktop' })
+  const dessin = String((await svg(ui as never)).source)
+  expect(dessin).toContain('#E9A27F') // Sonnet : Clawd et son mini
+  expect(dessin).not.toContain('#D97758') // pas d'orange Opus par défaut
+  await ui.unmount()
+})
