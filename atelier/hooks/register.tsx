@@ -47,6 +47,60 @@ async function readText($: $, path: string) {
   }
 }
 
+/**
+ * Le script Gradle sans ses commentaires : un exemple en commentaire n'est pas
+ * la version. Les chaînes sont recopiées telles quelles, sinon le `/*` d'une
+ * glob comme `include("lib/*.so")` ouvrirait un faux commentaire qui avalerait
+ * la suite du script.
+ */
+function sansCommentaires(t: string): string {
+  let out = ''
+  let i = 0
+  while (i < t.length) {
+    const c = t[i]!
+    if (c === '"' || c === "'") {
+      // une chaîne, jusqu'à son guillemet (ou la fin de la ligne si elle n'en a pas)
+      let j = i + 1
+      while (j < t.length && t[j] !== c && t[j] !== '\n') j += t[j] === '\\' ? 2 : 1
+      out += t.slice(i, j + 1)
+      i = j + 1
+    } else if (c === '/' && t[i + 1] === '/') {
+      while (i < t.length && t[i] !== '\n') i++
+    } else if (c === '/' && t[i + 1] === '*') {
+      const fin = t.indexOf('*/', i + 2)
+      i = fin < 0 ? t.length : fin + 2
+    } else {
+      out += c
+      i++
+    }
+  }
+  return out
+}
+
+/** Une valeur écrite en dur, pas un gabarit Kotlin comme `"$major.$minor.$patch"` */
+const enDur = (v: string | undefined) => (v && !v.includes('$') ? v : null)
+
+/**
+ * Version calculée par le script (`versionName = maVariable`) : on la lit dans
+ * un fichier de propriétés du projet (version.properties, gradle.properties),
+ * en `versionName=…` ou en `versionMajor` / `versionMinor` / `versionPatch`.
+ */
+async function versionDesProprietes($: $, dossiers: readonly string[]) {
+  for (const d of dossiers) {
+    for (const f of ['version.properties', 'gradle.properties']) {
+      const t = await readText($, `${d}/${f}`)
+      if (!t) continue
+      const cle = (re: RegExp) => t.match(re)?.[1]?.trim()
+      const nom = enDur(cle(/^\s*versionName\s*[=:]\s*(.+)$/im)?.replace(/^["']|["']$/g, ''))
+      const code = Number(cle(/^\s*versionCode\s*[=:]\s*(\d+)/im) ?? NaN)
+      const [maj, min, pat] = ['major', 'minor', 'patch'].map(k => cle(new RegExp(`^\\s*(?:version)?[._-]?${k}\\s*[=:]\\s*(\\d+)`, 'im')))
+      const versionName = nom ?? (maj !== undefined && min !== undefined && pat !== undefined ? `${maj}.${min}.${pat}` : null)
+      if (versionName) return { versionName, versionCode: Number.isNaN(code) ? null : code }
+    }
+  }
+  return null
+}
+
 async function firstExisting($: $, paths: readonly (string | null | undefined)[]) {
   for (const p of paths) {
     if (p && (await $.fs.exists(p).catch(() => false))) return p
@@ -148,9 +202,9 @@ async function refreshAndroid($: $, cwd: string): Promise<AtelierAndroid | null>
   const projet = await detectProjet($, cwd)
   if (!projet) return null
 
-  const gradle = (await readText($, projet.gradle)) ?? ''
+  const gradle = sansCommentaires((await readText($, projet.gradle)) ?? '')
   const appId = gradle.match(/applicationId\s*=?\s*["']([^"']+)["']/)?.[1] ?? null
-  let versionName = gradle.match(/versionName\s*=?\s*["']([^"']+)["']/)?.[1] ?? null
+  let versionName = [...gradle.matchAll(/versionName\s*=?\s*["']([^"']+)["']/g)].map(m => enDur(m[1])).find(v => v) ?? null
   let versionCode = Number(gradle.match(/versionCode\s*=?\s*(\d+)/)?.[1] ?? NaN)
   if (projet.pubspec) {
     const pub = (await readText($, projet.pubspec)) ?? ''
@@ -158,6 +212,14 @@ async function refreshAndroid($: $, cwd: string): Promise<AtelierAndroid | null>
     if (m) {
       versionName = m[1] ?? versionName
       versionCode = Number(m[2] ?? NaN)
+    }
+  }
+  if (!versionName && !projet.pubspec) {
+    // calculée par le script : on la lit dans ses propriétés
+    const v = await versionDesProprietes($, [cwd, `${cwd}/app`])
+    if (v) {
+      versionName = v.versionName
+      if (Number.isNaN(versionCode) && v.versionCode !== null) versionCode = v.versionCode
     }
   }
   const debugSuffix = gradle.match(/debug\s*\{[^}]*applicationIdSuffix\s*=?\s*["']([^"']+)["']/)?.[1] ?? ''
@@ -234,6 +296,7 @@ const VERSION_FILES = [
   'manifest.json',
   'version.py',
   'package.json',
+  'version.properties',
 ]
 
 async function refreshGit($: $, cwd: string): Promise<AtelierGit | null> {
@@ -251,7 +314,7 @@ async function refreshGit($: $, cwd: string): Promise<AtelierGit | null> {
     const diff = await run($, ['git', '-C', cwd, 'diff', 'HEAD', '-U0', '--', ...touched])
     const bumped = (diff?.stdout ?? '')
       .split(/\r?\n/)
-      .some(l => /^\+(?!\+)/.test(l) && /versionName|versionCode|^\+version:|"version"\s*:|appVersion|__version__|VERSION\s*=/.test(l))
+      .some(l => /^\+(?!\+)/.test(l) && (/versionName|versionCode|^\+version:|"version"\s*:|appVersion|__version__|VERSION\s*=/.test(l) || /version[._-]?(major|minor|patch)\s*[=:]/i.test(l)))
     if (bumped && !files.some(f => /(^|\/)CHANGELOG\.md$/i.test(f))) {
       warnings.push('version bumpée mais CHANGELOG.md pas touché')
     }

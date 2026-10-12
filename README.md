@@ -90,7 +90,8 @@ suivent ton thème clair ou sombre. Pas un mot : tout passe par ses gestes.
 
 - 📱 Version déclarée, dernier APK construit et version installée sur le
   téléphone (date comprise). Boutons **Installer sur le tel** (`i`) et
-  **Lancer** (`l`).
+  **Lancer** (`l`). La version est lue dans le script Gradle, `pubspec.yaml`,
+  ou `version.properties` quand le script la calcule.
 - 🌿 Branche, nombre de modifs, commits non poussés, alerte si la version est
   bumpée sans CHANGELOG. Bouton **Commit + push** (`c`).
 - Jauges des quotas 5 h et 7 j et du contexte, à lire d'un coup d'œil :

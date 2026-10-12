@@ -12,6 +12,8 @@ const APK_MTIME = Date.UTC(2026, 8, 30, 23, 52, 28)
 
 const GRADLE = `
 android {
+    // des globs dans des chaînes : elles n'ouvrent pas de commentaire
+    packaging { resources { excludes += "/META-INF/*.kotlin_module" } }
     defaultConfig {
         applicationId = "com.exemple.monapp"
         versionCode = 30
@@ -22,7 +24,8 @@ android {
             versionNameSuffix = "-debug"
         }
     }
-}`
+}
+val dex = fileTree("build").matching { include("**/*.dex") }`
 
 const FILES: Record<string, string> = { [`${CWD}/app/build.gradle.kts`]: GRADLE }
 const DIRS: Record<string, { name: string; kind: 'file' | 'dir'; mtimeMs: number }[]> = {
@@ -310,4 +313,46 @@ test('rien à montrer : le bandeau laisse le moteur dessiner', async ($, on) => 
     expect(await ui.find({ type: 'Text', text: /moteur/ })).toBeDefined()
     await ui.unmount()
   }
+})
+
+test('version calculée par le script : lue dans version.properties, pas dans un commentaire', async ($, on) => {
+  const fichiers: Record<string, string> = {
+    [`${CWD}/app/build.gradle.kts`]: `
+// Versioning auto : on lit version.properties à la racine du projet.
+// versionName = "$major.$minor.$patch"  (ex. "1.2.3")
+val computedVersionName = "$vMajor.$vMinor.$vPatch"
+android {
+    defaultConfig {
+        applicationId = "com.exemple.monapp"
+        versionCode = computedVersionCode
+        versionName = computedVersionName
+    }
+}`,
+    [`${CWD}/version.properties`]: '#MonApp version\nversionBuild=51\nversionMajor=3\nversionMinor=15\nversionPatch=2\n',
+  }
+  mock.clock(on as never)
+  mock.env(on as never, { LOCALAPPDATA })
+  on('session.cwd', () => ({ value: CWD }))
+  const norm = (p: string) => p.replace(/\\/g, '/')
+  on('fs.exists', ($, e) => ({ value: norm(e.path) in fichiers || norm(e.path) === ADB }))
+  on('fs.read', ($, e) => {
+    const f = fichiers[norm(e.path)]
+    if (f === undefined) throw new Error(`absent: ${e.path}`)
+    return { value: f }
+  })
+  on('fs.list', ($, e) => {
+    throw new Error(`absent: ${e.path}`)
+  })
+  // pas de tel branché, pas de dépôt git
+  on('process.run', () => ({ value: { exitCode: 1, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
+  on('ui.render', ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    return <Text>moteur</Text>
+  })
+  await $.command.run({ command: 'atelier', args: '', origin: { kind: 'composer' } })
+  await $.command.run({ command: 'atelier', args: '', origin: { kind: 'composer' } })
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  expect(await ui.find({ type: 'Text', text: /📱 3\.15\.2/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /\$major/ })).toBeUndefined()
+  await ui.unmount()
 })

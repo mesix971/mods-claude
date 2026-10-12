@@ -93,6 +93,15 @@
 
 ## atelier
 
+- **0.3.2** — 2026-10-08 — Version calculée bien lue :
+  - quand le script Gradle calcule la version (`versionName = maVariable`), le
+    bandeau la lit dans `version.properties` ou `gradle.properties` (`versionName`,
+    ou `versionMajor` / `versionMinor` / `versionPatch`) ;
+  - les commentaires du script sont ignorés : un exemple comme
+    `// versionName = "$major.$minor.$patch"` ne s'affiche plus à la place de la
+    version ;
+  - une montée de version dans `version.properties` compte aussi pour l'alerte
+    « CHANGELOG pas touché ».
 - **0.3.1** — 2026-10-07 — Jauges à jour :
   - le bouton ↻ relit aussi les quotas ;
   - mise à jour automatique chaque minute et dès l'ouverture de session ;
