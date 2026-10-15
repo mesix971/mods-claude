@@ -183,6 +183,22 @@ async function shell($: $, cmd: string, agentId: string | undefined, go: () => P
   return r
 }
 
+/**
+ * Ce que tu fais de ses scènes, pour qui veut l'écouter (un module qui
+ * enveloppe celui-ci, comme une version perso qui en tient un journal) : une
+ * caresse (♥) ou un zap (🎲), avec la scène qu'il jouait.
+ */
+export const gestes: { ecoute?: (geste: 'caresse' | 'zappe', anim: ClawdAnim) => void } = {}
+
+/** Prévient qui écoute, sans jamais gêner le bouton. */
+function geste(g: 'caresse' | 'zappe', anim: ClawdAnim) {
+  try {
+    gestes.ecoute?.(g, anim)
+  } catch {
+    // l'écoute est en option
+  }
+}
+
 // ------------------------------------------------------------------ hooks
 
 export const register: Register = on => {
@@ -406,12 +422,14 @@ export const register: Register = on => {
     else if (bulleVue?.id !== p.id) bulleVue = { id: p.id, deja: boulotEnCours(maintenant) }
 
     const caresser = async () => {
+      geste('caresse', anim)
       const n = (await update($, caresses, c => c + 1)) ?? 0
       await $.store.set('caresses', n)
       await reveil($)
       await scene($, 'coeur', 3000)
     }
     const occupeToi = async () => {
+      geste('zappe', anim)
       await reveil($)
       await update($, passage, () => null)
       await occupe($, tirage())
