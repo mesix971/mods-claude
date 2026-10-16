@@ -100,6 +100,16 @@
 
 ## atelier
 
+- **0.4.0** — 2026-10-16 — La liste de tâches de Claude en pastilles, sous les
+  jauges :
+  - un rond par étape : en pointillé tant qu'elle attend, qui tourne pendant
+    qu'elle avance, coché en vert une fois faite ;
+  - le nom de l'étape s'affiche au survol de sa pastille ;
+  - elle suit la liste de l'app desktop, les tâches de Claude Code (`TaskCreate`,
+    `TaskUpdate`, `TaskList`) et `TodoWrite` ; la liste d'un sous-agent ne remplace pas celle
+    de la session ;
+  - un plan entièrement fait laisse la place au suivant dès ton message
+    suivant ; en terminal, des ◌ ◐ ✔.
 - **0.3.2** — 2026-10-08 — Version calculée bien lue :
   - quand le script Gradle calcule la version (`versionName = maVariable`), le
     bandeau la lit dans `version.properties` ou `gradle.properties` (`versionName`,

@@ -32,12 +32,23 @@ export type AtelierUsage = {
   contextPercent: number | null
 }
 
+/** Une étape de la liste de tâches de Claude, dessinée en pastille sous les jauges */
+export type AtelierTache = {
+  /** `plan-2` (liste de l'app desktop), `task-7` (TaskCreate), `todo-1` (TodoWrite) */
+  id: string
+  /** Ce que l'étape fait : affiché au survol de sa pastille */
+  nom: string
+  etat: 'attente' | 'encours' | 'faite'
+}
+
 declare module 'claude-code' {
   interface PluginState {
     atelier: {
       android: AtelierAndroid | null
       git: AtelierGit | null
       usage: AtelierUsage | null
+      /** La liste de tâches de Claude, dans l'ordre (vide : pas de pastilles) */
+      taches: AtelierTache[]
       /** Avance d'un cran par minute, pour redessiner le bandeau */
       minute: number
       busy: string | null

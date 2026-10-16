@@ -3,6 +3,7 @@
 import { expect, mock, test } from 'claude-code/testing'
 
 import { jauges } from './jauges'
+import { MAX_TACHES, ajouteTache, depuisTodos, interrompue, majTache, suitPlan, svgTaches, toutFait } from './taches'
 
 const LOCALAPPDATA = 'C:/Users/dev/AppData/Local'
 const ADB = `${LOCALAPPDATA}/Android/Sdk/platform-tools/adb.exe`
@@ -354,5 +355,184 @@ android {
   const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
   expect(await ui.find({ type: 'Text', text: /📱 3\.15\.2/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /\$major/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+// ------------------------------------------------------- liste de tâches
+
+test('tâches : la liste suit le plan, ses avances, et les tâches de Claude Code', async () => {
+  const plan = suitPlan([], {
+    items: [
+      { content: 'Lire le code', status: 'in_progress' },
+      { content: 'Corriger le bug', status: 'pending' },
+      { content: 'Vérifier', status: 'pending' },
+    ],
+  })
+  expect(plan.map(t => t.etat)).toEqual(['encours', 'attente', 'attente'])
+  const deux = suitPlan(plan, { advance: true })
+  expect(deux.map(t => t.etat)).toEqual(['faite', 'encours', 'attente'])
+  // dans le désordre (numéros à partir de 1) : une seule étape en cours
+  expect(suitPlan(deux, { start: 3 }).map(t => t.etat)).toEqual(['faite', 'attente', 'encours'])
+  expect(suitPlan(deux, { done: [2], start: 3 }).map(t => t.etat)).toEqual(['faite', 'faite', 'encours'])
+  // la dernière avance : tout est fait
+  expect(toutFait(suitPlan(suitPlan(deux, { advance: true }), { advance: true }))).toBe(true)
+  expect(toutFait([])).toBe(false)
+
+  // les tâches de Claude Code, par leur id
+  let l = ajouteTache([], '1', 'Lire le code')
+  l = ajouteTache(l, '2', 'Corriger')
+  l = majTache(l, { taskId: '1', status: 'completed' })
+  l = majTache(l, { taskId: '2', status: 'in_progress', subject: 'Corriger le bug' })
+  expect(l).toEqual([
+    { id: 'task-1', nom: 'Lire le code', etat: 'faite' },
+    { id: 'task-2', nom: 'Corriger le bug', etat: 'encours' },
+  ])
+  expect(majTache(l, { taskId: '1', status: 'deleted' }).map(t => t.id)).toEqual(['task-2'])
+
+  // un nom piégé ne casse pas le dessin
+  const { svg } = svgTaches([{ id: 'x', nom: 'a <b> & "c"', etat: 'attente' }])
+  expect(svg).toContain('<title>a &lt;b&gt; &amp; &quot;c&quot;</title>')
+})
+
+function bandeauVide(on: Parameters<Parameters<typeof test>[1] extends infer F ? F extends ($: never, on: infer O) => unknown ? (o: O) => void : never : never>[0]) {
+  mock.clock(on as never)
+  mock.env(on as never, {})
+  on('session.cwd', () => ({ value: 'C:/vide' }))
+  on('fs.exists', () => ({ value: false }))
+  on('process.run', () => ({ value: { exitCode: 1, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
+  on('ui.toast', () => ({ value: undefined }))
+  on('prompt.submit', ($, e) => ({ text: e.text }))
+  on('ui.render', ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    return <Text>moteur</Text>
+  })
+}
+
+test('bandeau : la liste de l’app desktop en pastilles, le nom au survol, cochées en vert', async ($, on) => {
+  bandeauVide(on as never)
+  on('tool.call', { tool: 'mcp__ccd_turn__update_plan' }, () => ({ result: { ok: true } }))
+  const plan = (args: Record<string, unknown>) => $.tool.call({ tool: 'mcp__ccd_turn__update_plan', tool_use_id: 'plan', ...args })
+  await plan({
+    items: [
+      { content: 'Lire le code', status: 'in_progress' },
+      { content: 'Corriger le bug', status: 'pending' },
+      { content: 'Vérifier', status: 'pending' },
+    ],
+    scope: 'first_task',
+  })
+  await plan({ advance: true })
+
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  const svg = await ui.find({ type: 'Svg' })
+  // dessiné en cadre interactif : c'est ce qui fait marcher l'infobulle du survol
+  expect(svg?.props?.isInteractive).toBe(true)
+  const source = String(svg?.props?.source ?? '')
+  expect(source).toContain('<title>Lire le code</title>')
+  expect(source).toContain('#4cc38a')
+  expect(String(svg?.props?.alt)).toBe('Tâches 1/3 : Lire le code (faite), Corriger le bug (en cours), Vérifier (à faire)')
+  expect(await ui.find({ type: 'Text', text: /moteur/ })).toBeDefined()
+  await ui.unmount()
+
+  const term = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect(await term.find({ type: 'Text', text: /✔/ })).toBeDefined()
+  expect(await term.find({ type: 'Text', text: /◐/ })).toBeDefined()
+  await term.unmount()
+
+  // tout est fait : les pastilles restent cochées jusqu'au message suivant
+  await plan({ advance: true })
+  await plan({ advance: true })
+  const fini = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  expect(String((await fini.find({ type: 'Svg' }))?.props?.alt)).toContain('Tâches 3/3')
+  await $.prompt.submit({ text: 'merci' })
+  expect(await fini.find({ type: 'Svg' })).toBeUndefined()
+  expect(await fini.find({ type: 'Text', text: /moteur/ })).toBeDefined()
+  await fini.unmount()
+})
+
+test('bandeau : les tâches de Claude Code, créées, cochées, supprimées', async ($, on) => {
+  bandeauVide(on as never)
+  let n = 0
+  on('tool.call', { tool: 'TaskCreate' }, ($, e) => ({ result: { task: { id: String(++n), subject: e.subject } } }))
+  on('tool.call', { tool: 'TaskUpdate' }, ($, e) =>
+    e.taskId === '99'
+      ? { result: { success: false, taskId: e.taskId, updatedFields: [], error: 'Task not found' } }
+      : { result: { success: true, taskId: e.taskId, updatedFields: ['status'] } },
+  )
+  await $.tool.call({ tool: 'TaskCreate', subject: 'Lire le code', description: 'tout lire' })
+  await $.tool.call({ tool: 'TaskCreate', subject: 'Corriger le bug', description: 'le corriger' })
+  await $.tool.call({ tool: 'TaskUpdate', taskId: '1', status: 'completed' })
+
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  const alt = async () => String((await ui.find({ type: 'Svg' }))?.props?.alt ?? '')
+  expect(await alt()).toBe('Tâches 1/2 : Lire le code (faite), Corriger le bug (à faire)')
+  await $.tool.call({ tool: 'TaskUpdate', taskId: '2', status: 'deleted' })
+  expect(await alt()).toBe('Tâches 1/1 : Lire le code (faite)')
+  // l'outil répond sans erreur mais n'a rien changé : pas de pastille fantôme
+  await $.tool.call({ tool: 'TaskUpdate', taskId: '99', status: 'in_progress' })
+  expect(await alt()).toBe('Tâches 1/1 : Lire le code (faite)')
+  await ui.unmount()
+})
+
+test('tâches : les cas limites relevés à la relecture', async () => {
+  const plan = suitPlan([], { items: [{ content: 'A', status: 'completed' }, { content: 'B', status: 'in_progress' }, { content: 'C', status: 'pending' }] })
+  // un `start` hors de la liste ne dérange pas l'étape en cours
+  expect(suitPlan(plan, { done: [1], start: 99 }).map(t => t.etat)).toEqual(['faite', 'encours', 'attente'])
+  // tour interrompu : l'étape en cours repasse en attente
+  expect(interrompue(plan).map(t => t.etat)).toEqual(['faite', 'attente', 'attente'])
+  // une tâche qu'on n'a pas vue naître (session reprise) apparaît quand même
+  expect(majTache([], { taskId: '7', status: 'in_progress' })).toEqual([{ id: 'task-7', nom: 'Tâche 7', etat: 'encours' }])
+  // les tâches de Claude Code ne se mêlent pas aux restes d'un plan
+  expect(ajouteTache(plan, '1', 'Nouvelle').map(t => t.id)).toEqual(['task-1'])
+  // liste pleine : la plus ancienne laisse sa place, la nouvelle s'affiche
+  let l = ajouteTache([], 0, 'premiere')
+  for (let i = 1; i <= MAX_TACHES; i++) l = ajouteTache(l, i, `t${i}`)
+  expect(l.length).toBe(MAX_TACHES)
+  expect(l[0]!.nom).toBe('t1')
+  expect(l[MAX_TACHES - 1]!.nom).toBe(`t${MAX_TACHES}`)
+  // un caractère de contrôle (interdit en XML) ne casse pas le dessin
+  const [sale] = depuisTodos([{ content: 'a\u0001b\u0000c', status: 'pending' }])
+  expect(sale!.nom).toBe('a b c')
+  // à l'arrêt, l'anneau en cours est figé ; il ne tourne que pendant le travail
+  expect(svgTaches(plan, false).svg).not.toContain('animateTransform')
+  expect(svgTaches(plan, true).svg).toContain('animateTransform')
+})
+
+test('bandeau : TodoWrite et TaskList suivis, pas la liste d’un sous-agent, et vidés au /clear', async ($, on) => {
+  bandeauVide(on as never)
+  on('tool.call', { tool: 'TodoWrite' }, ($, e) => ({ result: { oldTodos: [], newTodos: e.todos } }))
+  on('tool.call', { tool: 'TaskList' }, () => ({
+    result: { tasks: [{ id: '3', subject: 'Recaler la liste', status: 'in_progress', blockedBy: [] }] },
+  }))
+  on('turn.complete', () => ({ text: '' }))
+  on('session.end', ($, e) => ({ sessionId: e.sessionId }))
+  const todos = [
+    { content: 'Lire le code', status: 'completed', activeForm: 'Lecture du code' },
+    { content: 'Corriger le bug', status: 'in_progress', activeForm: 'Correction du bug' },
+  ]
+  await $.tool.call({ tool: 'TodoWrite', todos })
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  const alt = async () => String((await ui.find({ type: 'Svg' }))?.props?.alt ?? '')
+  expect(await alt()).toBe('Tâches 1/2 : Lire le code (faite), Corriger le bug (en cours)')
+
+  // la liste d'un sous-agent ne remplace pas celle de la session
+  await $.tool.call({ tool: 'TodoWrite', todos: [{ content: 'Fouiller', status: 'in_progress', activeForm: 'Fouille' }], agentId: 'a1' })
+  expect(await alt()).toBe('Tâches 1/2 : Lire le code (faite), Corriger le bug (en cours)')
+
+  // tour interrompu : l'étape en cours repasse en attente
+  await $.turn.complete({ answer: '', durationMs: 1, isAborted: true, turnId: 't1', reason: 'aborted' })
+  expect(await alt()).toBe('Tâches 1/2 : Lire le code (faite), Corriger le bug (à faire)')
+
+  // un message glissé par le moteur ne vide pas un plan, même fini
+  await $.tool.call({ tool: 'TodoWrite', todos: todos.map(t => ({ ...t, status: 'completed' })) })
+  await $.prompt.submit({ text: 'rappel', isMeta: true })
+  expect(await alt()).toContain('Tâches 2/2')
+
+  // TaskList recale la liste sur les tâches de Claude Code
+  await $.tool.call({ tool: 'TaskList' })
+  expect(await alt()).toBe('Tâches 0/1 : Recaler la liste (en cours)')
+
+  // /clear : nouvelle conversation, plus de pastilles
+  await $.session.end({ reason: 'clear', sessionId: 's1', resume: { id: 's1' } })
+  expect(await ui.find({ type: 'Svg' })).toBeUndefined()
   await ui.unmount()
 })

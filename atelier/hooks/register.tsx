@@ -2,7 +2,9 @@
 //
 // 1. Bandeau au-dessus du prompt : version déclarée / dernier APK / version
 //    installée sur le tel (+ bouton Installer), état git (+ bouton Commit +
-//    push), jauges des quotas 5 h / 7 j et du contexte.
+//    push), jauges des quotas 5 h / 7 j et du contexte, et dessous la liste de
+//    tâches de Claude en pastilles (son nom au survol, cochée en vert une fois
+//    faite).
 // 2. Garde-fous sur Bash et PowerShell : JBR d'Android Studio cassé corrigé,
 //    JAVA_HOME ajouté à gradlew, commandes destructrices soumises à ton accord,
 //    secrets bloqués avant commit/push, commit non demandé confirmé, pas
@@ -14,14 +16,16 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, ToolCallResult } from 'claude-code'
 
-import type { AtelierAndroid, AtelierGit, AtelierUsage } from '../types'
+import type { AtelierAndroid, AtelierGit, AtelierTache, AtelierUsage } from '../types'
 import { COULEURS, jauges, resumeJauges, svgJauges, texteJauges } from './jauges'
+import { ajouteTache, depuisTaskList, depuisTodos, interrompue, majTache, resumeTaches, suitPlan, svgTaches, texteTaches, toutFait } from './taches'
 
 type $ = EngineInterface
 
 const android = atom({ plugin: 'atelier', key: 'android' } as const, null)
 const git = atom({ plugin: 'atelier', key: 'git' } as const, null)
 const usage = atom({ plugin: 'atelier', key: 'usage' } as const, null)
+const taches = atom({ plugin: 'atelier', key: 'taches' } as const, [])
 /** Avance d'un cran par minute : le bandeau se redessine même sans nouvelle donnée */
 const minute = atom({ plugin: 'atelier', key: 'minute' } as const, 0)
 const busy = atom({ plugin: 'atelier', key: 'busy' } as const, null)
@@ -148,6 +152,15 @@ async function trouverJbr($: $): Promise<string | null> {
 const hhmm = (ms: number) => {
   const d = new Date(ms)
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+/** Met la liste de tâches à jour sans jamais gêner l'outil : une pastille ratée ne casse pas l'appel */
+async function majTaches($: $, f: (l: readonly AtelierTache[]) => AtelierTache[]) {
+  try {
+    await update($, taches, f)
+  } catch {
+    // module rechargé en plein appel : la liste se recalera au suivant
+  }
 }
 
 const JOURS = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.']
@@ -628,6 +641,9 @@ export const register: Register = on => {
 
   on('prompt.submit', async ($, e, next) => {
     lastPrompt = e.text
+    // un plan entièrement fait laisse la place au suivant (pas sur un message
+    // que le moteur glisse lui-même : tu n'as pas encore vu le plan fini)
+    if (!e.isMeta) await majTaches($, l => (toutFait(l) ? [] : [...l]))
     if (!rappelFrancais) return next(e)
     rappelFrancais = false
     return next({
@@ -646,9 +662,43 @@ export const register: Register = on => {
     shell($, 'PowerShell', e.command, e.run_in_background === true, command => next({ ...e, command })),
   )
 
+  // ---------------------------------------------- la liste de tâches de Claude
+
+  // La liste de l'app desktop et celle de TodoWrite appartiennent à une
+  // boucle : celle d'un sous-agent ne remplace pas celle de la session.
+  on('tool.call', { tool: 'mcp__ccd_turn__update_plan' }, async ($, e, next) => {
+    const r = await next(e)
+    if (e.agentId === undefined && r.deny === undefined && !r.isError) await majTaches($, l => suitPlan(l, e))
+    return r
+  })
+  on('tool.call', { tool: 'TodoWrite' }, async ($, e, next) => {
+    const r = await next(e)
+    if (e.agentId === undefined && r.deny === undefined && !r.isError) await majTaches($, () => depuisTodos(e.todos))
+    return r
+  })
+  // les tâches de Claude Code sont celles de toute la session, sous-agents compris
+  on('tool.call', { tool: 'TaskCreate' }, async ($, e, next) => {
+    const r = await next(e)
+    if (r.deny === undefined && !r.isError) await majTaches($, l => ajouteTache(l, r.result?.task?.id, r.result?.task?.subject ?? e.subject))
+    return r
+  })
+  on('tool.call', { tool: 'TaskUpdate' }, async ($, e, next) => {
+    const r = await next(e)
+    // l'outil peut répondre sans erreur mais sans rien changer (`success: false`)
+    if (r.deny === undefined && !r.isError && r.result?.success !== false) await majTaches($, l => majTache(l, e))
+    return r
+  })
+  on('tool.call', { tool: 'TaskList' }, async ($, e, next) => {
+    const r = await next(e)
+    if (r.deny === undefined && !r.isError && Array.isArray(r.result?.tasks)) await majTaches($, () => depuisTaskList(r.result.tasks))
+    return r
+  })
+
   on('turn.complete', async ($, e, next) => {
     const ran = await next(e)
     if (e.agentId === undefined) {
+      // tour interrompu : l'étape en cours n'avance plus
+      if (e.isAborted) await majTaches($, interrompue)
       if (!e.isAborted && isEnglish(e.answer)) {
         rappelFrancais = true
         $.ui.toast('atelier : réponse en anglais détectée, rappel envoyé au prochain message')
@@ -665,6 +715,12 @@ export const register: Register = on => {
         .catch(() => {})
     }
     return ran
+  })
+
+  // /clear ou une reprise : le processus continue sur une autre conversation, qui a sa propre liste
+  on('session.end', async ($, e, next) => {
+    await majTaches($, () => [])
+    return next(e)
   })
 
   on('session.measure', async ($, e, next) => {
@@ -694,7 +750,8 @@ export const register: Register = on => {
     const u = await read($, usage)
     await read($, minute) // redessin chaque minute
     const enCours = await read($, busy)
-    if (!a && !g && !u) return next(e)
+    const lt = await read($, taches)
+    if (!a && !g && !u && lt.length === 0) return next(e)
     // on compose au lieu de remplacer : ce que dessinent les autres mods
     // (clawd) se place à droite de nos lignes, posé sur le bord du bas
     const dessous = await next(e)
@@ -717,6 +774,25 @@ export const register: Register = on => {
           {texteJauges(lj, quand).map(j => (
             <Text color={j.niveau === 'ok' ? undefined : COULEURS[j.niveau]} dimColor={j.niveau === 'ok'}>
               {j.texte}
+            </Text>
+          ))}
+        </Box>
+      )
+    }
+
+    // la liste de tâches en pastilles : le nom d'une étape au survol (d'où
+    // isInteractive) sur desktop, des ◌ ◐ ✔ ailleurs
+    let ronds: JSX.Element | null = null
+    if (lt.length > 0 && e.surface === 'desktop') {
+      const { Svg } = $.ui.resolve(e)
+      const dessin = svgTaches(lt, e.props.isWorking === true)
+      ronds = <Svg source={dessin.svg} alt={resumeTaches(lt)} width={dessin.largeur} height={18} isInteractive />
+    } else if (lt.length > 0) {
+      ronds = (
+        <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
+          {texteTaches(lt).map(t => (
+            <Text color={t.etat === 'faite' ? COULEURS.ok : undefined} dimColor={t.etat === 'attente'}>
+              {t.texte}
             </Text>
           ))}
         </Box>
@@ -802,6 +878,11 @@ export const register: Register = on => {
               <Text> </Text>
               <Button key="refresh" label="↻" plain dimColor onPress={() => refresh($)} />
               <Button key="hide" label="Masquer" role="dismiss" dimColor onPress={() => update($, isHidden, () => true)} />
+            </Box>
+          )}
+          {ronds && (
+            <Box flexDirection="row" alignItems="center">
+              {ronds}
             </Box>
           )}
           {enCours && <Text color="cyan">⏳ {enCours}</Text>}

@@ -9,7 +9,7 @@ Deux mods pour [Claude Code](https://claude.com/claude-code) :
 - **clawd** : le petit Claude orange en pixel art qui vit au-dessus de ton
   prompt et réagit, sans un mot, à ce qui se passe dans ta session.
 - **atelier** : un bandeau projet (versions APK ↔ téléphone, git, jauges de
-  quotas) et des garde-fous pour le dev Android.
+  quotas, tâches de Claude en pastilles) et des garde-fous pour le dev Android.
 
 Projet perso, fan-made et non officiel, sans lien avec Anthropic.
 
@@ -104,6 +104,9 @@ suivent ton thème clair ou sombre. Pas un mot : tout passe par ses gestes.
   - **heure du reset** : elle s'affiche quand ça devient serré.
 
   Un toast t'avertit aussi à 80 % puis à 95 %.
+- Juste en dessous, la liste de tâches de Claude en pastilles : un rond par
+  étape, en pointillé tant qu'elle attend, qui tourne pendant qu'elle avance,
+  coché en vert une fois faite. Le nom de l'étape s'affiche au survol.
 
 **Les garde-fous sur Bash et PowerShell**
 
