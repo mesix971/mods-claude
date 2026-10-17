@@ -2,8 +2,15 @@
 // sorties réelles d'adb et de git, anonymisées (app, appareil, utilisateur).
 import { expect, mock, test } from 'claude-code/testing'
 
-import { jauges } from './jauges'
-import { MAX_TACHES, ajouteTache, depuisTodos, interrompue, majTache, suitPlan, svgTaches, toutFait } from './taches'
+import { ajouteAgent, causeDe, finAgent, nettoieAgents, pastillesAgents, pingAgent } from './agents'
+import { analyse, estBuild, quoiBuild, sortieFond } from './build'
+import { ajouteReponse, debutTour, estLourde, finTour, mesureCout, texteConso, titreConso } from './conso'
+import { jauges, titreJauge } from './jauges'
+import { decrit, estDiscret } from './outils'
+import { svgPastilles } from './pastilles'
+import { coutReponse, euros, tokensCourts } from './prix'
+import { aRanger } from './rangement'
+import { MAX_TACHES, ajouteTache, depuisTodos, horodate, interrompue, majTache, pastillesTaches, planFini, suitPlan, svgTaches, toutFait } from './taches'
 
 const LOCALAPPDATA = 'C:/Users/dev/AppData/Local'
 const ADB = `${LOCALAPPDATA}/Android/Sdk/platform-tools/adb.exe`
@@ -131,6 +138,10 @@ test('bandeau : APK plus récent que le tel, git en avance, quota 5 h', async ($
       expect(alt).toContain('5 h 82 % → 23:10 (attention)')
       expect(alt).toContain('7 j 81 % → ven. 07:30 (attention)')
       expect(alt).toContain('contexte 45 %')
+      // interactif : le survol d'une jauge dit sa projection (4 h sur 5 écoulées pour 82 % : la limite tombe avant le reset)
+      const jaugesSvg = await ui.find({ type: 'Svg' })
+      expect(jaugesSvg?.props?.isInteractive).toBe(true)
+      expect(String(jaugesSvg?.props?.source)).toContain('À ce rythme : 100 % vers')
     } else {
       expect(await ui.find({ type: 'Text', text: /5 h ▰{7}▱ 82 % → 23:10/ })).toBeDefined()
     }
@@ -169,14 +180,18 @@ test('jauges : le rythme de consommation alerte avant le seuil', async () => {
   expect(jauges({ fiveHour: null, sevenDay: null, contextPercent: 80 }, fin)[0]!.niveau).toBe('attention')
 })
 
-test('↻ relit les quotas, et une fenêtre déjà réinitialisée repart à 0 %', async ($, on) => {
+test('↻ relit les quotas, une fenêtre déjà réinitialisée repart à 0 %, et « Masquer » dit comment revenir', async ($, on) => {
   // 08:00 à Paris
   mock.clock(on as never, { now: Date.UTC(2026, 9, 7, 6, 0) })
   mock.env(on as never, {})
   on('session.cwd', () => ({ value: 'C:/vide' }))
   on('fs.exists', () => ({ value: false }))
   on('process.run', () => ({ value: { exitCode: 1, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
-  on('ui.toast', () => ({ value: undefined }))
+  const toasts: string[] = []
+  on('ui.toast', ($, e) => {
+    toasts.push(e.text)
+    return { value: undefined }
+  })
   on('session.measure', ($, e) => ({ changed: e.changed }))
   on('ui.render', ($, e) => {
     const { Text } = $.ui.resolve(e)
@@ -205,6 +220,13 @@ test('↻ relit les quotas, et une fenêtre déjà réinitialisée repart à 0 %
   ]
   await ui.press({ key: 'refresh' })
   expect(await alt()).toContain('7 j 0 %')
+  expect(await alt()).toContain('contexte 92 %')
+  // « Masquer » : le bandeau s'efface, et un message dit comment le faire revenir
+  await ui.press({ key: 'hide' })
+  expect(await ui.find({ type: 'Svg' })).toBeUndefined()
+  expect(toasts).toContain('Bandeau atelier masqué : tape /atelier pour le ré-afficher')
+  // /atelier le fait revenir
+  await $.command.run({ command: 'atelier', args: '', origin: { kind: 'composer' } })
   expect(await alt()).toContain('contexte 92 %')
   await ui.unmount()
 })
@@ -391,11 +413,11 @@ test('tâches : la liste suit le plan, ses avances, et les tâches de Claude Cod
 
   // un nom piégé ne casse pas le dessin
   const { svg } = svgTaches([{ id: 'x', nom: 'a <b> & "c"', etat: 'attente' }])
-  expect(svg).toContain('<title>a &lt;b&gt; &amp; &quot;c&quot;</title>')
+  expect(svg).toContain('<title>a &lt;b&gt; &amp; &quot;c&quot; — à faire</title>')
 })
 
 function bandeauVide(on: Parameters<Parameters<typeof test>[1] extends infer F ? F extends ($: never, on: infer O) => unknown ? (o: O) => void : never : never>[0]) {
-  mock.clock(on as never)
+  const horloge = mock.clock(on as never)
   mock.env(on as never, {})
   on('session.cwd', () => ({ value: 'C:/vide' }))
   on('fs.exists', () => ({ value: false }))
@@ -406,6 +428,7 @@ function bandeauVide(on: Parameters<Parameters<typeof test>[1] extends infer F ?
     const { Text } = $.ui.resolve(e)
     return <Text>moteur</Text>
   })
+  return horloge
 }
 
 test('bandeau : la liste de l’app desktop en pastilles, le nom au survol, cochées en vert', async ($, on) => {
@@ -427,7 +450,7 @@ test('bandeau : la liste de l’app desktop en pastilles, le nom au survol, coch
   // dessiné en cadre interactif : c'est ce qui fait marcher l'infobulle du survol
   expect(svg?.props?.isInteractive).toBe(true)
   const source = String(svg?.props?.source ?? '')
-  expect(source).toContain('<title>Lire le code</title>')
+  expect(source).toContain('<title>Lire le code — faite en ')
   expect(source).toContain('#4cc38a')
   expect(String(svg?.props?.alt)).toBe('Tâches 1/3 : Lire le code (faite), Corriger le bug (en cours), Vérifier (à faire)')
   expect(await ui.find({ type: 'Text', text: /moteur/ })).toBeDefined()
@@ -479,6 +502,8 @@ test('tâches : les cas limites relevés à la relecture', async () => {
   expect(suitPlan(plan, { done: [1], start: 99 }).map(t => t.etat)).toEqual(['faite', 'encours', 'attente'])
   // tour interrompu : l'étape en cours repasse en attente
   expect(interrompue(plan).map(t => t.etat)).toEqual(['faite', 'attente', 'attente'])
+  // travail clos sans rien en suspens : tout le plan est coché, pas les tâches d'une autre source
+  expect(planFini([...plan, { id: 'task-1', nom: 'x', etat: 'attente' }]).map(t => t.etat)).toEqual(['faite', 'faite', 'faite', 'attente'])
   // une tâche qu'on n'a pas vue naître (session reprise) apparaît quand même
   expect(majTache([], { taskId: '7', status: 'in_progress' })).toEqual([{ id: 'task-7', nom: 'Tâche 7', etat: 'encours' }])
   // les tâches de Claude Code ne se mêlent pas aux restes d'un plan
@@ -492,9 +517,23 @@ test('tâches : les cas limites relevés à la relecture', async () => {
   // un caractère de contrôle (interdit en XML) ne casse pas le dessin
   const [sale] = depuisTodos([{ content: 'a\u0001b\u0000c', status: 'pending' }])
   expect(sale!.nom).toBe('a b c')
-  // à l'arrêt, l'anneau en cours est figé ; il ne tourne que pendant le travail
-  expect(svgTaches(plan, false).svg).not.toContain('animateTransform')
-  expect(svgTaches(plan, true).svg).toContain('animateTransform')
+  // l'étape en cours est l'orbe qui respire (120 points), animé seulement pendant le travail
+  const anime = svgTaches(plan, true).svg
+  expect(anime).toContain('class="orbe"')
+  expect(anime.match(/<circle [^>]*fill-opacity/g)?.length).toBe(120)
+  expect(anime).toContain('class="o1"')
+  expect(anime).toContain('@keyframes orbe1')
+  expect(anime).toContain('prefers-reduced-motion')
+  const fige = svgTaches(plan, false).svg
+  expect(fige).toContain('class="orbe"')
+  expect(fige).not.toContain('class="o1"')
+  // sans étape en cours, pas une ligne de l'orbe
+  expect(svgTaches(suitPlan(plan, { done: [2] }), true).svg).not.toContain('orbe')
+  // trois orbes au plus ; même 40 étapes en cours tiennent dans la limite du moteur
+  const enCours = Array.from({ length: MAX_TACHES }, (_, i) => ({ id: `task-${i}`, nom: `t${i}`, etat: 'encours' as const }))
+  const lourd = svgTaches(enCours, true).svg
+  expect(lourd.match(/class="orbe"/g)?.length).toBe(3)
+  expect(lourd.length).toBeLessThan(131_072)
 })
 
 test('bandeau : TodoWrite et TaskList suivis, pas la liste d’un sous-agent, et vidés au /clear', async ($, on) => {
@@ -534,5 +573,462 @@ test('bandeau : TodoWrite et TaskList suivis, pas la liste d’un sous-agent, et
   // /clear : nouvelle conversation, plus de pastilles
   await $.session.end({ reason: 'clear', sessionId: 's1', resume: { id: 's1' } })
   expect(await ui.find({ type: 'Svg' })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('bandeau : Claude clôt son travail sans cocher ses dernières étapes, le plan s’affiche fini', async ($, on) => {
+  bandeauVide(on as never)
+  on('tool.call', { tool: 'mcp__ccd_turn__update_plan' }, () => ({ result: { ok: true } }))
+  on('tool.call', { tool: 'mcp__ccd_turn__wrap_up' }, () => ({ result: { ok: true } }))
+  const appel = (tool: string, args: Record<string, unknown>) => $.tool.call({ tool, tool_use_id: tool, ...args } as never)
+  const etapes = ['Plafonner', 'Déployer', 'Autoriser', 'Lancer', 'Colorer', 'Vérifier']
+  const plan = (faites: number) =>
+    etapes.map((content, i) => ({ content, status: i < faites ? 'completed' : i === faites ? 'in_progress' : 'pending' }))
+  await appel('mcp__ccd_turn__update_plan', { items: plan(2), scope: 'continuation' })
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  const alt = async () => String((await ui.find({ type: 'Svg' }))?.props?.alt ?? '')
+
+  // un récap qui te pose une question : les étapes restantes t'attendent vraiment
+  await appel('mcp__ccd_turn__wrap_up', { recap: 'la fenêtre d’autorisation attend ta validation', ask: 'Tu me dis quand c’est validé ?' })
+  expect(await alt()).toContain('Tâches 2/6')
+
+  // le vrai cas : 4 faites, la 5e en cours, la 6e à faire, puis le récap final sans question
+  await appel('mcp__ccd_turn__update_plan', { items: plan(4), scope: 'continuation' })
+  expect(await alt()).toContain('Tâches 4/6')
+  await appel('mcp__ccd_turn__wrap_up', { recap: 'le tri tourne et les couleurs sont appliquées' })
+  expect(await alt()).toContain('Tâches 6/6')
+  await ui.unmount()
+})
+
+// ------------------------------------------- conso, quotas, minuteur, build, sous-agents
+
+/** Un montant au millionième près (les flottants ne tombent pas juste) */
+const millioniemes = (x: number | null | undefined) => Math.round((x ?? NaN) * 1e6)
+
+test('prix : le coût d’une réponse au tarif API, et son écriture en euros', async () => {
+  const u = (entree: number, lu: number, ecrit: number, sortie: number) => ({ entree, lu, ecrit, sortie })
+  // tarifs officiels au million de tokens (pricing du 17/10/2026)
+  expect(coutReponse('claude-opus-5-5', u(1e6, 0, 0, 0))).toBe(4)
+  expect(millioniemes(coutReponse('claude-opus-5-5', u(0, 1e6, 1e6, 1e6)))).toBe(millioniemes(0.2 + 5 + 20))
+  expect(millioniemes(coutReponse('claude-sonnet-5-5', u(0, 1e6, 0, 0)))).toBe(millioniemes(0.1))
+  expect(millioniemes(coutReponse('claude-fable-5-1', u(0, 1e6, 0, 1e6)))).toBe(millioniemes(0.25 + 50))
+  // Haiku : au-delà de 100 000 tokens de prompt (cache compris), toute la requête au tarif long
+  expect(millioniemes(coutReponse('claude-haiku-5-5', u(50_000, 40_000, 0, 0)))).toBe(millioniemes(0.0054))
+  expect(millioniemes(coutReponse('claude-haiku-5-5', u(150_000, 0, 0, 0)))).toBe(millioniemes(0.075))
+  expect(coutReponse('modele-maison-7b', u(1e6, 0, 0, 0))).toBe(null)
+  expect(euros(1.1253)).toBe('1,00 €')
+  expect(euros(0.004)).toBe('< 0,01 €')
+  expect([tokensCourts(1_284_512), tokensCourts(9_400), tokensCourts(25_000), tokensCourts(850)]).toEqual(['1,3 M', '9,4 k', '25 k', '850'])
+})
+
+test('conso : le tour d’après /cost, sinon estimé, et l’alerte de conversation lourde', async () => {
+  // le moteur tient /cost : le tour vaut la différence depuis son début
+  let c = debutTour(null, 10)
+  c = ajouteReponse(c, 'claude-opus-5-5', { entree: 2_000, lu: 500_000, ecrit: 10_000, sortie: 3_000 }, true, 10.5)
+  expect(millioniemes(c.tour?.dollars)).toBe(millioniemes(0.5))
+  expect(c.tour?.estime).toBe(false)
+  expect(texteConso(c)).toBe('tour 515 k · 0,44 €')
+  expect(estLourde(c)).toBe(true)
+  expect(titreConso(c)).toContain('d’après /cost')
+  expect(titreConso(c)).toContain('⚠ Chaque réponse relit 512 k tokens')
+  // un sous-agent répond après la fin du tour : seule la session compte
+  c = finTour(c, 10.5)!
+  c = ajouteReponse(c, 'claude-haiku-5-5', { entree: 1_000, lu: 0, ecrit: 0, sortie: 100 }, false, 10.6)
+  expect(c.tour?.enCours).toBe(false)
+  expect(texteConso(c)).toBe('tour 515 k · 0,44 €')
+  expect(millioniemes(c.session.dollars)).toBe(millioniemes(10.6))
+  // sans /cost : estimé avec la grille de prix
+  const e = ajouteReponse(debutTour(null, null), 'claude-sonnet-5-5', { entree: 1_000, lu: 100_000, ecrit: 0, sortie: 1_000 }, true, null)
+  expect(millioniemes(e.tour?.dollars)).toBe(millioniemes(0.022))
+  expect(titreConso(e)).toContain('estimation d’après les tarifs API')
+  expect(estLourde(e)).toBe(false)
+})
+
+test('quotas : la projection au survol des jauges', async () => {
+  const quand = (ms: number) => new Date(ms).toISOString().slice(11, 16)
+  const fin = Date.UTC(2026, 9, 17, 15, 0)
+  const u = (p: number) => ({ fiveHour: { percent: p, resetsAt: new Date(fin).toISOString() }, sevenDay: null, contextPercent: 29 })
+  const a = (p: number, maintenant: number) => titreJauge(jauges(u(p), maintenant)[0]!, maintenant, quand)
+  // mi-fenêtre (12:30) : 30 % → environ 60 % au reset
+  expect(a(30, fin - 2.5 * 3600_000)).toBe('Quota 5 h : 30 % utilisés · reset 15:00\nÀ ce rythme : environ 60 % au reset. Tu tiens.')
+  // 70 % à mi-fenêtre : la limite tombe à 10:00 + 2 h 30 × 100/70, vers 13:34
+  expect(a(70, fin - 2.5 * 3600_000)).toBe('Quota 5 h : 70 % utilisés · reset 15:00\nÀ ce rythme : 100 % vers 13:34, avant le reset.')
+  expect(a(10, fin - 4.9 * 3600_000)).toContain('Trop tôt dans la fenêtre')
+  const ctx = jauges(u(30), fin - 3600_000).find(j => j.nom === 'ctx')!
+  expect(titreJauge(ctx, fin, quand, { tokens: 290_000, window: 1_000_000 })).toBe('Contexte : 29 % de la fenêtre (290 k sur 1 M tokens)')
+})
+
+test('minuteur : depuis quand une étape avance, en combien de temps elle s’est faite', async () => {
+  let l = horodate([], [{ id: 'plan-1', nom: 'Lire', etat: 'encours' }, { id: 'plan-2', nom: 'Corriger', etat: 'attente' }], 1_000)
+  expect(l[0]!.debut).toBe(1_000)
+  // ce qui dure encore se compte à la minute (le bandeau se redessine chaque minute)
+  expect(pastillesTaches(l, 125_000)[0]!.titre).toMatch(/^Lire — en cours depuis \d\d:\d\d \(2 min\)$/)
+  expect(pastillesTaches(l, 125_000)[1]!.titre).toBe('Corriger — à faire')
+  // la même étape renvoyée dans une nouvelle liste garde son heure de début
+  l = horodate(l, [{ id: 'plan-1', nom: 'Lire', etat: 'faite' }, { id: 'plan-2', nom: 'Corriger', etat: 'encours' }], 61_000)
+  expect(pastillesTaches(l, 61_000)[0]!.titre).toBe('Lire — faite en 1 min')
+  expect(l[1]!.debut).toBe(61_000)
+})
+
+test('build : ce qui se construit, et le verdict de sa sortie', async () => {
+  expect(estBuild('./gradlew assembleDebug')).toBe(true)
+  expect(estBuild('.\\gradlew.bat :app:testDebugUnitTest --no-daemon')).toBe(true)
+  expect(estBuild('flutter build apk --release')).toBe(true)
+  expect(estBuild('./gradlew --stop')).toBe(false)
+  expect(estBuild('git status')).toBe(false)
+  expect(quoiBuild('./gradlew :app:assembleDebug --no-daemon')).toBe(':app:assembleDebug')
+  expect(quoiBuild('flutter build apk --release')).toBe('flutter build apk')
+  const echec = analyse('> Task :app:compileDebugKotlin FAILED\ne: file:///C:/proj/app/src/Main.kt:3:5 Unresolved reference: foo\n\nBUILD FAILED in 12s', false)
+  expect(echec).toEqual({ etat: 'echec', detail: ':app:compileDebugKotlin — Unresolved reference: foo' })
+  expect(analyse('BUILD SUCCESSFUL in 41s\n37 actionable tasks', false).etat).toBe('ok')
+  expect(analyse('√ Built build\\app\\outputs\\flutter-apk\\app-release.apk (21.4MB)', false).etat).toBe('ok')
+  expect(analyse('rien de clair', true).etat).toBe('echec')
+  // une sortie qui ne tranche pas (tronquée par un | grep) : « terminé », ni vert ni rouge
+  expect(analyse('rien de clair', false).etat).toBe('fini')
+  // une séquence de couleur ou un caractère de contrôle ne passe pas dans le dessin
+  expect(analyse('\u001b[31merror: classe\u0007 introuvable\u001b[0m\nBUILD FAILED', false).detail).toBe('classe introuvable')
+  // seule la commande réellement lancée compte, pas un fichier gradlew qu'on manipule
+  for (const pasUnBuild of ['git add gradlew gradlew.bat', 'chmod +x gradlew', 'cat release.ps1', 'git commit -m "fix gradlew"', './gradlew tasks --all', './gradlew -p app tasks']) {
+    expect(estBuild(pasUnBuild)).toBe(false)
+  }
+  expect(estBuild('JAVA_HOME=/opt/jbr ./gradlew assembleDebug')).toBe(true)
+  expect(estBuild("$env:JAVA_HOME = 'C:\\jbr'; & .\\gradlew.bat test")).toBe(true)
+  expect(quoiBuild('export JAVA_HOME="/opt/jbr"; ./gradlew assembleDebug 2>&1 | tail -20')).toBe('assembleDebug')
+  expect(quoiBuild('./gradlew -p app --tests MaClasse testDebugUnitTest')).toBe('testDebugUnitTest')
+  expect(sortieFond('Command running in background with ID: b1. Output is being written to: C:\\tmp\\b1.output')).toBe('C:\\tmp\\b1.output')
+})
+
+test('sous-agents : leur pastille à la couleur du modèle, leur mission et leur durée', async () => {
+  let l = ajouteAgent([], { id: 'a1', type: 'eclaireur', mission: 'fouille le projet', modele: 'claude-haiku-5-5' }, 0)
+  l = ajouteAgent(l, { id: 'a2', type: 'relecteur', mission: 'relis le diff', modele: 'claude-sonnet-5-5' }, 0)
+  l = finAgent(l, 'a1', undefined, 130_000)
+  const p = pastillesAgents(l, 140_000)
+  expect(p[0]).toEqual({ titre: 'Eclaireur · Haiku 5.5 — fouille le projet\nFini en 2 min 10 s', forme: 'faite', teinte: '#9CB86A' })
+  expect(p[1]!.forme).toBe('encours')
+  expect(p[1]!.teinte).toBe('#E9A27F')
+  expect(nettoieAgents(l).map(a => a.id)).toEqual(['a2'])
+  // arrêté sur une erreur ou un refus : il n'a pas « fini », sa pastille le dit
+  const enErreur = pastillesAgents(finAgent(l, 'a2', causeDe('error'), 150_000), 150_000)[1]!
+  expect(enErreur.forme).toBe('attente')
+  expect(enErreur.titre).toContain('Arrêté sur une erreur')
+  expect(causeDe('answer')).toBe(undefined)
+  expect(causeDe('refusal')).toBe('refus')
+})
+
+test('relecture : arrondis, conso stable d’un tour à l’autre, limite atteinte, minuteur d’une étape renommée', async () => {
+  expect([tokensCourts(9_999), tokensCourts(999_999), tokensCourts(1_000_000)]).toEqual(['10 k', '1 M', '1 M'])
+  expect(euros(2_000 * 1.1253)).toBe('2 000 €')
+  // l'ambre d'une conversation lourde ne s'éteint pas au début du tour suivant
+  let c = ajouteReponse(debutTour(null, 1), 'claude-opus-5-5', { entree: 0, lu: 500_000, ecrit: 0, sortie: 10 }, true, 1.2)
+  c = debutTour(finTour(c, 1.2), 1.2)
+  expect(estLourde(c)).toBe(true)
+  // le coût mesuré par le moteur après le tour fait foi
+  expect(mesureCout(c, 1.5)?.tour?.dollars).toBeDefined()
+  expect(millioniemes(mesureCout(c, 1.5)?.tour?.dollars)).toBe(millioniemes(0.3))
+  // à 100 %, ce n'est plus une projection
+  const fin = Date.UTC(2026, 9, 17, 15, 0)
+  const pleine = jauges({ fiveHour: { percent: 100, resetsAt: new Date(fin).toISOString() }, sevenDay: null, contextPercent: null }, fin - 3600_000)[0]!
+  expect(titreJauge(pleine, fin - 3600_000, ms => new Date(ms).toISOString().slice(11, 16))).toContain('Limite atteinte')
+  // sans l'heure (une image générée hors session), pas de projection
+  expect(titreJauge(pleine, undefined, ms => String(ms))).not.toContain('rythme')
+  // une étape renommée en cours de route garde son heure de début
+  let l = horodate([], [{ id: 'plan-1', nom: 'Lire', etat: 'encours' }], 1_000)
+  l = horodate(l, [{ id: 'plan-1', nom: 'Lire le code', etat: 'encours' }], 5_000)
+  expect(l[0]!.debut).toBe(1_000)
+})
+
+test('outils : ce que fait un appel, en quelques mots, sans ses secrets', async () => {
+  expect(decrit({ tool: 'Read', file_path: 'C:/proj/app/src/Main.kt' })).toBe('Lecture · Main.kt')
+  expect(decrit({ tool: 'Bash', command: './gradlew assembleDebug', description: 'Build debug' })).toBe('Bash · Build debug')
+  expect(decrit({ tool: 'WebFetch', url: 'https://exemple.org/docs/page?x=1' })).toBe('Page web · exemple.org')
+  expect(decrit({ tool: 'Agent', subagent_type: 'eclaireur', description: 'fouille le projet' })).toBe('Sous-agent eclaireur · fouille le projet')
+  expect(decrit({ tool: 'mcp__github__create_issue' })).toBe('github · create_issue')
+  // ce qui ressemble à un secret ne s'affiche pas, même au survol
+  const curl = decrit({ tool: 'Bash', command: 'curl -H "Authorization: Bearer abc123def" "https://moi:motdepasse@exemple.org/api?token=zz9&x=1"' })
+  for (const secret of ['abc123def', 'motdepasse', 'zz9']) expect(curl).not.toContain(secret)
+  expect(decrit({ tool: 'WebFetch', url: 'https://moi:motdepasse@exemple.org/page' })).toBe('Page web · exemple.org')
+  expect(decrit({ tool: 'Bash', command: 'git push --password=hunter2 origin' })).not.toContain('hunter2')
+  // les formats courants relevés à la relecture : le secret ne reste pas visible
+  const bash = (command: string) => decrit({ tool: 'Bash', command })
+  const ps = (command: string) => decrit({ tool: 'PowerShell', command })
+  const fuites: [string, string][] = [
+    [bash('export GEMINI_API_KEY="AIzaSyD-exemple1234567890abcdef"'), 'AIzaSyD-exemple'],
+    [ps("$env:GITHUB_TOKEN = 'ghp_exemple1234567890abcdef'"), 'ghp_exemple'],
+    [bash(`curl -d '{"password":"hunter2"}' https://exemple.org`), 'hunter2'],
+    [ps('Invoke-RestMethod -Headers @{Authorization="Bearer abc123def"} https://exemple.org'), 'abc123def'],
+    [bash('curl -H "Authorization: abc123def" https://exemple.org'), 'abc123def'],
+    [bash('git clone https://ghp_exemple1234567890@github.com/moi/depot'), 'ghp_exemple'],
+    [bash('curl https://moi:p@ss@exemple.org/x'), 'ss@'],
+    [bash('curl -u admin:s3cret https://exemple.org'), 's3cret'],
+    [bash('curl "https://maps.exemple.org/api?key=AIzaSyD-exemple1234567890abcdef"'), 'AIzaSyD-exemple'],
+    [bash('echo ghp_exemple1234567890abcdef | gh auth login --with-token'), 'ghp_exemple'],
+    [bash('aws configure set aws_access_key_id AKIAexemple0123456'), 'exemple0123456'],
+    [bash('SECRET_KEY=abc123def python manage.py runserver'), 'abc123def'],
+    [bash('sqlcmd "Server=x;Uid=sa;Pwd=hunter2;Database=y"'), 'hunter2'],
+  ]
+  for (const [libelle, secret] of fuites) expect(libelle).not.toContain(secret)
+  // … sans masquer ce qui n'en est pas
+  for (const commande of ['git commit -m "fix refresh-token expiry"', 'git push -u origin main', 'git status', './gradlew assembleDebug', 'keytool -genkey -keystore release.jks']) {
+    expect(bash(commande)).toBe(`Bash · ${commande}`)
+  }
+  expect(ps('$pwd = Get-Location')).toBe('PowerShell · $pwd = Get-Location')
+  // l'hôte d'une page : sans identifiants, ni bout de mot de passe pris pour un port
+  expect(decrit({ tool: 'WebFetch', url: 'https://moi:pa/ss@exemple.org/x' })).toBe('Page web · moi')
+  expect(decrit({ tool: 'WebFetch', url: 'http://localhost:3000/x' })).toBe('Page web · localhost:3000')
+  expect(decrit({ tool: 'WebFetch', url: 'https://www.npmjs.com/package/@scope/pkg' })).toBe('Page web · www.npmjs.com')
+  // masqué avant d'être coupé : un secret à cheval sur la coupe ne fuit pas à moitié
+  expect(decrit({ tool: 'Bash', command: `${'x'.repeat(90)} https://moi:motdepasse@exemple.org` })).not.toContain('motde')
+  // le JAVA_HOME que le garde-fou ajoute n'est pas ce que Claude a demandé
+  expect(decrit({ tool: 'Bash', command: 'export JAVA_HOME="C:/jbr"; ./gradlew assembleDebug' })).toBe('Bash · ./gradlew assembleDebug')
+  // tenue de liste, question pour toi, plan à valider : pas d'onde
+  for (const outil of ['TaskCreate', 'AskUserQuestion', 'ExitPlanMode', 'EnterPlanMode']) expect(estDiscret(outil)).toBe(true)
+  expect(estDiscret('Bash')).toBe(false)
+  // un libellé à rallonge est coupé à 120 caractères
+  expect(Array.from(decrit({ tool: 'Agent', subagent_type: 'x'.repeat(60), description: 'y'.repeat(100) })).length).toBe(120)
+})
+
+test('sonar : un outil lancé par un sous-agent fait partir une onde, recalée sur son heure', async () => {
+  let l = ajouteAgent([], { id: 'a1', type: 'eclaireur', mission: 'fouille', modele: 'claude-haiku-5-5' }, 0)
+  l = pingAgent(l, 'a1', 1_000, 'Recherche · jauges')
+  l = pingAgent(l, 'a1', 1_500, 'Lecture · jauges.ts')
+  const p = pastillesAgents(l, 1_800)[0]!
+  expect(p.ondes).toEqual([800, 300])
+  expect(p.titre).toContain('2 outils lancés, le dernier : Lecture · jauges.ts')
+  // arrêté sur une erreur : son dernier outil reste dit
+  expect(pastillesAgents(finAgent(l, 'a1', 'erreur', 2_000), 2_000)[0]!.titre).toContain('Arrêté sur une erreur en 2 s\n2 outils lancés, le dernier : Lecture · jauges.ts')
+  const { svg } = svgPastilles([[p]], true)
+  expect(svg).toContain('animation-delay:-800ms;stroke:#9CB86A')
+  expect(svg).toContain('animation-delay:-300ms')
+  expect(svg).toContain('@keyframes onde')
+  // une fois l'onde passée, plus rien à dessiner
+  expect(svgPastilles([[pastillesAgents(l, 5_000)[0]!]], true).svg).not.toContain('class="onde"')
+})
+
+test('bandeau : chaque outil d’un sous-agent fait partir une onde de sa pastille', async ($, on) => {
+  bandeauVide(on as never)
+  on('agent.spawn', () => ({ model: 'claude-sonnet-5-5', agentId: 'a1' }))
+  on('tool.call', { tool: 'Bash' }, () => ({ result: { stdout: 'ok', stderr: '', interrupted: false } }))
+  let ecritures = 0
+  on('state.set', ($, e, next) => {
+    if ((e as { key?: string }).key === 'agents') ecritures++
+    return next(e)
+  })
+  await $.agent.spawn({ prompt: 'relis', subagentType: 'relecteur', description: 'relis le diff' } as never)
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  const source = async () => String((await ui.findAll({ type: 'Svg' })).find(s => String(s.props?.alt).startsWith('Sous-agents'))?.props?.source)
+  expect(await source()).not.toContain('class="onde"')
+  // un outil de la conversation principale : pas d'onde
+  await $.tool.call({ tool: 'Bash', command: 'git status', description: 'État git' })
+  expect(await source()).not.toContain('class="onde"')
+  await $.tool.call({ tool: 'Bash', command: 'git diff', description: 'Diff', agentId: 'a1' } as never)
+  expect(await source()).toContain('class="onde"')
+  expect(await source()).toContain('1 outil lancé, le dernier : Bash · Diff')
+  // un sous-agent pas encore vu n'a pas de pastille : son outil n'écrit rien
+  // (le compteur, lui, a bien vu les écritures du sous-agent connu)
+  expect(ecritures).toBeGreaterThan(0)
+  const avant = ecritures
+  await $.tool.call({ tool: 'Bash', command: 'ls', description: 'Liste', agentId: 'inconnu' } as never)
+  expect(ecritures).toBe(avant)
+  await ui.unmount()
+})
+
+test('bandeau : un build interrompu ou refusé ne passe pas au rouge', async ($, on) => {
+  bandeauVide(on as never)
+  let reponse: Record<string, unknown> = {
+    result: { stdout: '> Task :app:compileDebugKotlin FAILED\n\nBUILD FAILED in 3s', stderr: '', interrupted: false },
+  }
+  on('tool.call', { tool: 'Bash' }, () => reponse as never)
+  await $.tool.call({ tool: 'Bash', command: './gradlew assembleDebug' })
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  const alt = async () => String((await ui.find({ type: 'Svg' }))?.props?.alt ?? '')
+  expect(await alt()).toContain('échoué')
+  // refusé (pas lancé) : on garde le verdict du build d'avant
+  reponse = { deny: 'refusé' }
+  await $.tool.call({ tool: 'Bash', command: './gradlew assembleRelease' })
+  expect(await alt()).toContain('Build assembleDebug — échoué')
+  // interrompu en cours : ni réussi ni échoué
+  reponse = { result: { stdout: '', stderr: '', interrupted: true } }
+  await $.tool.call({ tool: 'Bash', command: './gradlew assembleRelease' })
+  expect(await alt()).toContain('Build assembleRelease — interrompu')
+  await ui.unmount()
+})
+
+test('bandeau : un build de fond n’est pas déclaré fini sans la liste du moteur, et un sous-agent fini avant d’être vu', async ($, on) => {
+  bandeauVide(on as never)
+  on('tool.call', { tool: 'Bash' }, () => ({ result: { stdout: '', stderr: '', interrupted: false, backgroundTaskId: 'b1' } }))
+  on('classic.Stop', () => ({}))
+  on('turn.complete', () => ({ text: '' }))
+  on('agent.spawn', () => ({ model: 'claude-sonnet-5-5', agentId: 'a7' }))
+  await $.tool.call({ tool: 'Bash', command: './gradlew assembleRelease', run_in_background: true })
+  await $.classic.Stop({ stop_hook_active: false } as never)
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  const alt = async () => String((await ui.find({ type: 'Svg' }))?.props?.alt ?? '')
+  expect(await alt()).toContain('en cours depuis')
+  // sa fin arrive avant que son départ ne soit enregistré : il apparaît fini, pas « en cours » pour toujours
+  await $.turn.complete({ answer: 'fait', durationMs: 1, isAborted: false, turnId: 't2', reason: 'answer', agentId: 'a7' } as never)
+  await $.agent.spawn({ prompt: 'relis', subagentType: 'relecteur', description: 'relis le diff' } as never)
+  expect(await alt()).toContain('Relecteur (fini)')
+  await ui.unmount()
+})
+
+test('bandeau : la conso du tour en direct, au tarif API, et l’alerte de conversation lourde', async ($, on) => {
+  bandeauVide(on as never)
+  let cout = 2
+  on('session.usage', () => ({ value: { startedAt: 0, context: { tokens: 0, window: 1_000_000, percent: 0 }, rateLimits: [], cost: { usd: cout } } }))
+  on('turn.start', () => ({ turnId: 't1' }))
+  on('turn.complete', () => ({ text: '' }))
+  // la réponse simulée rappelle le pas auquel elle répond
+  on('turn.step', async function* ($: unknown, e: { turnId: string; index: number }) {
+    return {
+      turnId: e.turnId,
+      index: e.index,
+      answer: '',
+      toolUses: [],
+      stopReason: 'end_turn',
+      usage: { model: 'claude-opus-5-5', input_tokens: 2_000, output_tokens: 3_000, cache_read_input_tokens: 500_000, cache_creation_input_tokens: 10_000 },
+    }
+  } as never)
+  await $.turn.start({ turnId: 't1' } as never)
+  cout = 2.5
+  const pas = $.turn.step({ turnId: 't1', index: 0, model: 'claude-opus-5-5', messageCount: 2 } as never)
+  for await (const _ of pas) void _
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  const svg = await ui.find({ type: 'Svg' })
+  expect(svg?.props?.isInteractive).toBe(true)
+  expect(String(svg?.props?.alt)).toContain('Conso : tour 515 k · 0,44 €')
+  const source = String(svg?.props?.source)
+  expect(source).toContain('d’après /cost')
+  expect(source).toContain('class="pc attention"')
+  await ui.unmount()
+  const term = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect(await term.find({ type: 'Text', text: /tour 515 k · 0,44 €/ })).toBeDefined()
+  await term.unmount()
+})
+
+test('bandeau : les sous-agents en pastilles, puis effacés au message suivant', async ($, on) => {
+  bandeauVide(on as never)
+  on('agent.spawn', () => ({ model: 'claude-haiku-5-5', agentId: 'a1' }))
+  on('turn.complete', () => ({ text: '' }))
+  await $.agent.spawn({ prompt: 'fouille', subagentType: 'eclaireur', description: 'fouille le projet' } as never)
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  const svg = async () => await ui.find({ type: 'Svg' })
+  expect(String((await svg())?.props?.alt)).toBe('Sous-agents : Eclaireur (en cours)')
+  expect(String((await svg())?.props?.source)).toContain('--teinte:#9CB86A')
+  await $.turn.complete({ answer: 'fait', durationMs: 1, isAborted: false, turnId: 't9', reason: 'answer', agentId: 'a1' } as never)
+  expect(String((await svg())?.props?.alt)).toBe('Sous-agents : Eclaireur (fini)')
+  expect(String((await svg())?.props?.source)).toContain('fill="#9CB86A"')
+  await $.prompt.submit({ text: 'la suite' })
+  expect(await svg()).toBeUndefined()
+  await ui.unmount()
+})
+
+test('bandeau : un build qui échoue, en pastille rouge avec sa première erreur', async ($, on) => {
+  bandeauVide(on as never)
+  on('tool.call', { tool: 'Bash' }, () => ({
+    result: { stdout: '> Task :app:compileDebugKotlin FAILED\ne: file:///C:/proj/Main.kt:3:5 Unresolved reference: foo\n\nBUILD FAILED in 12s', stderr: '', interrupted: false },
+  }))
+  await $.tool.call({ tool: 'Bash', command: './gradlew assembleDebug' })
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  const svg = await ui.find({ type: 'Svg' })
+  expect(String(svg?.props?.alt)).toContain('Build assembleDebug — échoué')
+  expect(String(svg?.props?.source)).toContain(':app:compileDebugKotlin — Unresolved reference: foo')
+  expect(String(svg?.props?.source)).toContain('#ef5b5f')
+  await ui.unmount()
+})
+
+test('bandeau : un build en tâche de fond, suivi jusqu’à sa fin', async ($, on) => {
+  bandeauVide(on as never)
+  on('tool.call', { tool: 'Bash' }, () => ({ result: { stdout: '', stderr: '', interrupted: false, backgroundTaskId: 'b1' } }))
+  on('classic.Stop', () => ({}))
+  await $.tool.call({ tool: 'Bash', command: './gradlew assembleRelease', run_in_background: true })
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  const alt = async () => String((await ui.find({ type: 'Svg' }))?.props?.alt ?? '')
+  expect(await alt()).toContain('Build assembleRelease — en cours depuis')
+  expect(await alt()).toContain('en tâche de fond')
+  // toujours dans la liste du moteur : il tourne encore
+  await $.classic.Stop({ stop_hook_active: false, background_tasks: [{ id: 'b1', type: 'shell', status: 'running', description: 'build' }] } as never)
+  expect(await alt()).toContain('en cours depuis')
+  // sorti de la liste : il est fini
+  await $.classic.Stop({ stop_hook_active: false, background_tasks: [] } as never)
+  expect(await alt()).toContain('Build assembleRelease — terminé')
+  await ui.unmount()
+})
+
+test('rangement : 5 minutes après que tout est fini, les pastilles finies s’en vont', async () => {
+  const M = 60_000
+  const echec = { quoi: 'assembleDebug', debut: 0, fin: M, etat: 'echec' as const }
+  // un tour en cours : rien ne se range
+  expect(aRanger(20 * M, null, echec, [], [])).toBeNull()
+  // fini depuis 4 min : trop tôt ; depuis 5 min : la croix rouge s'en va
+  expect(aRanger(6 * M, 2 * M, echec, [], [])).toBeNull()
+  expect(aRanger(7 * M, 2 * M, echec, [], [])).toEqual({ build: true, agents: false, taches: false })
+  // un build ou un sous-agent qui tourne encore : rien n'est fini
+  expect(aRanger(30 * M, 2 * M, { ...echec, etat: 'encours' }, [], [])).toBeNull()
+  const agent = { id: 'a1', type: 'eclaireur', mission: 'fouille', modele: 'claude-haiku-5-5', debut: 0, etat: 'encours' as const }
+  expect(aRanger(30 * M, 2 * M, echec, [agent], [])).toBeNull()
+  // un sous-agent qui a fini après le tour : le délai part de sa fin
+  const fini = { ...agent, etat: 'faite' as const, fin: 4 * M }
+  expect(aRanger(8 * M, 2 * M, echec, [fini], [])).toBeNull()
+  expect(aRanger(9 * M, 2 * M, echec, [fini], [])).toEqual({ build: true, agents: true, taches: false })
+  // une liste faite s'en va aussi ; une liste qui t'attend encore reste, sans retenir le reste
+  const faite = [{ id: 'plan-1', nom: 'Lire', etat: 'faite' as const, debut: 0, fin: M }]
+  expect(aRanger(9 * M, 2 * M, null, [], faite)).toEqual({ build: false, agents: false, taches: true })
+  const ouverte = [...faite, { id: 'plan-2', nom: 'Corriger', etat: 'attente' as const }]
+  expect(aRanger(9 * M, 2 * M, null, [], ouverte)).toBeNull()
+  expect(aRanger(9 * M, 2 * M, echec, [], ouverte)).toEqual({ build: true, agents: false, taches: false })
+})
+
+test('bandeau : 5 minutes après que tout est fini, la croix rouge d’un build échoué et la liste faite s’en vont', async ($, on) => {
+  const horloge = bandeauVide(on as never)
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  // l'ouverture de session enregistre /tel et /atelier, puis lance le minuteur d'une minute
+  on('command.register', ($, e) => ({ value: { command: e.name } }))
+  on('turn.start', () => ({ turnId: 't1' }))
+  on('turn.complete', () => ({ text: '' }))
+  on('tool.call', { tool: 'Bash' }, () => ({
+    result: { stdout: '> Task :app:compileDebugKotlin FAILED\n\nBUILD FAILED in 3s', stderr: '', interrupted: false },
+  }))
+  on('tool.call', { tool: 'mcp__ccd_turn__update_plan' }, () => ({ result: { ok: true } }))
+  await $.session.start({ cwd: 'C:/vide', surface: 'desktop', isInteractive: true })
+  const finTour = (turnId: string) => $.turn.complete({ answer: 'fait', durationMs: 1, isAborted: false, turnId, reason: 'answer' } as never)
+  await $.turn.start({ turnId: 't1' } as never)
+  await $.tool.call({ tool: 'Bash', command: './gradlew assembleDebug' })
+  await $.tool.call({ tool: 'mcp__ccd_turn__update_plan', tool_use_id: 'plan', items: [{ content: 'Lire le code', status: 'completed' }], scope: 'first_task' } as never)
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  const pastilles = async () => String((await ui.findAll({ type: 'Svg' })).find(s => /Build|Tâches/.test(String(s.props?.alt)))?.props?.alt ?? '')
+  expect(await pastilles()).toContain('Build assembleDebug — échoué')
+  expect(await pastilles()).toContain('Tâches 1/1')
+  // Claude travaille encore 10 min : elles restent
+  await horloge.advance(10 * 60_000)
+  expect(await pastilles()).toContain('échoué')
+  await finTour('t1')
+  // 4 min de pause, puis un tour de 10 min : rien ne se range pendant qu'il travaille
+  await horloge.advance(4 * 60_000)
+  await $.turn.start({ turnId: 't2' } as never)
+  await horloge.advance(10 * 60_000)
+  expect(await pastilles()).toContain('échoué')
+  await finTour('t2')
+  // 4 min après la fin du tour : encore là ; passé 5 min : parties
+  await horloge.advance(4 * 60_000)
+  expect(await pastilles()).toContain('Tâches 1/1')
+  await horloge.advance(2 * 60_000)
+  expect(await pastilles()).toBe('')
+  await ui.unmount()
+})
+
+test('bandeau : une vieille croix rouge, d’avant le rechargement du mod, s’en va aussi', async ($, on) => {
+  const horloge = bandeauVide(on as never)
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  on('command.register', ($, e) => ({ value: { command: e.name } }))
+  on('tool.call', { tool: 'Bash' }, () => ({ result: { stdout: 'BUILD FAILED in 3s', stderr: '', interrupted: false } }))
+  // un build échoué, puis le mod rechargé (session.start revient) sans tour depuis
+  await $.tool.call({ tool: 'Bash', command: './gradlew assembleDebug' })
+  await $.session.start({ cwd: 'C:/vide', surface: 'desktop', isInteractive: true })
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  const build = async () => (await ui.findAll({ type: 'Svg' })).find(s => String(s.props?.alt).includes('Build assembleDebug'))
+  await horloge.advance(4 * 60_000)
+  expect(await build()).toBeDefined()
+  await horloge.advance(2 * 60_000)
+  expect(await build()).toBeUndefined()
   await ui.unmount()
 })

@@ -11,7 +11,7 @@
     {
       "name": "atelier",
       "source": "./atelier",
-      "description": "Bandeau projet (APK vs tel, git, jauges de quotas) et garde-fous pour le dev Android : commandes destructrices, secrets, JBR cassé."
+      "description": "Bandeau projet (APK vs tel, git, quotas et conso en euros, tâches, sous-agents et build en pastilles) et garde-fous pour le dev Android : commandes destructrices, secrets, JBR cassé."
     }
   ]
 }

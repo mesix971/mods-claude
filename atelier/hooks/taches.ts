@@ -1,12 +1,15 @@
 // La liste de tâches de Claude en pastilles, sous les jauges : un rond par
-// étape, en pointillé tant qu'elle attend, qui tourne pendant qu'elle avance,
-// vert et coché une fois faite. Son nom s'affiche au survol.
+// étape, en pointillé tant qu'elle attend, l'orbe qui respire pendant qu'elle
+// avance, vert et coché une fois faite. Son nom et sa durée s'affichent au
+// survol.
 //
 // Trois sources selon la session : la liste de l'app desktop
 // (mcp__ccd_turn__update_plan), les tâches de Claude Code (TaskCreate,
 // TaskUpdate, TaskList) et l'ancien TodoWrite.
 
 import type { AtelierTache } from '../types'
+import { type Pastille, svgPastilles } from './pastilles'
+import { duree, dureeCourte, heure } from './temps'
 
 type Etat = AtelierTache['etat']
 
@@ -17,7 +20,7 @@ const etatDe = (status: unknown): Etat => (status === 'completed' ? 'faite' : st
 /** Un nom sûr à dessiner : sans caractère de contrôle (interdit en XML), 200 caractères entiers au plus */
 const nomDe = (v: unknown) =>
   typeof v === 'string'
-    ? Array.from(v.replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ').replace(/\s+/g, ' ').trim())
+    ? Array.from(v.replace(/[\u0000-\u001f\u007f-\u009f\ufffe\uffff]/g, ' ').replace(/\s+/g, ' ').trim())
         .slice(0, 200)
         .join('')
     : ''
@@ -82,6 +85,13 @@ export const depuisTaskList = (tasks: unknown): AtelierTache[] =>
 export const depuisTodos = (todos: unknown): AtelierTache[] =>
   objets(todos).map((t, i) => ({ id: `todo-${i + 1}`, nom: nomDe(t.content), etat: etatDe(t.status) }))
 
+/**
+ * Claude clôt son travail sans rien laisser en suspens (wrap_up de l'app
+ * desktop, sans question) : le plan est fini, même s'il a oublié de cocher ses
+ * dernières étapes. Les tâches des autres sources gardent leur état.
+ */
+export const planFini = (l: readonly AtelierTache[]): AtelierTache[] => l.map(t => (t.id.startsWith('plan-') ? { ...t, etat: 'faite' } : t))
+
 /** Tour interrompu : l'étape en cours n'avance plus, elle repasse en attente */
 export const interrompue = (l: readonly AtelierTache[]): AtelierTache[] => l.map(t => (t.etat === 'encours' ? { ...t, etat: 'attente' } : t))
 
@@ -94,51 +104,55 @@ const LIBELLE: Record<Etat, string> = { attente: 'à faire', encours: 'en cours'
 export const resumeTaches = (l: readonly AtelierTache[]) =>
   `Tâches ${l.filter(t => t.etat === 'faite').length}/${l.length} : ` + l.map((t, i) => `${t.nom || `étape ${i + 1}`} (${LIBELLE[t.etat]})`).join(', ')
 
-const echappe = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
-
-const VERT = '#4cc38a'
-const HAUTEUR = 18
-const PAS = 17
-const R = 5.5
+/**
+ * Les heures de début et de fin, d'une liste à la suivante. Une étape qui
+ * commence prend l'heure, une étape qui finit aussi. Une même étape (même nom)
+ * garde les siennes, même renvoyée dans une nouvelle liste.
+ */
+export function horodate(avant: readonly AtelierTache[], apres: readonly AtelierTache[], maintenant: number): AtelierTache[] {
+  return apres.map(t => {
+    // la même étape : même id et même nom, sinon même nom (renvoyée dans une nouvelle liste),
+    // sinon même id si elle avance encore (renommée en cours de route)
+    const source = t.id.split('-')[0]
+    const ancien =
+      avant.find(a => a.id === t.id && a.nom === t.nom) ??
+      avant.find(a => a.nom === t.nom && a.id.split('-')[0] === source) ??
+      (t.etat === 'encours' ? avant.find(a => a.id === t.id && a.etat === 'encours') : undefined)
+    const { debut: _d, fin: _f, ...base } = t
+    if (t.etat === 'encours') return { ...base, debut: ancien?.etat === 'encours' && ancien.debut !== undefined ? ancien.debut : maintenant }
+    if (t.etat === 'faite') {
+      const fin = ancien?.etat === 'faite' && ancien.fin !== undefined ? ancien.fin : maintenant
+      return { ...base, ...(ancien?.debut !== undefined ? { debut: ancien.debut } : {}), fin }
+    }
+    return base
+  })
+}
 
 /**
- * Les pastilles en SVG, à dessiner avec `isInteractive` : le survol d'une
- * pastille montre le nom de son étape (`<title>`). La pastille en cours ne
- * tourne que si Claude travaille (`tourne`) : à l'arrêt, son anneau reste figé.
+ * Les tâches en pastilles : le survol dit le nom de l'étape, et depuis quand
+ * elle avance ou en combien de temps elle s'est faite.
  */
-export function svgTaches(l: readonly AtelierTache[], tourne = true): { svg: string; largeur: number } {
-  const cy = HAUTEUR / 2
-  let corps = ''
-  l.forEach((t, i) => {
-    const cx = i * PAS + PAS / 2
-    corps += `<g class="t"><title>${echappe(t.nom || `Étape ${i + 1}`)}</title>`
-    // une zone de survol pleine (invisible) : le rond en pointillé seul serait dur à viser
-    corps += `<circle class="zone" cx="${cx}" cy="${cy}" r="${PAS / 2}"/>`
-    if (t.etat === 'faite') {
-      corps += `<circle cx="${cx}" cy="${cy}" r="${R + 0.5}" fill="${VERT}"/>`
-      corps += `<path class="coche" d="M${cx - 2.8} ${cy + 0.1} l1.9 1.9 l3.7 -3.9"/>`
-    } else if (t.etat === 'encours') {
-      corps += `<circle class="piste" cx="${cx}" cy="${cy}" r="${R}"/>`
-      corps += `<path class="arc" d="M${cx} ${cy - R} A${R} ${R} 0 0 1 ${cx + R} ${cy}">`
-      if (tourne) corps += `<animateTransform attributeName="transform" type="rotate" from="0 ${cx} ${cy}" to="360 ${cx} ${cy}" dur="0.9s" repeatCount="indefinite"/>`
-      corps += '</path>'
-    } else {
-      corps += `<circle class="attente" cx="${cx}" cy="${cy}" r="${R}"/>`
-    }
-    corps += '</g>'
+export function pastillesTaches(l: readonly AtelierTache[], maintenant: number): Pastille[] {
+  return l.map((t, i) => {
+    const nom = t.nom || `Étape ${i + 1}`
+    const quand =
+      t.etat === 'encours'
+        ? t.debut !== undefined
+          ? ` — en cours depuis ${heure(t.debut)} (${dureeCourte(maintenant - t.debut)})`
+          : ' — en cours'
+        : t.etat === 'faite'
+          ? t.debut !== undefined && t.fin !== undefined
+            ? ` — faite en ${duree(t.fin - t.debut)}`
+            : t.fin !== undefined
+              ? ` — faite à ${heure(t.fin)}`
+              : ' — faite'
+          : ' — à faire'
+    return { titre: nom + quand, forme: t.etat }
   })
-  const largeur = Math.max(1, l.length * PAS)
-  const css =
-    `.zone{fill:transparent}.t:hover .zone{fill:#ffffff14}` +
-    `.attente{fill:none;stroke:#8b9097;stroke-width:1.4;stroke-dasharray:2.2 2.1}` +
-    `.piste{fill:none;stroke:#ffffff2e;stroke-width:1.6}.arc{fill:none;stroke:#e6e6e6;stroke-width:1.8;stroke-linecap:round}` +
-    `.coche{fill:none;stroke:#fff;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}` +
-    `@media (prefers-color-scheme: light){.t:hover .zone{fill:#0000000f}.attente{stroke:#9aa0a6}.piste{stroke:#0000001f}.arc{stroke:#3a3d42}}`
-  return {
-    largeur,
-    svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${largeur} ${HAUTEUR}"><style>${css}</style>${corps}</svg>`,
-  }
 }
+
+/** Les tâches seules en SVG (voir pastilles.ts) */
+export const svgTaches = (l: readonly AtelierTache[], tourne = true, maintenant = 0) => svgPastilles([pastillesTaches(l, maintenant)], tourne)
 
 /** La même chose en texte, pour le terminal : ◌ à faire, ◐ en cours, ✔ faite */
 export const texteTaches = (l: readonly AtelierTache[]) =>

@@ -8,8 +8,9 @@ Deux mods pour [Claude Code](https://claude.com/claude-code) :
 
 - **clawd** : le petit Claude orange en pixel art qui vit au-dessus de ton
   prompt et réagit, sans un mot, à ce qui se passe dans ta session.
-- **atelier** : un bandeau projet (versions APK ↔ téléphone, git, jauges de
-  quotas, tâches de Claude en pastilles) et des garde-fous pour le dev Android.
+- **atelier** : un bandeau projet (versions APK ↔ téléphone, git, quotas et
+  conso en euros, tâches, sous-agents et build en pastilles) et des
+  garde-fous pour le dev Android.
 
 Projet perso, fan-made et non officiel, sans lien avec Anthropic.
 
@@ -103,10 +104,26 @@ suivent ton thème clair ou sombre. Pas un mot : tout passe par ses gestes.
     le seuil ;
   - **heure du reset** : elle s'affiche quand ça devient serré.
 
-  Un toast t'avertit aussi à 80 % puis à 95 %.
+  Un toast t'avertit aussi à 80 % puis à 95 %. Au survol, chaque jauge dit
+  sa projection : à ce rythme, 100 % vers telle heure, ou « tu tiens ».
+- Juste après, la conso du tour en direct : ses tokens et ce qu'il coûterait
+  au tarif de l'API, en euros, avec le détail et le total de la session au
+  survol. Elle vire à l'ambre quand la conversation devient lourde (chaque
+  réponse relit plus de 400 k tokens) : une conversation neuve coûterait
+  bien moins.
 - Juste en dessous, la liste de tâches de Claude en pastilles : un rond par
-  étape, en pointillé tant qu'elle attend, qui tourne pendant qu'elle avance,
-  coché en vert une fois faite. Le nom de l'étape s'affiche au survol.
+  étape, en pointillé tant qu'elle attend, un anneau de points qui respire
+  pendant qu'elle avance (l'orbe « breathing » de
+  [thinking-orbs](https://github.com/Jakubantalik/thinking-orbs), de Jakub
+  Antalik, sous licence MIT), coché en vert une fois faite. Le nom de
+  l'étape s'affiche au survol, avec depuis quand elle avance ou en combien de
+  temps elle s'est faite. Après un trait, les sous-agents, à la couleur de
+  leur modèle (comme les mini-Clawds), avec leur mission et leur durée ; à
+  chaque outil qu'un sous-agent lance, sa pastille émet une onde (le sonar).
+  Cinq minutes après que tout est fini, les pastilles finies s'en vont.
+- Dans la ligne 📱, le build en pastille : l'orbe pendant un `gradlew` ou un
+  `flutter build` (même en tâche de fond), puis une coche avec sa durée, ou
+  une croix rouge avec la tâche qui a échoué et sa première erreur au survol.
 
 **Les garde-fous sur Bash et PowerShell**
 
@@ -126,7 +143,8 @@ suivent ton thème clair ou sombre. Pas un mot : tout passe par ses gestes.
 
 - Si Claude répond en anglais, il reçoit un rappel au tour suivant.
 - `/tel` installe le dernier APK ; `/atelier` masque ou affiche le bandeau et
-  donne la version.
+  donne la version. Caché avec son bouton « Masquer », le bandeau revient
+  aussi avec `/atelier`.
 
 ## Développer
 

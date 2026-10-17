@@ -16,9 +16,15 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, ToolCallResult } from 'claude-code'
 
-import type { AtelierAndroid, AtelierGit, AtelierTache, AtelierUsage } from '../types'
+import type { AtelierAgent, AtelierAndroid, AtelierBuild, AtelierConso, AtelierGit, AtelierTache, AtelierUsage } from '../types'
+import { ajouteAgent, causeDe, couleurModele, finAgent, nettoieAgents, pastillesAgents, pingAgent, resumeAgents } from './agents'
+import { analyse, buildVisible, estBuild, pastilleBuild, quoiBuild, sortieFond } from './build'
+import { ajouteReponse, debutTour, estLourde, finTour, mesureCout, texteConso, titreConso, tokensDe } from './conso'
 import { COULEURS, jauges, resumeJauges, svgJauges, texteJauges } from './jauges'
-import { ajouteTache, depuisTaskList, depuisTodos, interrompue, majTache, resumeTaches, suitPlan, svgTaches, texteTaches, toutFait } from './taches'
+import { decrit, estDiscret } from './outils'
+import { svgPastilles } from './pastilles'
+import { aRanger } from './rangement'
+import { ajouteTache, depuisTaskList, depuisTodos, horodate, interrompue, majTache, pastillesTaches, planFini, resumeTaches, suitPlan, texteTaches, toutFait } from './taches'
 
 type $ = EngineInterface
 
@@ -26,6 +32,10 @@ const android = atom({ plugin: 'atelier', key: 'android' } as const, null)
 const git = atom({ plugin: 'atelier', key: 'git' } as const, null)
 const usage = atom({ plugin: 'atelier', key: 'usage' } as const, null)
 const taches = atom({ plugin: 'atelier', key: 'taches' } as const, [])
+const conso = atom({ plugin: 'atelier', key: 'conso' } as const, null)
+const build = atom({ plugin: 'atelier', key: 'build' } as const, null)
+const agents = atom({ plugin: 'atelier', key: 'agents' } as const, [])
+const finDuTour = atom({ plugin: 'atelier', key: 'finDuTour' } as const, null)
 /** Avance d'un cran par minute : le bandeau se redessine même sans nouvelle donnée */
 const minute = atom({ plugin: 'atelier', key: 'minute' } as const, 0)
 const busy = atom({ plugin: 'atelier', key: 'busy' } as const, null)
@@ -154,12 +164,98 @@ const hhmm = (ms: number) => {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-/** Met la liste de tâches à jour sans jamais gêner l'outil : une pastille ratée ne casse pas l'appel */
+/**
+ * Met la liste de tâches à jour (avec l'heure des débuts et des fins) sans
+ * jamais gêner l'outil : une pastille ratée ne casse pas l'appel.
+ */
 async function majTaches($: $, f: (l: readonly AtelierTache[]) => AtelierTache[]) {
   try {
-    await update($, taches, f)
+    const maintenant = await $.clock.now()
+    await update($, taches, l => horodate(l, f(l), maintenant))
   } catch {
     // module rechargé en plein appel : la liste se recalera au suivant
+  }
+}
+
+/** De même pour la conso, le build et les sous-agents */
+async function majConso($: $, f: (c: AtelierConso | null) => AtelierConso | null) {
+  try {
+    await update($, conso, f)
+  } catch {
+    // idem
+  }
+}
+async function majBuild($: $, f: (b: AtelierBuild | null) => AtelierBuild | null) {
+  try {
+    await update($, build, f)
+  } catch {
+    // idem
+  }
+}
+async function majAgents($: $, f: (l: readonly AtelierAgent[]) => AtelierAgent[]) {
+  try {
+    await update($, agents, f)
+  } catch {
+    // idem
+  }
+}
+
+async function noteFinDuTour($: $, t: number | null) {
+  try {
+    await update($, finDuTour, () => t)
+  } catch {
+    // idem
+  }
+}
+
+/** 5 minutes après que tout est fini, les pastilles finies s'en vont (appelé chaque minute) */
+async function rangeLesFinis($: $) {
+  try {
+    const maintenant = await $.clock.now()
+    const r = aRanger(maintenant, await read($, finDuTour), await read($, build), await read($, agents), await read($, taches))
+    if (!r) return
+    // ce qui a recommencé entre-temps reste
+    if (r.build) await majBuild($, b => (b?.etat === 'encours' ? b : null))
+    if (r.agents) await majAgents($, l => l.filter(a => a.etat === 'encours'))
+    if (r.taches) await majTaches($, l => (toutFait(l) ? [] : [...l]))
+  } catch {
+    // le rangement attendra la minute suivante
+  }
+}
+
+/** Ce que la session a coûté jusqu'ici au tarif de l'API, d'après /cost, ou null si le moteur ne le tient pas */
+async function coutSession($: $): Promise<number | null> {
+  try {
+    const c = (await $.session.usage()).cost?.usd
+    return typeof c === 'number' && Number.isFinite(c) ? c : null
+  } catch {
+    return null
+  }
+}
+
+/** Les sous-agents dont la fin est arrivée avant que leur départ ne soit enregistré */
+const finisAvantNaissance = new Map<string, { cause: AtelierAgent['cause']; fin: number }>()
+/** Au-delà, les plus anciennes s'oublient (un départ refusé plus haut n'arrive jamais) */
+const MAX_FINIS_AVANT_NAISSANCE = 20
+
+/** La date de dernière écriture d'un fichier (la fin d'un build de fond), ou null */
+async function dateDe($: $, chemin: string): Promise<number | null> {
+  const p = slash(chemin)
+  const i = p.lastIndexOf('/')
+  if (i < 0) return null
+  try {
+    return (await $.fs.list(p.slice(0, i))).find(x => x.name === p.slice(i + 1))?.mtimeMs ?? null
+  } catch {
+    return null
+  }
+}
+
+/** L'heure, ou null quand l'horloge manque (un test qui ne la simule pas) */
+async function maintenantOuRien($: $): Promise<number | null> {
+  try {
+    return await $.clock.now()
+  } catch {
+    return null
   }
 }
 
@@ -356,12 +452,19 @@ async function refreshGit($: $, cwd: string): Promise<AtelierGit | null> {
 function usageDepuis(
   rateLimits: readonly { kind: string; percentUsed: number; resetsAt?: string }[],
   contextPercent: number | null,
+  contexte?: { tokens?: number; window?: number },
 ): AtelierUsage {
   const pick = (kind: string) => {
     const w = rateLimits.find(r => r.kind === kind)
     return w ? { percent: w.percentUsed, resetsAt: w.resetsAt } : null
   }
-  return { fiveHour: pick('five_hour'), sevenDay: pick('seven_day'), contextPercent }
+  return {
+    fiveHour: pick('five_hour'),
+    sevenDay: pick('seven_day'),
+    contextPercent,
+    ...(typeof contexte?.tokens === 'number' ? { contextTokens: contexte.tokens } : {}),
+    ...(typeof contexte?.window === 'number' ? { contextWindow: contexte.window } : {}),
+  }
 }
 
 /** Relit les quotas à la demande (gratuit) : bouton ↻, chaque minute, ouverture de session. */
@@ -369,7 +472,7 @@ async function rafraichirUsage($: $) {
   try {
     const u = await $.session.usage()
     if (u.rateLimits.length === 0 && u.context.percent === undefined) return
-    await update($, usage, () => usageDepuis(u.rateLimits, u.context.percent ?? null))
+    await update($, usage, () => usageDepuis(u.rateLimits, u.context.percent ?? null, u.context))
   } catch {
     // pas encore de réponse de l'API dans cette session : rien à afficher
   }
@@ -571,7 +674,38 @@ async function shell(
 ): Promise<ToolCallResult> {
   const verdict = await guard($, tool, command, isBackground)
   if (verdict.deny !== undefined) return { deny: verdict.deny }
-  const ran = await go(verdict.command)
+  // un build en pastille : l'orbe pendant qu'il tourne, puis son verdict
+  // (l'orbe part avant l'invite de permission, s'il y en a une : le moteur ne dit pas quand elle est acceptée)
+  const debutBuild = estBuild(verdict.command) ? await maintenantOuRien($) : null
+  const precedent = debutBuild !== null ? await read($, build) : null
+  const ceBuild = (b: AtelierBuild | null) => b !== null && b.debut === debutBuild
+  if (debutBuild !== null) await majBuild($, () => ({ quoi: quoiBuild(verdict.command), debut: debutBuild, etat: 'encours' }))
+  let ran: ToolCallResult
+  try {
+    ran = await go(verdict.command)
+  } catch (erreur) {
+    // le moteur a levé : la pastille ne reste pas « en cours » pour toujours
+    if (debutBuild !== null) await majBuild($, b => (ceBuild(b) ? { ...(b as AtelierBuild), etat: 'fini', detail: 'interrompu' } : b))
+    throw erreur
+  }
+  if (debutBuild !== null) {
+    const fin = (await maintenantOuRien($)) ?? debutBuild
+    const resultat = ran.result as { stdout?: string; stderr?: string; interrupted?: boolean; backgroundTaskId?: string } | undefined
+    const sortie = `${resultat?.stdout ?? ''}\n${resultat?.stderr ?? ''}`
+    if (ran.deny !== undefined || (ran.isError === true && !sortie.trim() && !resultat?.backgroundTaskId)) {
+      // refusé, ou jamais lancé : on revient au build d'avant
+      await majBuild($, b => (ceBuild(b) ? precedent : b))
+    } else if (resultat?.backgroundTaskId) {
+      // en tâche de fond : on le suit jusqu'à sa fin (classic.Stop)
+      const fond = { id: resultat.backgroundTaskId, sortie: sortieFond(ran.text), commande: verdict.command.slice(0, 300) }
+      await majBuild($, b => (ceBuild(b) ? { ...(b as AtelierBuild), fond } : b))
+    } else if (resultat?.interrupted) {
+      await majBuild($, b => (ceBuild(b) ? { ...(b as AtelierBuild), etat: 'fini', detail: 'interrompu', fin } : b))
+    } else {
+      const v = analyse(`${sortie}\n${ran.text ?? ''}`, ran.isError === true)
+      await majBuild($, b => (ceBuild(b) ? { ...(b as AtelierBuild), ...v, fin } : b))
+    }
+  }
   if (TOUCHE_ETAT.test(verdict.command)) {
     void refresh($)
       .then(async () => {
@@ -612,10 +746,16 @@ export const register: Register = on => {
     await $.command.register({ name: 'atelier', description: 'Affiche/masque le bandeau atelier et le rafraîchit' })
     const ran = await next(e)
     void refresh($)
-    // chaque minute : quotas relus, et le bandeau redessiné (une fenêtre qui
-    // vient de se réinitialiser repasse à 0 %, le trait du temps avance)
+    // une session neuve ou un module rechargé, sans fin de tour connue : le
+    // délai du rangement part d'ici (sinon une vieille croix rouge attendrait
+    // la fin du prochain tour)
+    if ((await read($, finDuTour).catch(() => null)) === null) await noteFinDuTour($, await maintenantOuRien($))
+    // chaque minute : quotas relus, pastilles finies rangées, et le bandeau
+    // redessiné (une fenêtre qui vient de se réinitialiser repasse à 0 %, le
+    // trait du temps avance)
     $.clock.every(60_000, () => {
       void rafraichirUsage($)
+        .then(() => rangeLesFinis($))
         .then(() => update($, minute, n => n + 1))
         .catch(() => {})
     })
@@ -643,7 +783,10 @@ export const register: Register = on => {
     lastPrompt = e.text
     // un plan entièrement fait laisse la place au suivant (pas sur un message
     // que le moteur glisse lui-même : tu n'as pas encore vu le plan fini)
-    if (!e.isMeta) await majTaches($, l => (toutFait(l) ? [] : [...l]))
+    if (!e.isMeta) {
+      await majTaches($, l => (toutFait(l) ? [] : [...l]))
+      await majAgents($, nettoieAgents)
+    }
     if (!rappelFrancais) return next(e)
     rappelFrancais = false
     return next({
@@ -671,6 +814,14 @@ export const register: Register = on => {
     if (e.agentId === undefined && r.deny === undefined && !r.isError) await majTaches($, l => suitPlan(l, e))
     return r
   })
+  // Claude clôt son travail (wrap_up) sans question pour toi : rien n'est en
+  // suspens, le plan est fini, même s'il a oublié de cocher les dernières
+  // étapes. Avec une question, les étapes restantes t'attendent : elles restent.
+  on('tool.call', { tool: 'mcp__ccd_turn__wrap_up' }, async ($, e, next) => {
+    const r = await next(e)
+    if (e.agentId === undefined && r.deny === undefined && !r.isError && !e.ask) await majTaches($, planFini)
+    return r
+  })
   on('tool.call', { tool: 'TodoWrite' }, async ($, e, next) => {
     const r = await next(e)
     if (e.agentId === undefined && r.deny === undefined && !r.isError) await majTaches($, () => depuisTodos(e.todos))
@@ -694,9 +845,120 @@ export const register: Register = on => {
     return r
   })
 
+  // ------------------------------------------------- la conso, en direct
+
+  // un tour de la conversation principale commence : ses compteurs repartent de zéro
+  on('turn.start', async ($, e, next) => {
+    const r = await next(e)
+    if (e.agentId === undefined) {
+      // Claude travaille : rien ne se range
+      await noteFinDuTour($, null)
+      const cout = await coutSession($)
+      await majConso($, c => debutTour(c, cout))
+    }
+    return r
+  })
+  // chaque réponse de l'API (sous-agents compris) : ses tokens, et ce qu'elle coûterait
+  on('turn.step', async function* ($, e, next) {
+    const r = yield* next(e)
+    try {
+      if (r?.usage) {
+        const u = r.usage
+        const cout = await coutSession($)
+        await majConso($, c => ajouteReponse(c, u.model, tokensDe(u), e.agentId === undefined, cout))
+      }
+    } catch {
+      // la conso attendra la réponse suivante
+    }
+    return r
+  })
+
+  // ------------------------------------------------- le sonar des sous-agents
+
+  // chaque outil qu'un sous-agent lance fait partir une onde de sa pastille
+  // (dès la demande, avant l'invite de permission : un appel refusé ensuite en fait partir une aussi)
+  on('tool.call', async ($, e, next) => {
+    const agent = e.agentId
+    if (agent === undefined || estDiscret(typeof e.tool === 'string' ? e.tool : '')) return next(e)
+    const maintenant = await maintenantOuRien($)
+    // un sous-agent pas encore enregistré n'a pas de pastille : rien à écrire
+    if (maintenant !== null && (await read($, agents).catch(() => [])).some(a => a.id === agent)) {
+      const outil = decrit(e as unknown as Record<string, unknown>)
+      await majAgents($, l => pingAgent(l, agent, maintenant, outil))
+    }
+    return next(e)
+  })
+
+  // ------------------------------------------------- les sous-agents
+
+  on('agent.spawn', async ($, e, next) => {
+    const r = await next(e)
+    if (r.deny === undefined && r.agentId) {
+      const id = r.agentId
+      const maintenant = (await maintenantOuRien($)) ?? 0
+      // un sous-agent qui a déjà fini (échec immédiat) avant que ce crochet ne l'ajoute
+      const dejaFini = finisAvantNaissance.get(id)
+      finisAvantNaissance.delete(id)
+      await majAgents($, l => {
+        const avec = ajouteAgent(l, { id, type: e.subagentType, mission: e.description, modele: r.model }, maintenant)
+        return dejaFini ? finAgent(avec, id, dejaFini.cause, dejaFini.fin) : avec
+      })
+    }
+    return r
+  })
+
+  // ------------------------------------------------- un build en tâche de fond
+
+  // à chaque fin de tour, le moteur liste ce qui tourne encore : un build qui
+  // n'y est plus est fini, et sa sortie dit s'il a réussi
+  on('classic.Stop', async ($, e, next) => {
+    const r = await next(e)
+    try {
+      const b = await read($, build)
+      // sans la liste, on ne sait rien : on attend le tour suivant
+      if (b?.etat === 'encours' && b.fond && e.background_tasks !== undefined) {
+        const fond = b.fond
+        const termine = /^(completed|failed|killed|stopped|error)$/i
+        const encore = e.background_tasks.some(
+          x => (x.id === fond.id || (x.type === 'shell' && !!fond.commande && !!x.command?.includes(fond.commande.slice(0, 120)))) && !termine.test(x.status),
+        )
+        if (!encore) {
+          const sortie = fond.sortie ? await readText($, fond.sortie) : null
+          const v = sortie ? analyse(sortie, false) : { etat: 'fini' as const }
+          const fin = (fond.sortie ? await dateDe($, fond.sortie) : null) ?? (await maintenantOuRien($)) ?? b.debut
+          await majBuild($, x => (x && x.fond?.id === fond.id ? { ...x, ...v, fin } : x))
+        }
+      }
+    } catch {
+      // le build se recalera au tour suivant
+    }
+    return r
+  })
+
   on('turn.complete', async ($, e, next) => {
     const ran = await next(e)
+    if (e.agentId !== undefined) {
+      // un sous-agent a fini (ou a été interrompu)
+      const id = e.agentId
+      const maintenant = (await maintenantOuRien($)) ?? 0
+      // en erreur ou sur un refus, il n'a pas « fini » : sa pastille le dit
+      const cause = e.isAborted ? 'interruption' : causeDe(e.reason)
+      const connu = (await read($, agents)).some(a => a.id === id)
+      if (connu) await majAgents($, l => finAgent(l, id, cause, maintenant))
+      else {
+        finisAvantNaissance.set(id, { cause, fin: maintenant })
+        for (const vieux of finisAvantNaissance.keys()) {
+          if (finisAvantNaissance.size <= MAX_FINIS_AVANT_NAISSANCE) break
+          finisAvantNaissance.delete(vieux)
+        }
+      }
+    }
     if (e.agentId === undefined) {
+      // le délai du rangement part d'ici
+      const fin = await maintenantOuRien($)
+      if (fin !== null) await noteFinDuTour($, fin)
+      const cout = await coutSession($)
+      await majConso($, c => finTour(c, cout))
       // tour interrompu : l'étape en cours n'avance plus
       if (e.isAborted) await majTaches($, interrompue)
       if (!e.isAborted && isEnglish(e.answer)) {
@@ -719,13 +981,16 @@ export const register: Register = on => {
 
   // /clear ou une reprise : le processus continue sur une autre conversation, qui a sa propre liste
   on('session.end', async ($, e, next) => {
-    await majTaches($, () => [])
+    finisAvantNaissance.clear()
+    await Promise.all([majTaches($, () => []), majAgents($, () => []), majConso($, () => null)])
     return next(e)
   })
 
   on('session.measure', async ($, e, next) => {
-    const u = usageDepuis(e.rateLimits, e.context.percent ?? null)
+    const u = usageDepuis(e.rateLimits, e.context.percent ?? null, e.context)
     await update($, usage, () => u)
+    const cout = e.cost?.usd
+    if (typeof cout === 'number' && Number.isFinite(cout)) await majConso($, c => mesureCout(c, cout))
 
     for (const [label, w] of [['5 h', u.fiveHour], ['7 j', u.sevenDay]] as const) {
       if (!w) continue
@@ -751,7 +1016,11 @@ export const register: Register = on => {
     await read($, minute) // redessin chaque minute
     const enCours = await read($, busy)
     const lt = await read($, taches)
-    if (!a && !g && !u && lt.length === 0) return next(e)
+    const c = await read($, conso)
+    const b = await read($, build)
+    const la = await read($, agents)
+    const texteC = texteConso(c)
+    if (!a && !g && !u && lt.length === 0 && la.length === 0 && !texteC && !b) return next(e)
     // on compose au lieu de remplacer : ce que dessinent les autres mods
     // (clawd) se place à droite de nos lignes, posé sur le bord du bas
     const dessous = await next(e)
@@ -763,12 +1032,16 @@ export const register: Register = on => {
     const lj = u ? jauges(u, maintenant) : []
     // l'heure d'un reset, avec le jour quand il est loin (fenêtre de 7 j)
     const quand = (ms: number) => (ms - maintenant > 20 * 3600_000 ? `${JOURS[new Date(ms).getDay()]} ` : '') + hhmm(ms)
+    // la conso du tour (et son coût au tarif de l'API) après les jauges
+    const pastilleC = texteC ? { texte: texteC, titre: titreConso(c), lourde: estLourde(c) } : null
     let quotas: JSX.Element | null = null
-    if (lj.length > 0 && e.surface === 'desktop') {
+    if ((lj.length > 0 || pastilleC) && e.surface === 'desktop') {
       const { Svg } = $.ui.resolve(e)
-      const dessin = svgJauges(lj, quand)
-      quotas = <Svg source={dessin.svg} alt={resumeJauges(lj, quand)} width={dessin.largeur} height={18} />
-    } else if (lj.length > 0) {
+      const dessin = svgJauges(lj, quand, { maintenant, contexte: u ? { tokens: u.contextTokens, window: u.contextWindow } : undefined, conso: pastilleC })
+      const alt = [lj.length > 0 ? resumeJauges(lj, quand) : '', pastilleC ? `Conso : ${pastilleC.texte}` : ''].filter(Boolean).join(' · ')
+      // interactif : le survol d'une jauge dit sa projection, celui de la conso son détail
+      quotas = <Svg source={dessin.svg} alt={alt} width={dessin.largeur} height={18} isInteractive />
+    } else if (lj.length > 0 || pastilleC) {
       quotas = (
         <Box flexDirection="row" flexWrap="wrap" columnGap={2}>
           {texteJauges(lj, quand).map(j => (
@@ -776,23 +1049,58 @@ export const register: Register = on => {
               {j.texte}
             </Text>
           ))}
+          {pastilleC && (
+            <Text color={pastilleC.lourde ? COULEURS.attention : undefined} dimColor={!pastilleC.lourde}>
+              {pastilleC.texte}
+            </Text>
+          )}
         </Box>
       )
     }
 
     // la liste de tâches en pastilles : le nom d'une étape au survol (d'où
     // isInteractive) sur desktop, des ◌ ◐ ✔ ailleurs
-    let ronds: JSX.Element | null = null
-    if (lt.length > 0 && e.surface === 'desktop') {
+    // le build en cours ou son verdict (un réussi s'efface au bout de 10 min)
+    const bv = buildVisible(b, maintenant) ? b : null
+    const enFond = bv?.etat === 'encours'
+    const glypheBuild = (x: AtelierBuild) => (
+      <Text color={x.etat === 'echec' ? COULEURS.critique : x.etat === 'ok' ? COULEURS.ok : undefined} dimColor={x.etat === 'fini'}>
+        {` ${x.etat === 'encours' ? '◐' : x.etat === 'echec' ? '✖' : '✔'} build`}
+      </Text>
+    )
+    let pastilleB: JSX.Element | null = null
+    if (bv && a && e.surface === 'desktop') {
       const { Svg } = $.ui.resolve(e)
-      const dessin = svgTaches(lt, e.props.isWorking === true)
-      ronds = <Svg source={dessin.svg} alt={resumeTaches(lt)} width={dessin.largeur} height={18} isInteractive />
-    } else if (lt.length > 0) {
+      const p = pastilleBuild(bv, maintenant)
+      const dessin = svgPastilles([[p]], enFond)
+      pastilleB = <Svg source={dessin.svg} alt={p.titre} width={dessin.largeur} height={18} isInteractive />
+    } else if (bv && a) {
+      pastilleB = glypheBuild(bv)
+    }
+
+    const groupes = [...(bv && !a ? [[pastilleBuild(bv, maintenant)]] : []), pastillesTaches(lt, maintenant), pastillesAgents(la, maintenant)].filter(
+      x => x.length > 0,
+    )
+    let ronds: JSX.Element | null = null
+    if (groupes.length > 0 && e.surface === 'desktop') {
+      const { Svg } = $.ui.resolve(e)
+      const dessin = svgPastilles(groupes, e.props.isWorking === true || (enFond && !a))
+      const alt = [bv && !a ? pastilleBuild(bv, maintenant).titre : '', lt.length > 0 ? resumeTaches(lt) : '', la.length > 0 ? resumeAgents(la) : '']
+        .filter(Boolean)
+        .join(' · ')
+      ronds = <Svg source={dessin.svg} alt={alt} width={dessin.largeur} height={18} isInteractive />
+    } else if (groupes.length > 0) {
       ronds = (
         <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
+          {bv && !a && glypheBuild(bv)}
           {texteTaches(lt).map(t => (
             <Text color={t.etat === 'faite' ? COULEURS.ok : undefined} dimColor={t.etat === 'attente'}>
               {t.texte}
+            </Text>
+          ))}
+          {la.map(x => (
+            <Text color={couleurModele(x.modele)} dimColor={x.etat === 'interrompu'}>
+              {x.etat === 'encours' ? '◐' : x.etat === 'faite' ? '✔' : '◌'}
             </Text>
           ))}
         </Box>
@@ -822,6 +1130,7 @@ export const register: Register = on => {
               ) : (
                 <Text dimColor>  · tel non branché </Text>
               )}
+              {pastilleB}
               {a.device && a.apk && !enCours && (
                 <Button
                   key="install"
@@ -877,7 +1186,17 @@ export const register: Register = on => {
               {quotas}
               <Text> </Text>
               <Button key="refresh" label="↻" plain dimColor onPress={() => refresh($)} />
-              <Button key="hide" label="Masquer" role="dismiss" dimColor onPress={() => update($, isHidden, () => true)} />
+              <Button
+                key="hide"
+                label="Masquer"
+                role="dismiss"
+                dimColor
+                onPress={async () => {
+                  await update($, isHidden, () => true)
+                  // sans ça, rien ne dit comment le faire revenir
+                  $.ui.toast('Bandeau atelier masqué : tape /atelier pour le ré-afficher', { timeoutMs: 8000 })
+                }}
+              />
             </Box>
           )}
           {ronds && (

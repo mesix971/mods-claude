@@ -100,6 +100,39 @@
 
 ## atelier
 
+- **0.5.0** — 2026-10-17 — Le bandeau en dit plus :
+  - la conso du tour en direct, après les jauges : ses tokens et ce qu'il
+    coûterait au tarif de l'API, en euros (d'après `/cost`, sinon estimé avec
+    les tarifs du 17/10/2026 et le taux BCE du 16/10/2026). Le survol donne le
+    détail et le total de la session. Elle passe à l'ambre quand chaque
+    réponse relit plus de 400 k tokens, avec le conseil d'ouvrir une
+    conversation neuve ;
+  - la projection des quotas au survol des jauges : à ce rythme, 100 % vers
+    telle heure avant le reset, ou « tu tiens » ;
+  - le minuteur des étapes : au survol, depuis quand une étape avance, en
+    combien de temps elle s'est faite ;
+  - le build en pastille, dans la ligne Android : l'orbe pendant un
+    `gradlew` ou un `flutter build`, même en tâche de fond, puis une coche
+    avec sa durée, ou une croix rouge avec la tâche qui a échoué et sa
+    première erreur au survol ;
+  - les sous-agents en pastilles, à la couleur de leur modèle (comme les
+    mini-Clawds), avec leur mission et leur durée au survol ;
+  - le sonar : chaque fois qu'un sous-agent lance un outil, sa pastille émet
+    une onde, et son survol dit le dernier outil lancé (jetons, mots de passe
+    et clés d'API aux formats courants masqués) ;
+  - « Masquer » dit comment faire revenir le bandeau : `/atelier` ;
+  - les pastilles finies (verdict d'un build, même une croix rouge,
+    sous-agents, liste de tâches faite) s'en vont 5 minutes après que tout est
+    fini, au lieu de rester là indéfiniment.
+- **0.4.1** — 2026-10-17 — Pastilles plus justes, et plus vivantes :
+  - elles se cochent quand Claude a fini : s'il clôt son travail sans rien te
+    laisser en suspens mais a oublié de cocher ses dernières étapes, le plan
+    s'affiche quand même fini ; s'il te pose une question, les étapes
+    restantes restent ouvertes, elles t'attendent ;
+  - l'étape en cours devient l'orbe « breathing » de
+    [thinking-orbs](https://github.com/Jakubantalik/thinking-orbs) (Jakub
+    Antalik, licence MIT) : un anneau de points qui respire, porté en SVG
+    animé sans script, immobile quand Claude ne travaille pas.
 - **0.4.0** — 2026-10-16 — La liste de tâches de Claude en pastilles, sous les
   jauges :
   - un rond par étape : en pointillé tant qu'elle attend, qui tourne pendant

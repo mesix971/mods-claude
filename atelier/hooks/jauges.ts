@@ -6,6 +6,7 @@
 // bas pourcentage, parce qu'à ce rythme la limite tombe avant le reset.
 
 import type { AtelierUsage } from '../types'
+import { tokensCourts } from './prix'
 
 export type Niveau = 'ok' | 'attention' | 'critique'
 export type Jauge = {
@@ -72,14 +73,67 @@ const BARRE = 56
 // largeur approximative d'un caractère à 10,5 px (police système)
 const CAR = 6.1
 
-/** Les jauges en SVG (fond transparent, couleurs du texte selon le thème). */
-export function svgJauges(l: readonly Jauge[], hhmm: (ms: number) => string): { svg: string; largeur: number } {
+/** Un texte sûr dans le SVG : échappé, sans caractère de contrôle (interdit en XML, il casserait tout le dessin) */
+const echappe = (s: string) =>
+  s
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\ufffe\uffff]/g, '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+
+/**
+ * Ce que dit une jauge au survol. Pour un quota : à ce rythme, la limite
+ * tombe-t-elle avant le reset (et vers quelle heure), ou tient-on. Pour le
+ * contexte : sa part de la fenêtre, en tokens quand on les connaît.
+ */
+export function titreJauge(j: Jauge, maintenant: number | undefined, quand: (ms: number) => string, contexte?: { tokens?: number; window?: number }): string {
+  if (j.nom === 'ctx') {
+    const detail = contexte?.tokens !== undefined && contexte.window ? ` (${tokensCourts(contexte.tokens)} sur ${tokensCourts(contexte.window)} tokens)` : ''
+    return `Contexte : ${Math.round(j.pct)} % de la fenêtre${detail}`
+  }
+  const tete = `Quota ${j.nom === '5 h' ? '5 h' : '7 jours'} : ${Math.round(j.pct)} % utilisés${j.reset !== null ? ` · reset ${quand(j.reset)}` : ''}`
+  // sans l'heure (une image générée hors session), pas de projection
+  if (j.reset === null || j.ecoule === null || maintenant === undefined) return tete
+  if (j.pct >= 100) return `${tete}\nLimite atteinte : elle se lève au reset.`
+  if (j.pct <= 0) return `${tete}
+Rien consommé dans cette fenêtre pour l'instant.`
+  if (j.ecoule < 0.05) return `${tete}
+Trop tôt dans la fenêtre pour une projection.`
+  const projete = j.pct / j.ecoule
+  if (projete >= 100) {
+    const fenetre = j.nom === '5 h' ? CINQ_H : SEPT_J
+    const debut = j.reset - fenetre
+    return `${tete}
+À ce rythme : 100 % vers ${quand(debut + (maintenant - debut) * (100 / j.pct))}, avant le reset.`
+  }
+  return `${tete}
+À ce rythme : environ ${Math.round(projete)} % au reset. Tu tiens.`
+}
+
+export type OptionsJauges = {
+  /** Pour les projections du survol */
+  maintenant?: number
+  contexte?: { tokens?: number; window?: number }
+  /** La pastille de conso, après les jauges */
+  conso?: { texte: string; titre: string; lourde: boolean } | null
+}
+
+/**
+ * Les jauges en SVG (fond transparent, couleurs du texte selon le thème), à
+ * dessiner avec `isInteractive` : le survol de chacune dit sa projection.
+ */
+export function svgJauges(l: readonly Jauge[], hhmm: (ms: number) => string, o: OptionsJauges = {}): { svg: string; largeur: number } {
   let x = 0
   let corps = ''
   for (const j of l) {
     const bx = x + ETIQUETTE
     const plein = (Math.max(0, Math.min(100, j.pct)) / 100) * BARRE
     const texte = legende(j, hhmm)
+    const fin = bx + BARRE + 5 + Math.ceil(texte.length * CAR)
+    corps += `<g class="t"><title>${echappe(titreJauge(j, o.maintenant, hhmm, o.contexte))}</title>`
+    corps += `<rect class="zone" x="${x}" y="0" width="${fin - x}" height="${HAUTEUR}" rx="4"/>`
     corps += `<text class="lab" x="${x}" y="13">${j.nom}</text>`
     corps += `<rect class="piste" x="${bx}" y="6" width="${BARRE}" height="6" rx="3"/>`
     if (plein > 0) {
@@ -88,8 +142,15 @@ export function svgJauges(l: readonly Jauge[], hhmm: (ms: number) => string): { 
     if (j.ecoule !== null) {
       corps += `<rect class="tic" x="${(bx + j.ecoule * BARRE - 1).toFixed(1)}" y="3" width="2" height="12" rx="1"/>`
     }
-    corps += `<text class="pc ${j.niveau}" x="${bx + BARRE + 5}" y="13">${texte}</text>`
-    x = bx + BARRE + 5 + Math.ceil(texte.length * CAR) + 14
+    corps += `<text class="pc ${j.niveau}" x="${bx + BARRE + 5}" y="13">${texte}</text></g>`
+    x = fin + 14
+  }
+  if (o.conso) {
+    const fin = x + Math.ceil(o.conso.texte.length * CAR)
+    corps += `<g class="t"><title>${echappe(o.conso.titre)}</title>`
+    corps += `<rect class="zone" x="${x}" y="0" width="${fin - x}" height="${HAUTEUR}" rx="4"/>`
+    corps += `<text class="pc${o.conso.lourde ? ' attention' : ''}" x="${x}" y="13">${echappe(o.conso.texte)}</text></g>`
+    x = fin + 14
   }
   const largeur = Math.max(1, x - 14)
   const css =
@@ -97,8 +158,9 @@ export function svgJauges(l: readonly Jauge[], hhmm: (ms: number) => string): { 
     `.pc{font:10.5px "Segoe UI",system-ui,sans-serif;fill:#a3a7ad;font-variant-numeric:tabular-nums}` +
     `.pc.attention{fill:#f2b33d}.pc.critique{fill:#ef5b5f;font-weight:700}` +
     `.piste{fill:#ffffff24}.tic{fill:#f2f2f2;opacity:.9}` +
+    `.zone{fill:transparent}.t:hover .zone{fill:#ffffff10}` +
     `.pulse{animation:pulse 1.2s ease-in-out infinite}@keyframes pulse{50%{opacity:.45}}` +
-    `@media (prefers-color-scheme: light){.lab,.pc{fill:#5f646b}.pc.attention{fill:#b7791f}.piste{fill:#0000001f}.tic{fill:#2b2b2b}}`
+    `@media (prefers-color-scheme: light){.lab,.pc{fill:#5f646b}.pc.attention{fill:#b7791f}.piste{fill:#0000001f}.tic{fill:#2b2b2b}.t:hover .zone{fill:#0000000c}}`
   return {
     largeur,
     svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${largeur} ${HAUTEUR}"><style>${css}</style>${corps}</svg>`,
