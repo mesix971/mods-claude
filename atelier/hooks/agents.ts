@@ -55,11 +55,11 @@ export function pastillesAgents(l: readonly AtelierAgent[], maintenant: number):
     const teinte = couleurModele(a.modele)
     const ondes = (a.pings ?? []).map(t => maintenant - t).filter(age => age >= 0 && age < DUREE_ONDE)
     const outils = a.appels ? `\n${a.appels} outil${a.appels > 1 ? 's' : ''} lancé${a.appels > 1 ? 's' : ''}${a.dernierOutil ? `, le dernier : ${a.dernierOutil}` : ''}` : ''
-    if (a.etat === 'encours') return { titre: `${qui}\nEn cours depuis ${heure(a.debut)} (${dureeCourte(maintenant - a.debut)})${outils}`, forme: 'encours', teinte, ondes }
+    if (a.etat === 'encours') return { titre: `${qui}\nEn cours depuis ${heure(a.debut)} (${dureeCourte(maintenant - a.debut)})${outils}`, forme: 'encours', teinte, ondes, id: `agent-${a.id}` }
     const temps = a.fin !== undefined ? ` en ${duree(a.fin - a.debut)}` : ''
     return a.etat === 'faite'
-      ? { titre: `${qui}\nFini${temps}${outils}`, forme: 'faite', teinte }
-      : { titre: `${qui}\n${a.cause === 'erreur' ? 'Arrêté sur une erreur' : a.cause === 'refus' ? 'A refusé la tâche' : 'Interrompu'}${temps}${outils}`, forme: 'attente', teinte }
+      ? { titre: `${qui}\nFini${temps}${outils}`, forme: 'faite', teinte, id: `agent-${a.id}` }
+      : { titre: `${qui}\n${a.cause === 'erreur' ? 'Arrêté sur une erreur' : a.cause === 'refus' ? 'A refusé la tâche' : 'Interrompu'}${temps}${outils}`, forme: 'attente', teinte, id: `agent-${a.id}` }
   })
 }
 

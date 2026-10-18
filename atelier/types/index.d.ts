@@ -110,6 +110,33 @@ export type AtelierAgent = {
   dernierOutil?: string
 }
 
+/** Un élément du bandeau qu'un autre mod du dépôt (Clawd) peut viser */
+export type AtelierElement = {
+  /** `jauge-5h`, `jauge-7j`, `jauge-contexte`, `conso`, `tache-<id>`, `agent-<id>`, `build` */
+  id: string
+  genre: 'jauge' | 'conso' | 'tache' | 'agent' | 'build'
+  /**
+   * Ce qu'il montre : `attente` (le rond en pointillé), `encours` (l'orbe),
+   * `faite` (la coche), `echec` (la croix) ; pour une jauge son niveau (`ok`,
+   * `attention`, `critique`) ; pour la conso `ok` ou `lourde`
+   */
+  etat: string
+  /** Sa place dans le dessin desktop : en px CSS depuis le bord gauche du bandeau */
+  x: number
+  largeur: number
+  /** Sa ligne, comptée depuis le bas du bandeau (0 : la dernière) */
+  ligne: number
+  /** La couleur d'un sous-agent (son modèle) */
+  teinte?: string
+}
+
+/** La bande partagée : ce qu'atelier dessine, ligne par ligne, et où */
+export type AtelierScene = {
+  /** Les lignes du bandeau, de haut en bas */
+  lignes: ('android' | 'git' | 'quotas' | 'pastilles' | 'occupe')[]
+  elements: AtelierElement[]
+}
+
 declare module 'claude-code' {
   interface PluginState {
     atelier: {
@@ -121,12 +148,25 @@ declare module 'claude-code' {
       conso: AtelierConso | null
       build: AtelierBuild | null
       agents: AtelierAgent[]
+      /** La bande partagée, pour Clawd : ce que le bandeau dessine et où (null : rien, ou masqué) */
+      scene: AtelierScene | null
+      /** Le dernier conseil de modèle (Haiku a lu la demande) : le modèle et l'effort qui suffisent, et pourquoi */
+      conseil: { modele: 'haiku' | 'sonnet' | 'opus' | 'fable'; effort: 'low' | 'medium' | 'high' | 'xhigh' | 'max'; raison: string } | null
+      /** Ce qui tourne : le modèle et l'effort des requêtes de la conversation, notés à chaque requête */
+      reglage: { modele: string | null; effort: string | null } | null
       /** L'heure où le dernier tour de Claude a fini (null pendant un tour, ou avant le premier) */
       finDuTour: number | null
       /** Avance d'un cran par minute, pour redessiner le bandeau */
       minute: number
       busy: string | null
       isHidden: boolean
+    }
+    /** Le contrat de Clawd (l'autre mod du dépôt), qu'atelier lit seulement */
+    clawd: {
+      /** Ce qu'il tient en ce moment, chacun jusqu'à une échéance (ms) : atelier ne le dessine plus jusque-là */
+      emprunts: { id: string; jusqua: number }[]
+      /** Le numéro qu'il joue sur toute la bande : son dessin (SVG), sa hauteur (px) et sa fin (ms) */
+      grandeScene: { svg: string; hauteur: number; fin: number } | null
     }
   }
 }

@@ -9,8 +9,8 @@ Deux mods pour [Claude Code](https://claude.com/claude-code) :
 - **clawd** : le petit Claude orange en pixel art qui vit au-dessus de ton
   prompt et réagit, sans un mot, à ce qui se passe dans ta session.
 - **atelier** : un bandeau projet (versions APK ↔ téléphone, git, quotas et
-  conso en euros, tâches, sous-agents et build en pastilles) et des
-  garde-fous pour le dev Android.
+  conso en euros, conseil de modèle, tâches, sous-agents et build en
+  pastilles) et des garde-fous pour le dev Android.
 
 Projet perso, fan-made et non officiel, sans lien avec Anthropic.
 
@@ -106,11 +106,21 @@ suivent ton thème clair ou sombre. Pas un mot : tout passe par ses gestes.
 
   Un toast t'avertit aussi à 80 % puis à 95 %. Au survol, chaque jauge dit
   sa projection : à ce rythme, 100 % vers telle heure, ou « tu tiens ».
+  Quand tu vas trop vite, elle dit aussi combien de temps sans Claude pour
+  revenir dans le rythme, et jusqu'à quelle heure.
 - Juste après, la conso du tour en direct : ses tokens et ce qu'il coûterait
   au tarif de l'API, en euros, avec le détail et le total de la session au
   survol. Elle vire à l'ambre quand la conversation devient lourde (chaque
   réponse relit plus de 400 k tokens) : une conversation neuve coûterait
   bien moins.
+- Puis le conseil de modèle : Haiku lit chaque demande que tu tapes (avec le
+  projet, le plan, le build, les sous-agents et les quotas) et dit quel
+  modèle et quel effort suffisent pour la suite, par exemple « 💡 Sonnet ·
+  Moyen ». La puce ne s'affiche que quand ce n'est pas ce qui tourne, la
+  raison au survol ; c'est toi qui changes. Quelques centaines de tokens de
+  Haiku par demande. Une réponse courte (« oui », « vas-y ») garde le conseil
+  d'avant ; les routines, les autres sessions, les plugins et le bandeau
+  masqué n'appellent pas Haiku.
 - Juste en dessous, la liste de tâches de Claude en pastilles : un rond par
   étape, en pointillé tant qu'elle attend, un anneau de points qui respire
   pendant qu'elle avance (l'orbe « breathing » de
@@ -124,6 +134,13 @@ suivent ton thème clair ou sombre. Pas un mot : tout passe par ses gestes.
 - Dans la ligne 📱, le build en pastille : l'orbe pendant un `gradlew` ou un
   `flutter build` (même en tâche de fond), puis une coche avec sa durée, ou
   une croix rouge avec la tâche qui a échoué et sa première erreur au survol.
+- La bande partagée, pour un mod qui sait jouer sur toute la bande (une
+  version de Clawd qui en est capable ; le Clawd de ce dépôt ne le fait pas
+  encore) : atelier publie ce qu'il dessine et où (son état `atelier.scene`),
+  ne dessine plus ce que ce mod tient (son état `clawd.emprunts`, chaque
+  emprunt avec son échéance) et pose son numéro par-dessus toute la bande
+  (`clawd.grandeScene`). Atelier doit être chargé avant ce mod : c'est sa
+  rangée qui couvre la bande.
 
 **Les garde-fous sur Bash et PowerShell**
 

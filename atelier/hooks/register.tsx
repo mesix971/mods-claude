@@ -17,14 +17,16 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, ToolCallResult } from 'claude-code'
 
 import type { AtelierAgent, AtelierAndroid, AtelierBuild, AtelierConso, AtelierGit, AtelierTache, AtelierUsage } from '../types'
-import { ajouteAgent, causeDe, couleurModele, finAgent, nettoieAgents, pastillesAgents, pingAgent, resumeAgents } from './agents'
-import { analyse, buildVisible, estBuild, pastilleBuild, quoiBuild, sortieFond } from './build'
-import { ajouteReponse, debutTour, estLourde, finTour, mesureCout, texteConso, titreConso, tokensDe } from './conso'
+import { ajouteAgent, causeDe, couleurModele, finAgent, nettoieAgents, pingAgent, resumeAgents } from './agents'
+import { analyse, estBuild, pastilleBuild, quoiBuild, sortieFond } from './build'
+import { aJuger, conseilAffiche, deToi, lisConseil, promptConseil } from './conseil'
+import { ajouteReponse, debutTour, finTour, mesureCout, tokensDe } from './conso'
 import { COULEURS, jauges, resumeJauges, svgJauges, texteJauges } from './jauges'
 import { decrit, estDiscret } from './outils'
 import { svgPastilles } from './pastilles'
 import { aRanger } from './rangement'
-import { ajouteTache, depuisTaskList, depuisTodos, horodate, interrompue, majTache, pastillesTaches, planFini, resumeTaches, suitPlan, texteTaches, toutFait } from './taches'
+import { CELLULE, empruntsDe, grandeSceneDe, planBandeau, quandDe, sceneDuBandeau } from './scene'
+import { ajouteTache, depuisTaskList, depuisTodos, horodate, interrompue, majTache, planFini, resumeTaches, suitPlan, texteTaches, toutFait } from './taches'
 
 type $ = EngineInterface
 
@@ -36,6 +38,14 @@ const conso = atom({ plugin: 'atelier', key: 'conso' } as const, null)
 const build = atom({ plugin: 'atelier', key: 'build' } as const, null)
 const agents = atom({ plugin: 'atelier', key: 'agents' } as const, [])
 const finDuTour = atom({ plugin: 'atelier', key: 'finDuTour' } as const, null)
+const scene = atom({ plugin: 'atelier', key: 'scene' } as const, null)
+/** Ce que Clawd tient en ce moment : son état à lui, qu'atelier lit seulement */
+const empruntsClawd = atom({ plugin: 'clawd', key: 'emprunts' } as const, [])
+/** Le numéro que Clawd joue sur toute la bande (son dessin) : atelier le pose par-dessus ses lignes */
+const grandeSceneClawd = atom({ plugin: 'clawd', key: 'grandeScene' } as const, null)
+const conseil = atom({ plugin: 'atelier', key: 'conseil' } as const, null)
+const reglage = atom({ plugin: 'atelier', key: 'reglage' } as const, null)
+const SANS_REGLAGE = { modele: null, effort: null }
 /** Avance d'un cran par minute : le bandeau se redessine même sans nouvelle donnée */
 const minute = atom({ plugin: 'atelier', key: 'minute' } as const, 0)
 const busy = atom({ plugin: 'atelier', key: 'busy' } as const, null)
@@ -172,6 +182,7 @@ async function majTaches($: $, f: (l: readonly AtelierTache[]) => AtelierTache[]
   try {
     const maintenant = await $.clock.now()
     await update($, taches, l => horodate(l, f(l), maintenant))
+    void publieScene($)
   } catch {
     // module rechargé en plein appel : la liste se recalera au suivant
   }
@@ -181,6 +192,7 @@ async function majTaches($: $, f: (l: readonly AtelierTache[]) => AtelierTache[]
 async function majConso($: $, f: (c: AtelierConso | null) => AtelierConso | null) {
   try {
     await update($, conso, f)
+    void publieScene($)
   } catch {
     // idem
   }
@@ -188,6 +200,7 @@ async function majConso($: $, f: (c: AtelierConso | null) => AtelierConso | null
 async function majBuild($: $, f: (b: AtelierBuild | null) => AtelierBuild | null) {
   try {
     await update($, build, f)
+    void publieScene($)
   } catch {
     // idem
   }
@@ -195,6 +208,7 @@ async function majBuild($: $, f: (b: AtelierBuild | null) => AtelierBuild | null
 async function majAgents($: $, f: (l: readonly AtelierAgent[]) => AtelierAgent[]) {
   try {
     await update($, agents, f)
+    void publieScene($)
   } catch {
     // idem
   }
@@ -205,6 +219,100 @@ async function noteFinDuTour($: $, t: number | null) {
     await update($, finDuTour, () => t)
   } catch {
     // idem
+  }
+}
+
+/**
+ * Le conseil de modèle pour une demande : Haiku la lit, avec le contexte du
+ * travail (projet, plan, build, sous-agents, quotas), et dit quel modèle et
+ * quel effort suffisent. Quelques centaines de tokens de Haiku par demande ;
+ * seul le dernier demandé compte.
+ */
+let dernierConseil = 0
+async function conseille($: $, texte: string) {
+  const n = ++dernierConseil
+  try {
+    // avant la première requête, le modèle de la session (l'effort viendra avec elle)
+    if (!(await read($, reglage))) {
+      const m = await $.session.model().catch(() => null)
+      await update($, reglage, r => r ?? { modele: m, effort: null })
+    }
+    const maintenant = await $.clock.now()
+    const u = await read($, usage)
+    const contexte = {
+      projet: (await read($, android)) ? 'Android' : 'autre',
+      etapes: (await read($, taches)).filter(t => t.etat !== 'faite').length,
+      buildRate: (await read($, build))?.etat === 'echec',
+      sousAgents: (await read($, agents)).filter(a => a.etat === 'encours').length,
+      quotaSerre: u ? jauges(u, maintenant).some(j => j.nom !== 'ctx' && j.niveau !== 'ok') : false,
+    }
+    const r = await $.model.complete({ model: 'haiku', prompt: promptConseil(texte, contexte), effort: 'low', maxTokens: 150, timeoutMs: 20_000 })
+    if (n !== dernierConseil) return
+    // sans réponse lisible, plus de conseil : celui d'avant parlait de la demande d'avant
+    const c = r.isAnswered ? lisConseil(r.text) : null
+    await update($, conseil, () => c)
+    void publieScene($)
+  } catch {
+    // pas de conseil cette fois (ni celui de la demande d'avant)
+    if (n === dernierConseil) {
+      await update($, conseil, () => null).catch(() => {})
+      void publieScene($)
+    }
+  }
+}
+
+/**
+ * La bande partagée, telle que le bandeau la dessine sur desktop (null quand
+ * il ne dessine rien) : écrite seulement quand elle change. Un dessin ne peut
+ * pas écrire, d'où cet appel après chaque écriture qui le change, et chaque
+ * minute ; des appels rapprochés n'en font qu'un.
+ */
+let sceneEcrite: string | null = null
+let publication: Promise<void> | null = null
+let aRepublier = false
+function publieScene($: $): Promise<void> {
+  if (publication) {
+    aRepublier = true
+    return publication
+  }
+  publication = (async () => {
+    try {
+      do {
+        aRepublier = false
+        await publieUneFois($)
+      } while (aRepublier)
+    } finally {
+      publication = null
+    }
+  })()
+  return publication
+}
+async function publieUneFois($: $) {
+  try {
+    const maintenant = await $.clock.now()
+    const plan = (await read($, isHidden))
+      ? null
+      : planBandeau(
+          {
+            android: await read($, android),
+            git: await read($, git),
+            usage: await read($, usage),
+            taches: await read($, taches),
+            conso: await read($, conso),
+            build: await read($, build),
+            agents: await read($, agents),
+            busy: await read($, busy),
+            conseil: conseilAffiche(await read($, conseil), (await read($, reglage)) ?? SANS_REGLAGE),
+          },
+          maintenant,
+        )
+    const s = plan && plan.lignes.length > 0 ? sceneDuBandeau(plan, quandDe(maintenant)) : null
+    const texte = JSON.stringify(s)
+    if (texte === sceneEcrite) return
+    await update($, scene, () => s)
+    sceneEcrite = texte
+  } catch {
+    // la bande se recalera au prochain changement
   }
 }
 
@@ -258,8 +366,6 @@ async function maintenantOuRien($: $): Promise<number | null> {
     return null
   }
 }
-
-const JOURS = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.']
 
 // ----------------------------------------------------------------- Android
 
@@ -473,6 +579,7 @@ async function rafraichirUsage($: $) {
     const u = await $.session.usage()
     if (u.rateLimits.length === 0 && u.context.percent === undefined) return
     await update($, usage, () => usageDepuis(u.rateLimits, u.context.percent ?? null, u.context))
+    void publieScene($)
   } catch {
     // pas encore de réponse de l'API dans cette session : rien à afficher
   }
@@ -489,6 +596,7 @@ function refresh($: $) {
       const [a, g] = await Promise.all([refreshAndroid($, cwd), refreshGit($, cwd)])
       await update($, android, () => a)
       await update($, git, () => g)
+      void publieScene($)
     } catch {
       // module rechargé ou session fermée en plein rafraîchissement : on laisse tomber
     } finally {
@@ -503,6 +611,7 @@ async function installApk($: $) {
   if (!a?.apk) return 'Pas d’APK construit dans ce projet.'
   if (!a.device) return 'Aucun téléphone branché (adb devices vide).'
   await update($, busy, () => `Installation de ${a.apk!.name}…`)
+  void publieScene($)
   try {
     const r = await run($, [await trouverAdb($), '-s', a.device.serial, 'install', '-r', a.apk.path], 180_000)
     const out = `${r?.stdout ?? ''}\n${r?.stderr ?? ''}`
@@ -520,6 +629,7 @@ async function installApk($: $) {
     return `❌ Échec : ${out.match(/Failure \[[^\]]+\]/)?.[0] ?? (out.trim().split(/\r?\n/).pop() ?? 'adb muet')}`
   } finally {
     await update($, busy, () => null)
+    void publieScene($)
   }
 }
 
@@ -756,6 +866,7 @@ export const register: Register = on => {
     $.clock.every(60_000, () => {
       void rafraichirUsage($)
         .then(() => rangeLesFinis($))
+        .then(() => publieScene($))
         .then(() => update($, minute, n => n + 1))
         .catch(() => {})
     })
@@ -771,6 +882,7 @@ export const register: Register = on => {
 
   on('command.run', { command: 'atelier' }, async $ => {
     const hidden = await update($, isHidden, h => !h)
+    void publieScene($)
     void refresh($)
     const manifest = await readText($, `${$.plugin.root}/.claude-plugin/plugin.json`)
     const version = manifest?.match(/"version"\s*:\s*"([^"]+)"/)?.[1] ?? '?'
@@ -786,6 +898,9 @@ export const register: Register = on => {
     if (!e.isMeta) {
       await majTaches($, l => (toutFait(l) ? [] : [...l]))
       await majAgents($, nettoieAgents)
+      // le modèle et l'effort qui suffisent pour ce que tu demandes (Haiku le lit, sans retarder le tour) ;
+      // pas pour une routine, une autre session ou un plugin, ni bandeau masqué : du quota pour rien
+      if (!e.command && deToi(e.origin) && aJuger(e.text) && !(await read($, isHidden))) void conseille($, e.text)
     }
     if (!rappelFrancais) return next(e)
     rappelFrancais = false
@@ -860,6 +975,19 @@ export const register: Register = on => {
   })
   // chaque réponse de l'API (sous-agents compris) : ses tokens, et ce qu'elle coûterait
   on('turn.step', async function* ($, e, next) {
+    // ce qui tourne vraiment : le modèle et l'effort de la requête (pour le conseil de modèle)
+    if (e.agentId === undefined) {
+      try {
+        const effort = typeof e.effort === 'string' ? e.effort : null
+        const avant = await read($, reglage)
+        if (avant?.modele !== e.model || avant?.effort !== effort) {
+          await update($, reglage, () => ({ modele: e.model, effort }))
+          void publieScene($)
+        }
+      } catch {
+        // il sera noté à la requête suivante
+      }
+    }
     const r = yield* next(e)
     try {
       if (r?.usage) {
@@ -982,13 +1110,17 @@ export const register: Register = on => {
   // /clear ou une reprise : le processus continue sur une autre conversation, qui a sa propre liste
   on('session.end', async ($, e, next) => {
     finisAvantNaissance.clear()
-    await Promise.all([majTaches($, () => []), majAgents($, () => []), majConso($, () => null)])
+    // un conseil encore en route parlait de l'autre conversation
+    dernierConseil++
+    await Promise.all([majTaches($, () => []), majAgents($, () => []), majConso($, () => null), update($, conseil, () => null).catch(() => {})])
+    void publieScene($)
     return next(e)
   })
 
   on('session.measure', async ($, e, next) => {
     const u = usageDepuis(e.rateLimits, e.context.percent ?? null, e.context)
     await update($, usage, () => u)
+    void publieScene($)
     const cout = e.cost?.usd
     if (typeof cout === 'number' && Number.isFinite(cout)) await majConso($, c => mesureCout(c, cout))
 
@@ -1019,8 +1151,12 @@ export const register: Register = on => {
     const c = await read($, conso)
     const b = await read($, build)
     const la = await read($, agents)
-    const texteC = texteConso(c)
-    if (!a && !g && !u && lt.length === 0 && la.length === 0 && !texteC && !b) return next(e)
+    const maintenant = await $.clock.now()
+    // le même plan que la bande partagée (scene.ts) : ce que Clawd y lit est ce qui est dessiné
+    const ca = conseilAffiche(await read($, conseil), (await read($, reglage)) ?? SANS_REGLAGE)
+    const plan = planBandeau({ android: a, git: g, usage: u, taches: lt, conso: c, build: b, agents: la, busy: enCours, conseil: ca }, maintenant)
+    // rien à montrer : le moteur dessine (et la bande partagée est vide)
+    if (plan.lignes.length === 0) return next(e)
     // on compose au lieu de remplacer : ce que dessinent les autres mods
     // (clawd) se place à droite de nos lignes, posé sur le bord du bas
     const dessous = await next(e)
@@ -1028,20 +1164,22 @@ export const register: Register = on => {
     const { Box, Text, Button } = $.ui.resolve(e)
 
     // quotas et contexte en jauges : un dessin sur desktop, des blocs ▰▱ ailleurs
-    const maintenant = await $.clock.now()
-    const lj = u ? jauges(u, maintenant) : []
-    // l'heure d'un reset, avec le jour quand il est loin (fenêtre de 7 j)
-    const quand = (ms: number) => (ms - maintenant > 20 * 3600_000 ? `${JOURS[new Date(ms).getDay()]} ` : '') + hhmm(ms)
+    const lj = plan.jauges
+    const quand = quandDe(maintenant)
     // la conso du tour (et son coût au tarif de l'API) après les jauges
-    const pastilleC = texteC ? { texte: texteC, titre: titreConso(c), lourde: estLourde(c) } : null
+    const pastilleC = plan.conso
+    // ce que Clawd tient en ce moment : sa place reste, vide, jusqu'à ce qu'il le rende
+    const caches = empruntsDe(await read($, empruntsClawd), maintenant)
     let quotas: JSX.Element | null = null
-    if ((lj.length > 0 || pastilleC) && e.surface === 'desktop') {
+    if ((lj.length > 0 || pastilleC || plan.conseil) && e.surface === 'desktop') {
       const { Svg } = $.ui.resolve(e)
-      const dessin = svgJauges(lj, quand, { maintenant, contexte: u ? { tokens: u.contextTokens, window: u.contextWindow } : undefined, conso: pastilleC })
-      const alt = [lj.length > 0 ? resumeJauges(lj, quand) : '', pastilleC ? `Conso : ${pastilleC.texte}` : ''].filter(Boolean).join(' · ')
+      const dessin = svgJauges(lj, quand, { maintenant, contexte: u ? { tokens: u.contextTokens, window: u.contextWindow } : undefined, conso: pastilleC, conseil: plan.conseil, caches })
+      const alt = [lj.length > 0 ? resumeJauges(lj, quand) : '', pastilleC ? `Conso : ${pastilleC.texte}` : '', plan.conseil ? `Conseil : ${plan.conseil.texte}` : '']
+        .filter(Boolean)
+        .join(' · ')
       // interactif : le survol d'une jauge dit sa projection, celui de la conso son détail
       quotas = <Svg source={dessin.svg} alt={alt} width={dessin.largeur} height={18} isInteractive />
-    } else if (lj.length > 0 || pastilleC) {
+    } else if (lj.length > 0 || pastilleC || plan.conseil) {
       quotas = (
         <Box flexDirection="row" flexWrap="wrap" columnGap={2}>
           {texteJauges(lj, quand).map(j => (
@@ -1054,6 +1192,7 @@ export const register: Register = on => {
               {pastilleC.texte}
             </Text>
           )}
+          {plan.conseil && <Text color="#b085f5">{plan.conseil.texte}</Text>}
         </Box>
       )
     }
@@ -1061,7 +1200,7 @@ export const register: Register = on => {
     // la liste de tâches en pastilles : le nom d'une étape au survol (d'où
     // isInteractive) sur desktop, des ◌ ◐ ✔ ailleurs
     // le build en cours ou son verdict (un réussi s'efface au bout de 10 min)
-    const bv = buildVisible(b, maintenant) ? b : null
+    const bv = plan.build
     const enFond = bv?.etat === 'encours'
     const glypheBuild = (x: AtelierBuild) => (
       <Text color={x.etat === 'echec' ? COULEURS.critique : x.etat === 'ok' ? COULEURS.ok : undefined} dimColor={x.etat === 'fini'}>
@@ -1072,19 +1211,17 @@ export const register: Register = on => {
     if (bv && a && e.surface === 'desktop') {
       const { Svg } = $.ui.resolve(e)
       const p = pastilleBuild(bv, maintenant)
-      const dessin = svgPastilles([[p]], enFond)
+      const dessin = svgPastilles([[p]], enFond, caches)
       pastilleB = <Svg source={dessin.svg} alt={p.titre} width={dessin.largeur} height={18} isInteractive />
     } else if (bv && a) {
       pastilleB = glypheBuild(bv)
     }
 
-    const groupes = [...(bv && !a ? [[pastilleBuild(bv, maintenant)]] : []), pastillesTaches(lt, maintenant), pastillesAgents(la, maintenant)].filter(
-      x => x.length > 0,
-    )
+    const groupes = plan.groupes
     let ronds: JSX.Element | null = null
     if (groupes.length > 0 && e.surface === 'desktop') {
       const { Svg } = $.ui.resolve(e)
-      const dessin = svgPastilles(groupes, e.props.isWorking === true || (enFond && !a))
+      const dessin = svgPastilles(groupes, e.props.isWorking === true || (enFond && !a), caches)
       const alt = [bv && !a ? pastilleBuild(bv, maintenant).titre : '', lt.length > 0 ? resumeTaches(lt) : '', la.length > 0 ? resumeAgents(la) : '']
         .filter(Boolean)
         .join(' · ')
@@ -1106,6 +1243,41 @@ export const register: Register = on => {
         </Box>
       )
     }
+
+    // le numéro que Clawd joue sur toute la bande (son dessin, qu'il publie) :
+    // posé par-dessus nos lignes, dans notre rangée, la seule qui couvre la bande
+    const gs = e.surface === 'desktop' ? grandeSceneDe(await read($, grandeSceneClawd), maintenant) : null
+    let grandeScene: JSX.Element | null = null
+    if (gs) {
+      const { Svg } = $.ui.resolve(e)
+      // la bande ne se mesure qu'en cases : sa largeur en px, pour que le dessin la couvre à l'échelle 1
+      grandeScene = (
+        <Box key="grande-scene" position="absolute" left={0} right={0} bottom={0}>
+          <Svg source={gs.svg} alt="Clawd joue sur la bande" width={Math.round(e.props.bodyColumns * CELLULE)} height={gs.hauteur} />
+        </Box>
+      )
+    }
+
+    // ↻ et Masquer : au bout de la ligne git, courte ; sur celle des quotas (sans git), ils la faisaient
+    // passer à la ligne quand elle était longue, et la bande changeait de forme
+    const commandes = (
+      <Box flexDirection="row" alignItems="center">
+        <Text> </Text>
+        <Button key="refresh" label="↻" plain dimColor onPress={() => refresh($)} />
+        <Button
+          key="hide"
+          label="Masquer"
+          role="dismiss"
+          dimColor
+          onPress={async () => {
+            await update($, isHidden, () => true)
+            void publieScene($)
+            // sans ça, rien ne dit comment le faire revenir
+            $.ui.toast('Bandeau atelier masqué : tape /atelier pour le ré-afficher', { timeoutMs: 8000 })
+          }}
+        />
+      </Box>
+    )
 
     return (
       <Box flexDirection="row" alignItems="flex-end">
@@ -1147,7 +1319,7 @@ export const register: Register = on => {
             </Box>
           )}
           {g && (
-            <Box flexDirection="row" flexWrap="wrap">
+            <Box key="ligne-git" flexDirection="row" flexWrap="wrap">
               <Text>🌿 {g.branch}</Text>
               <Text dimColor={g.changed === 0}>{`  · ${g.changed} modif${g.changed > 1 ? 's' : ''}`}</Text>
               {g.hasRemote && (
@@ -1179,24 +1351,13 @@ export const register: Register = on => {
                   }
                 />
               )}
+              {commandes}
             </Box>
           )}
           {quotas && (
-            <Box flexDirection="row" flexWrap="wrap" alignItems="center">
+            <Box key="ligne-quotas" flexDirection="row" flexWrap="wrap" alignItems="center">
               {quotas}
-              <Text> </Text>
-              <Button key="refresh" label="↻" plain dimColor onPress={() => refresh($)} />
-              <Button
-                key="hide"
-                label="Masquer"
-                role="dismiss"
-                dimColor
-                onPress={async () => {
-                  await update($, isHidden, () => true)
-                  // sans ça, rien ne dit comment le faire revenir
-                  $.ui.toast('Bandeau atelier masqué : tape /atelier pour le ré-afficher', { timeoutMs: 8000 })
-                }}
-              />
+              {!g && commandes}
             </Box>
           )}
           {ronds && (
@@ -1207,6 +1368,7 @@ export const register: Register = on => {
           {enCours && <Text color="cyan">⏳ {enCours}</Text>}
         </Box>
         {dessous}
+        {grandeScene}
       </Box>
     )
   })

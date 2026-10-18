@@ -100,6 +100,27 @@
 
 ## atelier
 
+- **0.8.0** — 2026-10-18 — Le conseil de modèle : à chaque demande que tu tapes, Haiku
+  la lit (avec le projet, le plan, le build, les sous-agents et les quotas) et
+  dit quel modèle et quel effort suffisent pour la suite. Une puce « 💡 Sonnet · Moyen »
+  après la conso, seulement quand ce n'est pas ce qui tourne, la raison au
+  survol ; c'est toi qui changes. Les efforts sont nommés comme dans le
+  sélecteur de l'app (Faible, Moyen, Élevé, Extra, Max). Aussi :
+  - ↻ et « Masquer » passent au bout de la ligne git : sur celle des quotas,
+    ils la faisaient passer à la ligne ;
+  - le numéro de Clawd est posé à la largeur de la bande.
+- **0.7.0** — 2026-10-18 — Au survol d'un quota qui file trop vite (la barre
+  dépasse le trait) : la pause sans Claude pour revenir dans le rythme, et
+  jusqu'à quelle heure (le temps que le trait rattrape la barre).
+- **0.6.0** — 2026-10-17 — La bande partagée, pour que Clawd joue avec :
+  - atelier publie ce qu'il dessine et où (son état `atelier.scene`) : les
+    jauges, la conso, chaque pastille, avec sa place en px et sa ligne ;
+  - ce que Clawd tient en ce moment (son état `clawd.emprunts`) n'est plus
+    dessiné : la place reste vide jusqu'à ce qu'il le rende, ou jusqu'à
+    l'échéance de l'emprunt (un Clawd planté ne cache rien longtemps) ;
+  - son numéro (son état `clawd.grandeScene`, un dessin qu'il prépare) est
+    posé par-dessus toute la bande : c'est la rangée d'atelier qui la couvre ;
+  - le dessin et la bande partagée suivent le même plan (`scene.ts`).
 - **0.5.0** — 2026-10-17 — Le bandeau en dit plus :
   - la conso du tour en direct, après les jauges : ses tokens et ce qu'il
     coûterait au tarif de l'API, en euros (d'après `/cost`, sinon estimé avec

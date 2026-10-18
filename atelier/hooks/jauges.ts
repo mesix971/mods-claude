@@ -7,6 +7,7 @@
 
 import type { AtelierUsage } from '../types'
 import { tokensCourts } from './prix'
+import { dureePause } from './temps'
 
 export type Niveau = 'ok' | 'attention' | 'critique'
 export type Jauge = {
@@ -85,8 +86,9 @@ const echappe = (s: string) =>
 
 /**
  * Ce que dit une jauge au survol. Pour un quota : à ce rythme, la limite
- * tombe-t-elle avant le reset (et vers quelle heure), ou tient-on. Pour le
- * contexte : sa part de la fenêtre, en tokens quand on les connaît.
+ * tombe-t-elle avant le reset (et vers quelle heure), ou tient-on ; et quand
+ * on va trop vite, combien de temps sans Claude pour revenir dans le rythme.
+ * Pour le contexte : sa part de la fenêtre, en tokens quand on les connaît.
  */
 export function titreJauge(j: Jauge, maintenant: number | undefined, quand: (ms: number) => string, contexte?: { tokens?: number; window?: number }): string {
   if (j.nom === 'ctx') {
@@ -105,8 +107,12 @@ Trop tôt dans la fenêtre pour une projection.`
   if (projete >= 100) {
     const fenetre = j.nom === '5 h' ? CINQ_H : SEPT_J
     const debut = j.reset - fenetre
-    return `${tete}
-À ce rythme : 100 % vers ${quand(debut + (maintenant - debut) * (100 / j.pct))}, avant le reset.`
+    const lignes = [tete, `À ce rythme : 100 % vers ${quand(debut + (maintenant - debut) * (100 / j.pct))}, avant le reset.`]
+    // la pause qui laisse le trait (le temps écoulé) rattraper la barre (la part consommée) :
+    // la projection retombe alors à 100 % pile au reset
+    const rattrape = debut + (j.pct / 100) * fenetre
+    if (rattrape - maintenant >= 60_000) lignes.push(`Pause pour revenir dans le rythme : ${dureePause(rattrape - maintenant)} (jusqu'à ${quand(rattrape)})`)
+    return lignes.join('\n')
   }
   return `${tete}
 À ce rythme : environ ${Math.round(projete)} % au reset. Tu tiens.`
@@ -118,20 +124,36 @@ export type OptionsJauges = {
   contexte?: { tokens?: number; window?: number }
   /** La pastille de conso, après les jauges */
   conso?: { texte: string; titre: string; lourde: boolean } | null
+  /** Le conseil de modèle (conseil.ts), après la conso */
+  conseil?: { texte: string; titre: string } | null
+  /** Ce qu'un autre mod tient en ce moment (Clawd qui joue avec) : la place reste, vide */
+  caches?: ReadonlySet<string>
 }
+
+/** Le nom d'une jauge dans la bande partagée */
+export const idJauge = (j: Jauge) => (j.nom === '5 h' ? 'jauge-5h' : j.nom === '7 j' ? 'jauge-7j' : 'jauge-contexte')
+
+/** Où une jauge (ou la conso) est dessinée : en px depuis le bord gauche de son SVG */
+export type PlaceJauge = { id: string; genre: 'jauge' | 'conso'; x: number; largeur: number; etat: string; titre: string }
 
 /**
  * Les jauges en SVG (fond transparent, couleurs du texte selon le thème), à
  * dessiner avec `isInteractive` : le survol de chacune dit sa projection.
  */
-export function svgJauges(l: readonly Jauge[], hhmm: (ms: number) => string, o: OptionsJauges = {}): { svg: string; largeur: number } {
+export function svgJauges(l: readonly Jauge[], hhmm: (ms: number) => string, o: OptionsJauges = {}): { svg: string; largeur: number; places: PlaceJauge[] } {
   let x = 0
   let corps = ''
+  const places: PlaceJauge[] = []
   for (const j of l) {
     const bx = x + ETIQUETTE
     const plein = (Math.max(0, Math.min(100, j.pct)) / 100) * BARRE
     const texte = legende(j, hhmm)
     const fin = bx + BARRE + 5 + Math.ceil(texte.length * CAR)
+    places.push({ id: idJauge(j), genre: 'jauge', x, largeur: fin - x, etat: j.niveau, titre: `${j.nom} ${texte}` })
+    if (o.caches?.has(idJauge(j))) {
+      x = fin + 14
+      continue
+    }
     corps += `<g class="t"><title>${echappe(titreJauge(j, o.maintenant, hhmm, o.contexte))}</title>`
     corps += `<rect class="zone" x="${x}" y="0" width="${fin - x}" height="${HAUTEUR}" rx="4"/>`
     corps += `<text class="lab" x="${x}" y="13">${j.nom}</text>`
@@ -147,9 +169,20 @@ export function svgJauges(l: readonly Jauge[], hhmm: (ms: number) => string, o: 
   }
   if (o.conso) {
     const fin = x + Math.ceil(o.conso.texte.length * CAR)
-    corps += `<g class="t"><title>${echappe(o.conso.titre)}</title>`
+    places.push({ id: 'conso', genre: 'conso', x, largeur: fin - x, etat: o.conso.lourde ? 'lourde' : 'ok', titre: o.conso.texte })
+    if (!o.caches?.has('conso')) {
+      corps += `<g class="t"><title>${echappe(o.conso.titre)}</title>`
+      corps += `<rect class="zone" x="${x}" y="0" width="${fin - x}" height="${HAUTEUR}" rx="4"/>`
+      corps += `<text class="pc${o.conso.lourde ? ' attention' : ''}" x="${x}" y="13">${echappe(o.conso.texte)}</text></g>`
+    }
+    x = fin + 14
+  }
+  if (o.conseil) {
+    // l'émoji compte double dans la longueur : de quoi le loger
+    const fin = x + Math.ceil(o.conseil.texte.length * CAR)
+    corps += `<g class="t"><title>${echappe(o.conseil.titre)}</title>`
     corps += `<rect class="zone" x="${x}" y="0" width="${fin - x}" height="${HAUTEUR}" rx="4"/>`
-    corps += `<text class="pc${o.conso.lourde ? ' attention' : ''}" x="${x}" y="13">${echappe(o.conso.texte)}</text></g>`
+    corps += `<text class="cs" x="${x}" y="13">${echappe(o.conseil.texte)}</text></g>`
     x = fin + 14
   }
   const largeur = Math.max(1, x - 14)
@@ -157,13 +190,15 @@ export function svgJauges(l: readonly Jauge[], hhmm: (ms: number) => string, o: 
     `.lab{font:600 10.5px "Segoe UI",system-ui,sans-serif;fill:#a3a7ad}` +
     `.pc{font:10.5px "Segoe UI",system-ui,sans-serif;fill:#a3a7ad;font-variant-numeric:tabular-nums}` +
     `.pc.attention{fill:#f2b33d}.pc.critique{fill:#ef5b5f;font-weight:700}` +
+    `.cs{font:10.5px "Segoe UI",system-ui,sans-serif;fill:#b085f5}` +
     `.piste{fill:#ffffff24}.tic{fill:#f2f2f2;opacity:.9}` +
     `.zone{fill:transparent}.t:hover .zone{fill:#ffffff10}` +
     `.pulse{animation:pulse 1.2s ease-in-out infinite}@keyframes pulse{50%{opacity:.45}}` +
-    `@media (prefers-color-scheme: light){.lab,.pc{fill:#5f646b}.pc.attention{fill:#b7791f}.piste{fill:#0000001f}.tic{fill:#2b2b2b}.t:hover .zone{fill:#0000000c}}`
+    `@media (prefers-color-scheme: light){.lab,.pc{fill:#5f646b}.cs{fill:#7c4dcc}.pc.attention{fill:#b7791f}.piste{fill:#0000001f}.tic{fill:#2b2b2b}.t:hover .zone{fill:#0000000c}}`
   return {
     largeur,
     svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${largeur} ${HAUTEUR}"><style>${css}</style>${corps}</svg>`,
+    places,
   }
 }
 

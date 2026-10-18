@@ -111,7 +111,9 @@ export function analyse(brute: string, enErreur: boolean): { etat: AtelierBuild[
 export const buildVisible = (b: AtelierBuild | null, maintenant: number): b is AtelierBuild =>
   b !== null && (b.etat === 'encours' || b.etat === 'echec' || maintenant - (b.fin ?? b.debut) < 10 * 60_000)
 
-export function pastilleBuild(b: AtelierBuild, maintenant: number): Pastille {
+export const pastilleBuild = (b: AtelierBuild, maintenant: number): Pastille => ({ id: 'build', ...pastilleSansNom(b, maintenant) })
+
+function pastilleSansNom(b: AtelierBuild, maintenant: number): Pastille {
   const nom = `Build ${b.quoi}`
   if (b.etat === 'encours') {
     return { titre: `${nom} — en cours depuis ${heure(b.debut)} (${dureeCourte(maintenant - b.debut)})${b.fond ? ', en tâche de fond' : ''}`, forme: 'encours' }

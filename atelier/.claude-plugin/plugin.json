@@ -1,7 +1,7 @@
 {
   "name": "atelier",
-  "version": "0.5.0",
-  "description": "Bandeau projet (APK vs tel, git, quotas et conso en euros, tâches, sous-agents et build en pastilles) et garde-fous pour le dev Android avec Claude Code",
+  "version": "0.8.0",
+  "description": "Bandeau projet (APK vs tel, git, quotas et conso en euros, conseil de modèle, tâches, sous-agents et build en pastilles) et garde-fous pour le dev Android avec Claude Code",
   "author": { "name": "mesix971" },
   "types":"./types/index.d.ts"
 }

@@ -147,7 +147,7 @@ export function pastillesTaches(l: readonly AtelierTache[], maintenant: number):
               ? ` — faite à ${heure(t.fin)}`
               : ' — faite'
           : ' — à faire'
-    return { titre: nom + quand, forme: t.etat }
+    return { id: `tache-${t.id}`, titre: nom + quand, forme: t.etat }
   })
 }
 

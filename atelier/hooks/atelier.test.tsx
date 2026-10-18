@@ -4,13 +4,16 @@ import { expect, mock, test } from 'claude-code/testing'
 
 import { ajouteAgent, causeDe, finAgent, nettoieAgents, pastillesAgents, pingAgent } from './agents'
 import { analyse, estBuild, quoiBuild, sortieFond } from './build'
+import { aJuger, conseilAffiche, coupe, deToi, familleDe, lisConseil, nomEffort, promptConseil } from './conseil'
 import { ajouteReponse, debutTour, estLourde, finTour, mesureCout, texteConso, titreConso } from './conso'
-import { jauges, titreJauge } from './jauges'
+import { jauges, svgJauges, titreJauge } from './jauges'
 import { decrit, estDiscret } from './outils'
 import { svgPastilles } from './pastilles'
 import { coutReponse, euros, tokensCourts } from './prix'
 import { aRanger } from './rangement'
+import { empruntsDe, grandeSceneDe, planBandeau, quandDe, sceneDuBandeau } from './scene'
 import { MAX_TACHES, ajouteTache, depuisTodos, horodate, interrompue, majTache, pastillesTaches, planFini, suitPlan, svgTaches, toutFait } from './taches'
+import { dureePause } from './temps'
 
 const LOCALAPPDATA = 'C:/Users/dev/AppData/Local'
 const ADB = `${LOCALAPPDATA}/Android/Sdk/platform-tools/adb.exe`
@@ -132,6 +135,9 @@ test('bandeau : APK plus récent que le tel, git en avance, quota 5 h', async ($
     expect(await ui.find({ type: 'Text', text: /APK 5\.7\.0-debug 01:52/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /tel 5\.7\.0-debug 22:11 ⚠ pas à jour/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /2 commits non poussés/ })).toBeDefined()
+    // ↻ et Masquer au bout de la ligne git, courte : la ligne des quotas ne passe plus à la ligne
+    expect(JSON.stringify((await ui.find({ key: 'ligne-git' }))?.children)).toContain('Masquer')
+    expect(JSON.stringify((await ui.find({ key: 'ligne-quotas' }))?.children)).not.toContain('Masquer')
     // quotas en jauges : dessin sur desktop (son texte alternatif dit tout), blocs ▰▱ en terminal
     if (surface === 'desktop') {
       const alt = String((await ui.find({ type: 'Svg' }))?.props?.alt ?? '')
@@ -213,6 +219,8 @@ test('↻ relit les quotas, une fenêtre déjà réinitialisée repart à 0 %, e
   const alt = async () => String((await ui.find({ type: 'Svg' }))?.props?.alt ?? '')
   expect(await alt()).toContain('5 h 0 %')
   expect(await alt()).toContain('7 j 66 %')
+  // sans git, ↻ et Masquer restent sur la ligne des quotas
+  expect(JSON.stringify((await ui.find({ key: 'ligne-quotas' }))?.children)).toContain('Masquer')
   // la dernière réponse de l'API dit 0 % partout : le bouton ↻ va la relire
   api = [
     { kind: 'five_hour', percentUsed: 0, resetsAt: '2026-10-07T11:00:00Z' },
@@ -651,11 +659,27 @@ test('quotas : la projection au survol des jauges', async () => {
   const a = (p: number, maintenant: number) => titreJauge(jauges(u(p), maintenant)[0]!, maintenant, quand)
   // mi-fenêtre (12:30) : 30 % → environ 60 % au reset
   expect(a(30, fin - 2.5 * 3600_000)).toBe('Quota 5 h : 30 % utilisés · reset 15:00\nÀ ce rythme : environ 60 % au reset. Tu tiens.')
-  // 70 % à mi-fenêtre : la limite tombe à 10:00 + 2 h 30 × 100/70, vers 13:34
-  expect(a(70, fin - 2.5 * 3600_000)).toBe('Quota 5 h : 70 % utilisés · reset 15:00\nÀ ce rythme : 100 % vers 13:34, avant le reset.')
+  // 70 % à mi-fenêtre : la limite tombe à 10:00 + 2 h 30 × 100/70, vers 13:34 ; et pour revenir
+  // dans le rythme, le trait doit rattraper la barre : 70 % de 5 h après 10:00, soit 13:30, dans 1 h
+  expect(a(70, fin - 2.5 * 3600_000)).toBe(
+    "Quota 5 h : 70 % utilisés · reset 15:00\nÀ ce rythme : 100 % vers 13:34, avant le reset.\nPause pour revenir dans le rythme : 1 h 00 (jusqu'à 13:30)",
+  )
+  expect(a(80, fin - 2.5 * 3600_000)).toContain("Pause pour revenir dans le rythme : 1 h 30 (jusqu'à 14:00)")
+  // sur 7 jours : 70 % consommés, 65 % du temps écoulé, 5 % d'une semaine à attendre
+  const sem = (maintenant: number) =>
+    titreJauge(jauges({ fiveHour: null, sevenDay: { percent: 70, resetsAt: new Date(fin).toISOString() }, contextPercent: null }, maintenant)[0]!, maintenant, quand)
+  expect(sem(fin - 0.35 * 7 * 24 * 3600_000)).toContain('Pause pour revenir dans le rythme : 8 h 24 (jusqu')
+  // dans le rythme : rien à attendre
+  expect(a(30, fin - 2.5 * 3600_000)).not.toContain('Pause')
   expect(a(10, fin - 4.9 * 3600_000)).toContain('Trop tôt dans la fenêtre')
   const ctx = jauges(u(30), fin - 3600_000).find(j => j.nom === 'ctx')!
   expect(titreJauge(ctx, fin, quand, { tokens: 290_000, window: 1_000_000 })).toBe('Contexte : 29 % de la fenêtre (290 k sur 1 M tokens)')
+})
+
+test('pause : sa durée en minutes, en heures, en jours', () => {
+  expect(dureePause(25 * 60_000)).toBe('25 min')
+  expect(dureePause(8.4 * 3600_000)).toBe('8 h 24')
+  expect(dureePause(30 * 3600_000)).toBe('1 j 6 h')
 })
 
 test('minuteur : depuis quand une étape avance, en combien de temps elle s’est faite', async () => {
@@ -703,7 +727,7 @@ test('sous-agents : leur pastille à la couleur du modèle, leur mission et leur
   l = ajouteAgent(l, { id: 'a2', type: 'relecteur', mission: 'relis le diff', modele: 'claude-sonnet-5-5' }, 0)
   l = finAgent(l, 'a1', undefined, 130_000)
   const p = pastillesAgents(l, 140_000)
-  expect(p[0]).toEqual({ titre: 'Eclaireur · Haiku 5.5 — fouille le projet\nFini en 2 min 10 s', forme: 'faite', teinte: '#9CB86A' })
+  expect(p[0]).toEqual({ id: 'agent-a1', titre: 'Eclaireur · Haiku 5.5 — fouille le projet\nFini en 2 min 10 s', forme: 'faite', teinte: '#9CB86A' })
   expect(p[1]!.forme).toBe('encours')
   expect(p[1]!.teinte).toBe('#E9A27F')
   expect(nettoieAgents(l).map(a => a.id)).toEqual(['a2'])
@@ -1031,4 +1055,274 @@ test('bandeau : une vieille croix rouge, d’avant le rechargement du mod, s’e
   await horloge.advance(2 * 60_000)
   expect(await build()).toBeUndefined()
   await ui.unmount()
+})
+
+test('bande partagée : chaque élément du bandeau à la place où il est dessiné', async () => {
+  const M = 60_000
+  const usage = {
+    fiveHour: { percent: 42, resetsAt: new Date(4 * 3600_000).toISOString() },
+    sevenDay: { percent: 10, resetsAt: new Date(6 * 24 * 3600_000).toISOString() },
+    contextPercent: null,
+  }
+  const plan = planBandeau(
+    {
+      android: null,
+      git: null,
+      usage,
+      taches: [
+        { id: 'plan-1', nom: 'Lire', etat: 'faite', debut: 0, fin: M },
+        { id: 'plan-2', nom: 'Corriger', etat: 'encours', debut: M },
+      ],
+      conso: null,
+      build: { quoi: 'assembleDebug', debut: 0, fin: M, etat: 'echec' },
+      agents: [{ id: 'a1', type: 'eclaireur', mission: 'fouille', modele: 'claude-haiku-5-5', debut: 0, etat: 'encours' }],
+      busy: null,
+    },
+    2 * M,
+  )
+  const s = sceneDuBandeau(plan, quandDe(2 * M))
+  expect(s.lignes).toEqual(['quotas', 'pastilles'])
+  const ou = (id: string) => s.elements.find(x => x.id === id)
+  // les jauges sur l'avant-dernière ligne, l'une après l'autre
+  // 42 % au bout d'un cinquième de la fenêtre : le rythme la met à l'ambre
+  expect(ou('jauge-5h')).toMatchObject({ genre: 'jauge', x: 0, ligne: 1, etat: 'attention' })
+  expect(ou('jauge-7j')!.x).toBe(ou('jauge-5h')!.largeur + 14)
+  // les pastilles en bas : le build, un trait, les tâches, un trait, les sous-agents
+  expect(ou('build')).toMatchObject({ genre: 'build', etat: 'echec', x: 0, largeur: 17, ligne: 0 })
+  expect(ou('tache-plan-1')).toMatchObject({ genre: 'tache', etat: 'faite', x: 27 })
+  expect(ou('tache-plan-2')).toMatchObject({ genre: 'tache', etat: 'encours', x: 44 })
+  // ni le nom des étapes ni la mission des sous-agents ne quittent le bandeau
+  expect('titre' in ou('tache-plan-2')!).toBe(false)
+  expect(ou('agent-a1')).toMatchObject({ genre: 'agent', etat: 'encours', x: 71, teinte: '#9CB86A' })
+  // ce que Clawd tient n'est plus dessiné, mais sa place reste : le suivant ne bouge pas
+  const caches = new Set(['tache-plan-2'])
+  const dessin = svgPastilles(plan.groupes, false, caches)
+  expect(dessin.svg).not.toContain('Corriger')
+  expect(dessin.places.find(x => x.id === 'agent-a1')!.x).toBe(71)
+  const sansJauge = svgJauges(plan.jauges, quandDe(2 * M), { caches: new Set(['jauge-5h']) })
+  expect(sansJauge.svg).not.toContain('>5 h<')
+  expect(sansJauge.places.find(x => x.id === 'jauge-7j')!.x).toBe(ou('jauge-7j')!.x)
+  // ce que Clawd écrit dans son état, nettoyé ; un emprunt échu ne cache plus rien (un Clawd planté ne bloque pas le bandeau)
+  expect([...empruntsDe([{ id: 'build', jusqua: 10 }, { id: 'conso', jusqua: 4 }, 'tache-plan-1', null, { id: 3, jusqua: 10 }], 5)]).toEqual(['build'])
+  expect([...empruntsDe('build', 0)]).toEqual([])
+  // son numéro sur toute la bande : un SVG, une hauteur raisonnable, pas encore fini
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="64"/>'
+  expect(grandeSceneDe({ svg, hauteur: 64, fin: 10 }, 5)).toEqual({ svg, hauteur: 64 })
+  expect(grandeSceneDe({ svg, hauteur: 64, fin: 4 }, 5)).toBeNull()
+  expect(grandeSceneDe({ svg: '<div/>', hauteur: 64, fin: 10 }, 5)).toBeNull()
+  expect(grandeSceneDe({ svg, hauteur: 900, fin: 10 }, 5)).toBeNull()
+  expect(grandeSceneDe({ svg: `<svg>${'x'.repeat(131_072)}</svg>`, hauteur: 64, fin: 10 }, 5)).toBeNull()
+})
+
+test('bandeau : la bande partagée est publiée, ce que Clawd tient n’est plus dessiné, et son numéro couvre la bande', async ($, on) => {
+  const horloge = bandeauVide(on as never)
+  on('tool.call', { tool: 'mcp__ccd_turn__update_plan' }, () => ({ result: { ok: true } }))
+  let tenus: { id: string; jusqua: number }[] = []
+  let numero: { svg: string; hauteur: number; fin: number } | null = null
+  on('state.get', ($, e, next) =>
+    e.plugin === 'clawd' && e.key === 'emprunts'
+      ? { value: { value: tenus, version: 1 } }
+      : e.plugin === 'clawd' && e.key === 'grandeScene'
+        ? { value: { value: numero, version: 1 } }
+        : next(e),
+  )
+  let publiee: unknown = null
+  on('state.set', ($, e, next) => {
+    if ((e as { key?: string }).key === 'scene') publiee = (e as { value?: unknown }).value
+    return next(e)
+  })
+  await $.tool.call({
+    tool: 'mcp__ccd_turn__update_plan',
+    tool_use_id: 'plan',
+    items: [
+      { content: 'Lire le code', status: 'completed' },
+      { content: 'Corriger le bug', status: 'in_progress' },
+    ],
+    scope: 'first_task',
+  } as never)
+  // la bande partagée dit où est chaque étape
+  await horloge.settle()
+  expect(publiee).toMatchObject({ lignes: ['pastilles'], elements: [{ id: 'tache-plan-1', x: 0, ligne: 0 }, { id: 'tache-plan-2', x: 17, etat: 'encours' }] })
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  const source = async () => String((await ui.find({ type: 'Svg' }))?.props?.source)
+  expect(await source()).toContain('Corriger le bug')
+  // Clawd prend l'étape en cours : atelier ne la dessine plus
+  tenus = [{ id: 'tache-plan-2', jusqua: horloge.now() + 10_000 }]
+  // et son numéro (son dessin) : posé par-dessus toute la bande, dans notre rangée
+  numero = { svg: '<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="64"/>', hauteur: 64, fin: horloge.now() + 10_000 }
+  const ui2 = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  expect(String((await ui2.find({ type: 'Svg' }))?.props?.source)).not.toContain('Corriger le bug')
+  expect(String((await ui2.find({ type: 'Svg' }))?.props?.source)).toContain('Lire le code')
+  const grande = (await ui2.find({ key: 'grande-scene' })) as { props?: Record<string, unknown>; children?: { props?: Record<string, unknown> }[] } | undefined
+  expect(grande?.props).toMatchObject({ position: 'absolute', left: 0, right: 0, bottom: 0 })
+  // à la largeur de la bande en px (120 cases), pour que le dessin la couvre à l'échelle 1
+  expect(grande?.children?.[0]?.props).toMatchObject({ source: numero.svg, height: 64, width: 900 })
+  await ui2.unmount()
+  // passé l'échéance (un Clawd planté), tout revient : l'étape redessinée, plus de numéro
+  await horloge.advance(11_000)
+  const ui3 = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  expect(String((await ui3.find({ type: 'Svg' }))?.props?.source)).toContain('Corriger le bug')
+  expect(await ui3.find({ key: 'grande-scene' })).toBeUndefined()
+  await ui.unmount()
+  await ui3.unmount()
+})
+
+test('conseil : la demande jugée, la réponse de Haiku lue, et ce que le bandeau en dit', async () => {
+  // une demande courte continue la précédente, une commande n'en est pas une
+  expect(aJuger('oui vas-y')).toBe(false)
+  expect(aJuger('/clawd montre cadre, et regarde bien partout')).toBe(false)
+  expect(aJuger('  corrige le bug du minuteur dans taches.ts  ')).toBe(true)
+  expect(familleDe('claude-opus-5-5[1m]')).toBe('opus')
+  expect(familleDe('claude-mythos-5-1')).toBe('fable')
+  expect(familleDe(null)).toBeNull()
+  // le JSON, même entouré de texte ; la raison nettoyée et tenue courte
+  expect(lisConseil('Voici : {"modele":" Sonnet ","effort":"MEDIUM","raison":"petite\\nretouche   locale"} voilà')).toEqual({ modele: 'sonnet', effort: 'medium', raison: 'petite retouche locale' })
+  expect(lisConseil('{"modele":"opus","effort":"high","raison":"' + 'x'.repeat(200) + '"}')?.raison).toHaveLength(80)
+  expect(lisConseil('{"modele":"opus","effort":"high"}')).toEqual({ modele: 'opus', effort: 'high', raison: '' })
+  expect(lisConseil('{"modele":"gpt","effort":"medium"}')).toBeNull()
+  expect(lisConseil('{"modele":"opus","effort":"ultra"}')).toBeNull()
+  expect(lisConseil('{"modele":"opus","effort":"high"')).toBeNull()
+  expect(lisConseil('pas de JSON')).toBeNull()
+  // dans un bloc ```json, une accolade dans la raison, un modèle écrit en entier
+  expect(lisConseil('```json\n{"modele":"sonnet","effort":"low","raison":"un {objet} à renommer"}\n```')).toEqual({ modele: 'sonnet', effort: 'low', raison: 'un {objet} à renommer' })
+  expect(lisConseil('{"modele":"Opus 5.5","effort":"high"}')?.modele).toBe('opus')
+  // ce qui vient de toi seulement : ni routine, ni autre session, ni plugin
+  expect(['composer', 'bridge', 'plugin', 'scheduled-trigger', 'peer', 'sdk', 'channel'].map(kind => deToi({ kind }))).toEqual([true, true, false, false, false, false, false])
+  expect(deToi(undefined)).toBe(false)
+  // montré seulement quand ce n'est pas ce qui tourne
+  const c = { modele: 'sonnet', effort: 'medium', raison: 'petite retouche' } as const
+  expect(conseilAffiche(null, { modele: 'claude-opus-5-5', effort: 'high' })).toBeNull()
+  expect(conseilAffiche(c, { modele: 'claude-sonnet-5-5', effort: 'medium' })).toBeNull()
+  expect(conseilAffiche(c, { modele: 'claude-sonnet-5-5', effort: null })).toBeNull()
+  expect(conseilAffiche(c, { modele: 'claude-sonnet-5-5', effort: 'high' })?.texte).toBe('💡 Sonnet · Moyen')
+  // les efforts dits comme dans le sélecteur de l'app
+  expect(conseilAffiche(c, { modele: 'claude-opus-5-5', effort: 'xhigh' })).toEqual({
+    texte: '💡 Sonnet · Moyen',
+    titre: 'Conseil pour la suite : Sonnet 5.5, effort Moyen (petite retouche)\nEn ce moment : Opus 5.5 · Extra',
+  })
+  expect(['low', 'medium', 'high', 'xhigh', 'max', 'autre'].map(nomEffort)).toEqual(['Faible', 'Moyen', 'Élevé', 'Extra', 'Max', 'autre'])
+  expect(conseilAffiche({ ...c, raison: '' }, { modele: 'opus', effort: null })?.titre).toBe('Conseil pour la suite : Sonnet 5.5, effort Moyen\nEn ce moment : opus')
+  // ce qui tourne est inconnu : la puce resterait là pour rien
+  expect(conseilAffiche(c, { modele: null, effort: null })).toBeNull()
+  expect(conseilAffiche(c, { modele: 'passerelle-maison', effort: 'high' })).toBeNull()
+  // ce que Haiku sait du travail, et la demande coupée à 2000 caractères
+  // une demande écrite après un long collage : son début et sa fin
+  expect(coupe('a'.repeat(1500) + 'b'.repeat(1500))).toBe(`${'a'.repeat(1000)}\n[…]\n${'b'.repeat(1000)}`)
+  // compté en caractères, sans couper un émoji en deux
+  expect(coupe('😀'.repeat(1500))).toBe('😀'.repeat(1500))
+  expect(coupe('😀'.repeat(2500))).toBe(`${'😀'.repeat(1000)}\n[…]\n${'😀'.repeat(1000)}`)
+  expect(coupe('x'.repeat(50_000)).length).toBe(2000 + '\n[…]\n'.length)
+  const p = promptConseil('é'.repeat(3000), { projet: 'Android', etapes: 2, buildRate: true, sousAgents: 1, quotaSerre: true })
+  expect(p).toContain('Le quota est serré')
+  expect(p).toContain('Contexte : projet Android ; plan en cours : 2 étape(s) ; dernier build raté ; sous-agents au travail : 1.')
+  expect(p).toContain(`<demande>\n${'é'.repeat(1000)}\n[…]\n${'é'.repeat(1000)}\n</demande>`)
+  expect(promptConseil('x', { projet: 'autre', etapes: 0, buildRate: false, sousAgents: 0, quotaSerre: false })).toContain('Le quota va bien')
+})
+
+test('bandeau : le conseil de modèle de Haiku, montré quand il diffère de ce qui tourne', async ($, on) => {
+  const horloge = bandeauVide(on as never)
+  const demandes: { model: string; prompt: string; effort?: unknown; maxTokens?: number }[] = []
+  let reponse = 'Voici : {"modele":"sonnet","effort":"medium","raison":"petite retouche locale"}'
+  let repond = true
+  let attente: Promise<void> | null = null
+  on('model.complete', async ($, e) => {
+    demandes.push({ model: e.model, prompt: e.prompt, effort: e.effort, maxTokens: e.maxTokens })
+    const texte = reponse
+    if (attente) await attente
+    return {
+      value: repond
+        ? { isAnswered: true, text: texte, usage: { input_tokens: 300, output_tokens: 30, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } }
+        : { isAnswered: false, reason: 'api-error', status: 529, error: 'overloaded' },
+    } as never
+  })
+  on('session.model', () => ({ value: 'claude-opus-5-5' }))
+  on('session.end', ($, e) => ({ sessionId: e.sessionId }))
+  on('turn.step', async function* ($: unknown, e: { turnId: string; index: number }) {
+    return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: 'end_turn' }
+  } as never)
+  const conseilMontre = async (surface: 'desktop' | 'terminal') => {
+    const ui = await $.ui.mount({ ...BAND, surface })
+    const r =
+      surface === 'desktop'
+        ? { alt: String((await ui.find({ type: 'Svg' }))?.props?.alt ?? ''), source: String((await ui.find({ type: 'Svg' }))?.props?.source ?? '') }
+        : { alt: (await ui.find({ type: 'Text', text: /💡/ }))?.text ?? '', source: '' }
+    await ui.unmount()
+    return r
+  }
+
+  const toi = { kind: 'composer' } as const
+  const demande = (text: string) => $.prompt.submit({ text, origin: toi } as never)
+  // une demande courte continue la précédente, un message du moteur n'est pas une demande : pas de Haiku
+  await demande('oui vas-y')
+  await $.prompt.submit({ text: 'rappel du moteur, assez long pour être jugé', isMeta: true, origin: toi } as never)
+  // ni ce qui ne vient pas de toi : une routine, un plugin (le bouton « Commit + push »)
+  await $.prompt.submit({ text: 'la routine de chaque matin, assez longue', origin: { kind: 'scheduled-trigger' } } as never)
+  await $.prompt.submit({ text: 'Pousse les commits en attente et vérifie que le push est bien passé.', origin: { kind: 'plugin', plugin: 'atelier', asUser: true } } as never)
+  await horloge.settle()
+  expect(demandes).toHaveLength(0)
+
+  // une vraie demande : Haiku la lit, avec le contexte, sans retarder le tour
+  await demande('renomme le bouton Masquer en Cacher dans register.tsx')
+  await horloge.settle()
+  expect(demandes).toHaveLength(1)
+  expect(demandes[0]).toMatchObject({ model: 'haiku', effort: 'low', maxTokens: 150 })
+  expect(demandes[0].prompt).toContain('<demande>\nrenomme le bouton Masquer en Cacher dans register.tsx\n</demande>')
+  expect(demandes[0].prompt).toContain('projet autre ; plan en cours : 0 étape(s) ; dernier build sans échec ; sous-agents au travail : 0.')
+  // la session tourne en Opus : le conseil diffère, il s'affiche, sa raison au survol
+  const d = await conseilMontre('desktop')
+  expect(d.alt).toBe('Conseil : 💡 Sonnet · Moyen')
+  expect(d.source).toContain('Conseil pour la suite : Sonnet 5.5, effort Moyen (petite retouche locale)\nEn ce moment : Opus 5.5</title>')
+  expect(d.source).toContain('class="cs"')
+  expect((await conseilMontre('terminal')).alt).toBe('💡 Sonnet · Moyen')
+
+  // une requête part en Opus high : noté, montré au survol
+  for await (const _ of $.turn.step({ turnId: 't1', index: 0, model: 'claude-opus-5-5', effort: 'high', messageCount: 2 } as never)) void _
+  expect((await conseilMontre('desktop')).source).toContain('En ce moment : Opus 5.5 · Élevé')
+  // tu passes en Sonnet medium : c'est ce qu'il faut, plus rien à dire (et sans rien d'autre, plus de bandeau)
+  for await (const _ of $.turn.step({ turnId: 't1', index: 1, model: 'claude-sonnet-5-5', effort: 'medium', messageCount: 4 } as never)) void _
+  expect((await conseilMontre('desktop')).alt).toBe('')
+  expect((await conseilMontre('terminal')).alt).toBe('')
+  // la requête d'un sous-agent ne dit pas ce qui tourne
+  for await (const _ of $.turn.step({ turnId: 't1', index: 2, model: 'claude-haiku-5-5', effort: 'low', messageCount: 2, agentId: 'a1' } as never)) void _
+  expect((await conseilMontre('desktop')).alt).toBe('')
+
+  // seule la dernière demande compte : la réponse en retard d'une demande d'avant n'écrase pas la nouvelle
+  let libere = () => {}
+  reponse = '{"modele":"haiku","effort":"low","raison":"simple question"}'
+  attente = new Promise<void>(r => (libere = r))
+  await demande('c’est quoi la différence entre merge et rebase ?')
+  await horloge.settle()
+  attente = null
+  reponse = '{"modele":"opus","effort":"xhigh","raison":"débogage sur plusieurs fichiers"}'
+  await demande('le build plante au hasard, trouve pourquoi et corrige')
+  await horloge.settle()
+  libere()
+  await horloge.settle()
+  expect(demandes).toHaveLength(3)
+  expect((await conseilMontre('desktop')).alt).toBe('Conseil : 💡 Opus · Extra')
+
+  // Haiku sans réponse : plus de conseil (celui d'avant parlait de la demande d'avant)
+  repond = false
+  await demande('ajoute un test pour le conseil de modèle')
+  await horloge.settle()
+  expect((await conseilMontre('desktop')).alt).toBe('')
+
+  // /clear : le conseil de l'autre conversation s'en va, même encore en route
+  repond = true
+  await demande('refais toute l’architecture du mod en trois couches')
+  await horloge.settle()
+  expect((await conseilMontre('terminal')).alt).toBe('💡 Opus · Extra')
+  attente = new Promise<void>(r => (libere = r))
+  await demande('refais toute l’architecture du mod en trois couches, encore')
+  await horloge.settle()
+  await $.session.end({ reason: 'clear', sessionId: 's1', resume: { id: 's1' } })
+  libere()
+  await horloge.settle()
+  expect((await conseilMontre('terminal')).alt).toBe('')
+  // bandeau masqué : personne ne verrait le conseil, Haiku n'est pas appelé
+  const avant = demandes.length
+  await $.command.run({ command: 'atelier', args: '', origin: { kind: 'composer' } })
+  await demande('encore une demande assez longue pour être jugée')
+  await horloge.settle()
+  expect(demandes).toHaveLength(avant)
 })

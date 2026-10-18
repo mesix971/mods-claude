@@ -8,6 +8,8 @@ import { CSS_ORBE, svgOrbe } from './orbe'
 
 export type Forme = 'attente' | 'encours' | 'faite' | 'echec'
 export type Pastille = {
+  /** Son nom dans la bande partagée (`tache-plan-2`, `agent-a1`, `build`) : un autre mod (Clawd) peut la viser */
+  id?: string
   /** L'infobulle du survol */
   titre: string
   forme: Forme
@@ -16,6 +18,9 @@ export type Pastille = {
   /** Le sonar : l'âge (ms) des dernières ondes, chacune émise quand un sous-agent a lancé un outil */
   ondes?: number[]
 }
+
+/** Où une pastille nommée est dessinée : en px depuis le bord gauche de son SVG */
+export type PlacePastille = { id: string; x: number; largeur: number; forme: Forme; titre: string; teinte?: string }
 
 /** La durée d'une onde du sonar */
 export const DUREE_ONDE = 1_200
@@ -48,12 +53,19 @@ const couleur = (c: string | undefined) => (c && /^#[0-9a-f]{3}([0-9a-f]{3})?$/i
  * Les groupes de pastilles en un SVG, séparés d'un trait discret. `tourne` :
  * Claude travaille, les orbes s'animent ; sinon ils restent immobiles. Au-delà
  * de trois orbes à la fois, les suivants gardent un simple anneau, plus léger.
+ * `caches` : les pastilles qu'un autre mod tient en ce moment (Clawd qui joue
+ * avec) ; leur place reste, vide, jusqu'à ce qu'il les rende.
  */
-export function svgPastilles(groupes: readonly (readonly Pastille[])[], tourne = true): { svg: string; largeur: number } {
+export function svgPastilles(
+  groupes: readonly (readonly Pastille[])[],
+  tourne = true,
+  caches: ReadonlySet<string> = new Set(),
+): { svg: string; largeur: number; places: PlacePastille[] } {
   const cy = HAUTEUR / 2
   let corps = ''
   let orbes = 0
   let x = 0
+  const places: PlacePastille[] = []
   const pleins = groupes.filter(g => g.length > 0)
   pleins.forEach((groupe, ig) => {
     if (ig > 0) {
@@ -63,6 +75,11 @@ export function svgPastilles(groupes: readonly (readonly Pastille[])[], tourne =
     for (const p of groupe) {
       const cx = x + PAS / 2
       const teinte = couleur(p.teinte)
+      if (p.id) places.push({ id: p.id, x, largeur: PAS, forme: p.forme, titre: p.titre, ...(teinte ? { teinte } : {}) })
+      if (p.id && caches.has(p.id)) {
+        x += PAS
+        continue
+      }
       corps += `<g class="t"><title>${echappe(p.titre)}</title>`
       // une zone de survol pleine (invisible) : le rond en pointillé seul serait dur à viser
       corps += `<circle class="zone" cx="${cx}" cy="${cy}" r="${PAS / 2}"/>`
@@ -107,5 +124,6 @@ export function svgPastilles(groupes: readonly (readonly Pastille[])[], tourne =
   return {
     largeur,
     svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${largeur} ${HAUTEUR}"><style>${css}</style>${corps}</svg>`,
+    places,
   }
 }

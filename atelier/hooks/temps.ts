@@ -14,6 +14,15 @@ export function dureeCourte(ms: number): string {
   return `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')}`
 }
 
+/** Une pause à faire : 25 min · 8 h 24 · 1 j 6 h */
+export function dureePause(ms: number): string {
+  const min = Math.max(0, Math.round(ms / 60_000))
+  if (min < 60) return `${min} min`
+  const h = Math.floor(min / 60)
+  if (h < 24) return `${h} h ${String(min % 60).padStart(2, '0')}`
+  return `${Math.floor(h / 24)} j ${h % 24} h`
+}
+
 /** 45 s · 3 min 12 s · 1 h 05 */
 export function duree(ms: number): string {
   const s = Math.max(0, Math.round(ms / 1000))
