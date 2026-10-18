@@ -25,7 +25,7 @@ import { COULEURS, jauges, resumeJauges, svgJauges, texteJauges } from './jauges
 import { decrit, estDiscret } from './outils'
 import { svgPastilles } from './pastilles'
 import { aRanger } from './rangement'
-import { CELLULE, empruntsDe, grandeSceneDe, planBandeau, quandDe, sceneDuBandeau } from './scene'
+import { CELLULE, ECHELLE, HAUTEUR_DESSIN, empruntsDe, grandeSceneDe, planBandeau, quandDe, sceneDuBandeau } from './scene'
 import { ajouteTache, depuisTaskList, depuisTodos, horodate, interrompue, majTache, planFini, resumeTaches, suitPlan, texteTaches, toutFait } from './taches'
 
 type $ = EngineInterface
@@ -1170,15 +1170,17 @@ export const register: Register = on => {
     const pastilleC = plan.conso
     // ce que Clawd tient en ce moment : sa place reste, vide, jusqu'à ce qu'il le rende
     const caches = empruntsDe(await read($, empruntsClawd), maintenant)
+    // dit aussi dans le texte alternatif : ce qui n'est pas dessiné reste annoncé
+    const joueAvec = caches.size ? `Clawd joue avec : ${[...caches].join(', ')}` : ''
     let quotas: JSX.Element | null = null
     if ((lj.length > 0 || pastilleC || plan.conseil) && e.surface === 'desktop') {
       const { Svg } = $.ui.resolve(e)
       const dessin = svgJauges(lj, quand, { maintenant, contexte: u ? { tokens: u.contextTokens, window: u.contextWindow } : undefined, conso: pastilleC, conseil: plan.conseil, caches })
-      const alt = [lj.length > 0 ? resumeJauges(lj, quand) : '', pastilleC ? `Conso : ${pastilleC.texte}` : '', plan.conseil ? `Conseil : ${plan.conseil.texte}` : '']
+      const alt = [lj.length > 0 ? resumeJauges(lj, quand) : '', pastilleC ? `Conso : ${pastilleC.texte}` : '', plan.conseil ? `Conseil : ${plan.conseil.texte}` : '', joueAvec]
         .filter(Boolean)
         .join(' · ')
       // interactif : le survol d'une jauge dit sa projection, celui de la conso son détail
-      quotas = <Svg source={dessin.svg} alt={alt} width={dessin.largeur} height={18} isInteractive />
+      quotas = <Svg source={dessin.svg} alt={alt} width={+(dessin.largeur * ECHELLE).toFixed(1)} height={HAUTEUR_DESSIN} isInteractive />
     } else if (lj.length > 0 || pastilleC || plan.conseil) {
       quotas = (
         <Box flexDirection="row" flexWrap="wrap" columnGap={2}>
@@ -1212,7 +1214,7 @@ export const register: Register = on => {
       const { Svg } = $.ui.resolve(e)
       const p = pastilleBuild(bv, maintenant)
       const dessin = svgPastilles([[p]], enFond, caches)
-      pastilleB = <Svg source={dessin.svg} alt={p.titre} width={dessin.largeur} height={18} isInteractive />
+      pastilleB = <Svg source={dessin.svg} alt={p.titre} width={+(dessin.largeur * ECHELLE).toFixed(1)} height={HAUTEUR_DESSIN} isInteractive />
     } else if (bv && a) {
       pastilleB = glypheBuild(bv)
     }
@@ -1222,10 +1224,10 @@ export const register: Register = on => {
     if (groupes.length > 0 && e.surface === 'desktop') {
       const { Svg } = $.ui.resolve(e)
       const dessin = svgPastilles(groupes, e.props.isWorking === true || (enFond && !a), caches)
-      const alt = [bv && !a ? pastilleBuild(bv, maintenant).titre : '', lt.length > 0 ? resumeTaches(lt) : '', la.length > 0 ? resumeAgents(la) : '']
+      const alt = [bv && !a ? pastilleBuild(bv, maintenant).titre : '', lt.length > 0 ? resumeTaches(lt) : '', la.length > 0 ? resumeAgents(la) : '', joueAvec]
         .filter(Boolean)
         .join(' · ')
-      ronds = <Svg source={dessin.svg} alt={alt} width={dessin.largeur} height={18} isInteractive />
+      ronds = <Svg source={dessin.svg} alt={alt} width={+(dessin.largeur * ECHELLE).toFixed(1)} height={HAUTEUR_DESSIN} isInteractive />
     } else if (groupes.length > 0) {
       ronds = (
         <Box flexDirection="row" flexWrap="wrap" columnGap={1}>

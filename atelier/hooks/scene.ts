@@ -13,7 +13,7 @@ import type { AtelierAgent, AtelierAndroid, AtelierBuild, AtelierConso, AtelierE
 import { pastillesAgents } from './agents'
 import { buildVisible, pastilleBuild } from './build'
 import { estLourde, texteConso, titreConso } from './conso'
-import { jauges, svgJauges } from './jauges'
+import { idJauge, jauges, svgJauges } from './jauges'
 import type { Jauge } from './jauges'
 import { svgPastilles } from './pastilles'
 import type { Pastille } from './pastilles'
@@ -52,9 +52,10 @@ const JOURS = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.']
 /**
  * La largeur d'une case de la bande en px CSS, sur desktop : la bande ne se
  * mesure qu'en cases (`bodyColumns`), un dessin qui doit la couvrir se règle
- * en px. Relevée sur une capture (/clawd montre cadre).
+ * en px. Relevée le 2026-10-18 sur une capture du cadre : 95 colonnes, une
+ * rangée de 751 px.
  */
-export const CELLULE = 7.5
+export const CELLULE = 7.9
 
 /** L'heure d'un reset, avec le jour quand il est loin (fenêtre de 7 j) */
 export const quandDe = (maintenant: number) => (ms: number) => (ms - maintenant > 20 * 3600_000 ? `${JOURS[new Date(ms).getDay()]} ` : '') + heure(ms)
@@ -80,24 +81,54 @@ export function planBandeau(x: EtatBandeau, maintenant: number): Plan {
 const genreDe = (id: string): AtelierElement['genre'] => (id.startsWith('agent-') ? 'agent' : id === 'build' ? 'build' : 'tache')
 
 /** La bande partagée d'après le plan : chaque élément à la place où le dessin le met */
+/**
+ * La hauteur (px CSS) à laquelle le bandeau pose ses dessins (jauges,
+ * pastilles), tous dessinés sur 18 unités de haut. L'app ne les laisse pas
+ * dépasser la hauteur d'une ligne de texte (~17,2 px, relevé sur des
+ * captures du cadre : tout était réduit de 4,4 %, et les places publiées
+ * glissaient d'autant) : posés à 17 px, ils ne sont jamais réduits par
+ * l'app, et leur échelle est connue au juste.
+ */
+export const HAUTEUR_DESSIN = 17
+/** Les px CSS d'une unité de ces dessins : les places publiées sont celles qu'on voit */
+export const ECHELLE = HAUTEUR_DESSIN / 18
+const aLEchelle = (v: number) => +(v * ECHELLE).toFixed(1)
+
+/** Un dessin d'élément sans son infobulle : Clawd le promène dans une image, où elle ne servirait pas */
+const sansTitre = (svg: string) => svg.replace(/<title>[\s\S]*?<\/title>/g, '')
+
 export function sceneDuBandeau(p: Plan, quand: (ms: number) => string): AtelierScene {
   const ligne = (nom: AtelierScene['lignes'][number]) => p.lignes.length - 1 - p.lignes.indexOf(nom)
   const elements: AtelierElement[] = []
   if (p.lignes.includes('quotas')) {
     for (const pl of svgJauges(p.jauges, quand, { conso: p.conso, conseil: p.conseil }).places) {
-      elements.push({ id: pl.id, genre: pl.genre, etat: pl.etat, x: pl.x, largeur: pl.largeur, ligne: ligne('quotas') })
+      // son dessin seul, à l'identique : la même fonction, avec lui seul
+      const j = p.jauges.find(j => idJauge(j) === pl.id)
+      const seul = j
+        ? svgJauges([j], quand)
+        : pl.id === 'conso' && p.conso
+          ? svgJauges([], quand, { conso: p.conso })
+          : pl.id === 'conseil' && p.conseil
+            ? svgJauges([], quand, { conseil: p.conseil })
+            : null
+      elements.push({ id: pl.id, genre: pl.genre, etat: pl.etat, x: aLEchelle(pl.x), largeur: aLEchelle(pl.largeur), hauteur: HAUTEUR_DESSIN, ligne: ligne('quotas'), ...(seul ? { dessin: sansTitre(seul.svg) } : {}) })
     }
   }
   if (p.lignes.includes('pastilles')) {
+    const toutes = p.groupes.flat()
     for (const pl of svgPastilles(p.groupes, false).places) {
+      // l'orbe en cours pèse ~24 Ko : Clawd en dessine une à lui
+      const pa = pl.forme === 'encours' ? undefined : toutes.find(x => x.id === pl.id)
       elements.push({
         id: pl.id,
         genre: genreDe(pl.id),
         etat: pl.forme,
-        x: pl.x,
-        largeur: pl.largeur,
+        x: aLEchelle(pl.x),
+        largeur: aLEchelle(pl.largeur),
+        hauteur: HAUTEUR_DESSIN,
         ligne: ligne('pastilles'),
         ...(pl.teinte ? { teinte: pl.teinte } : {}),
+        ...(pa ? { dessin: sansTitre(svgPastilles([[{ ...pa, ondes: undefined }]], false).svg) } : {}),
       })
     }
   }

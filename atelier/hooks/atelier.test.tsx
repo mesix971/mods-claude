@@ -11,7 +11,7 @@ import { decrit, estDiscret } from './outils'
 import { svgPastilles } from './pastilles'
 import { coutReponse, euros, tokensCourts } from './prix'
 import { aRanger } from './rangement'
-import { empruntsDe, grandeSceneDe, planBandeau, quandDe, sceneDuBandeau } from './scene'
+import { ECHELLE, HAUTEUR_DESSIN, empruntsDe, grandeSceneDe, planBandeau, quandDe, sceneDuBandeau } from './scene'
 import { MAX_TACHES, ajouteTache, depuisTodos, horodate, interrompue, majTache, pastillesTaches, planFini, suitPlan, svgTaches, toutFait } from './taches'
 import { dureePause } from './temps'
 
@@ -1085,15 +1085,39 @@ test('bande partagée : chaque élément du bandeau à la place où il est dessi
   const ou = (id: string) => s.elements.find(x => x.id === id)
   // les jauges sur l'avant-dernière ligne, l'une après l'autre
   // 42 % au bout d'un cinquième de la fenêtre : le rythme la met à l'ambre
-  expect(ou('jauge-5h')).toMatchObject({ genre: 'jauge', x: 0, ligne: 1, etat: 'attention' })
-  expect(ou('jauge-7j')!.x).toBe(ou('jauge-5h')!.largeur + 14)
+  // les places à l'échelle où l'app les montre (dessins posés à 17 px de haut pour 18 unités)
+  const ech = (v: number) => +(v * ECHELLE).toFixed(1)
+  const brutes = svgJauges(plan.jauges, quandDe(2 * M)).places
+  expect(ou('jauge-5h')).toMatchObject({ genre: 'jauge', x: 0, ligne: 1, etat: 'attention', hauteur: HAUTEUR_DESSIN, largeur: ech(brutes[0]!.largeur) })
+  expect(ou('jauge-7j')!.x).toBe(ech(brutes[0]!.largeur + 14))
   // les pastilles en bas : le build, un trait, les tâches, un trait, les sous-agents
-  expect(ou('build')).toMatchObject({ genre: 'build', etat: 'echec', x: 0, largeur: 17, ligne: 0 })
-  expect(ou('tache-plan-1')).toMatchObject({ genre: 'tache', etat: 'faite', x: 27 })
-  expect(ou('tache-plan-2')).toMatchObject({ genre: 'tache', etat: 'encours', x: 44 })
+  expect(ou('build')).toMatchObject({ genre: 'build', etat: 'echec', x: 0, largeur: 16.1, ligne: 0 })
+  expect(ou('tache-plan-1')).toMatchObject({ genre: 'tache', etat: 'faite', x: 25.5 })
+  expect(ou('tache-plan-2')).toMatchObject({ genre: 'tache', etat: 'encours', x: 41.6 })
   // ni le nom des étapes ni la mission des sous-agents ne quittent le bandeau
   expect('titre' in ou('tache-plan-2')!).toBe(false)
-  expect(ou('agent-a1')).toMatchObject({ genre: 'agent', etat: 'encours', x: 71, teinte: '#9CB86A' })
+  // le dessin de chaque élément, à l'identique et sans infobulle, pour que Clawd le promène : rien du nom des étapes ni des missions
+  const j5 = ou('jauge-5h')!.dessin!
+  expect(j5).toContain(`viewBox="0 0 ${brutes[0]!.largeur} 18"`)
+  // la jauge seule : son nom, sa barre ambre, son pourcentage, rien des autres
+  expect(j5).toContain('>5 h<')
+  expect(j5).toContain('fill="#f2b33d"')
+  expect(j5).toContain('42 %')
+  expect(j5).not.toContain('7 j')
+  expect(ou('jauge-7j')!.dessin).toContain('>7 j<')
+  expect(ou('tache-plan-1')!.dessin).toContain('viewBox="0 0 17 18"')
+  expect(ou('build')!.dessin).toContain('#ef5b5f')
+  for (const el of s.elements) expect(el.dessin ?? '').not.toMatch(/<title|Lire|Corriger|fouille|assembleDebug/)
+  // la conso : son dessin seul, son texte
+  const avecConso = planBandeau({ android: null, git: null, usage, taches: [], conso: ajouteReponse(debutTour(null, 1), 'claude-opus-5-5', { entree: 2_000, lu: 180_000, ecrit: 9_000, sortie: 6_000 }, true, 1.4), build: null, agents: [], busy: null }, 2 * M)
+  const conso = sceneDuBandeau(avecConso, quandDe(2 * M)).elements.find(x => x.id === 'conso')!
+  expect(conso.dessin).toMatch(/viewBox="0 0 [0-9]+ 18"/)
+  expect(conso.dessin).toContain('tour 197 k')
+  expect(conso.dessin).not.toContain('5 h')
+  // l'orbe en cours (~24 Ko) : Clawd dessine la sienne
+  expect(ou('tache-plan-2')!.dessin).toBeUndefined()
+  expect(ou('agent-a1')!.dessin).toBeUndefined()
+  expect(ou('agent-a1')).toMatchObject({ genre: 'agent', etat: 'encours', x: 67.1, teinte: '#9CB86A' })
   // ce que Clawd tient n'est plus dessiné, mais sa place reste : le suivant ne bouge pas
   const caches = new Set(['tache-plan-2'])
   const dessin = svgPastilles(plan.groupes, false, caches)
@@ -1101,7 +1125,7 @@ test('bande partagée : chaque élément du bandeau à la place où il est dessi
   expect(dessin.places.find(x => x.id === 'agent-a1')!.x).toBe(71)
   const sansJauge = svgJauges(plan.jauges, quandDe(2 * M), { caches: new Set(['jauge-5h']) })
   expect(sansJauge.svg).not.toContain('>5 h<')
-  expect(sansJauge.places.find(x => x.id === 'jauge-7j')!.x).toBe(ou('jauge-7j')!.x)
+  expect(ech(sansJauge.places.find(x => x.id === 'jauge-7j')!.x)).toBe(ou('jauge-7j')!.x)
   // ce que Clawd écrit dans son état, nettoyé ; un emprunt échu ne cache plus rien (un Clawd planté ne bloque pas le bandeau)
   expect([...empruntsDe([{ id: 'build', jusqua: 10 }, { id: 'conso', jusqua: 4 }, 'tache-plan-1', null, { id: 3, jusqua: 10 }], 5)]).toEqual(['build'])
   expect([...empruntsDe('build', 0)]).toEqual([])
@@ -1142,10 +1166,11 @@ test('bandeau : la bande partagée est publiée, ce que Clawd tient n’est plus
   } as never)
   // la bande partagée dit où est chaque étape
   await horloge.settle()
-  expect(publiee).toMatchObject({ lignes: ['pastilles'], elements: [{ id: 'tache-plan-1', x: 0, ligne: 0 }, { id: 'tache-plan-2', x: 17, etat: 'encours' }] })
+  expect(publiee).toMatchObject({ lignes: ['pastilles'], elements: [{ id: 'tache-plan-1', x: 0, ligne: 0 }, { id: 'tache-plan-2', x: 16.1, etat: 'encours' }] })
   const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
   const source = async () => String((await ui.find({ type: 'Svg' }))?.props?.source)
   expect(await source()).toContain('Corriger le bug')
+  expect((await ui.find({ type: 'Svg' }))?.props).toMatchObject({ height: HAUTEUR_DESSIN, width: 32.1 })
   // Clawd prend l'étape en cours : atelier ne la dessine plus
   tenus = [{ id: 'tache-plan-2', jusqua: horloge.now() + 10_000 }]
   // et son numéro (son dessin) : posé par-dessus toute la bande, dans notre rangée
@@ -1153,10 +1178,11 @@ test('bandeau : la bande partagée est publiée, ce que Clawd tient n’est plus
   const ui2 = await $.ui.mount({ ...BAND, surface: 'desktop' })
   expect(String((await ui2.find({ type: 'Svg' }))?.props?.source)).not.toContain('Corriger le bug')
   expect(String((await ui2.find({ type: 'Svg' }))?.props?.source)).toContain('Lire le code')
+  expect(String((await ui2.find({ type: 'Svg' }))?.props?.alt)).toContain('Clawd joue avec : tache-plan-2')
   const grande = (await ui2.find({ key: 'grande-scene' })) as { props?: Record<string, unknown>; children?: { props?: Record<string, unknown> }[] } | undefined
   expect(grande?.props).toMatchObject({ position: 'absolute', left: 0, right: 0, bottom: 0 })
   // à la largeur de la bande en px (120 cases), pour que le dessin la couvre à l'échelle 1
-  expect(grande?.children?.[0]?.props).toMatchObject({ source: numero.svg, height: 64, width: 900 })
+  expect(grande?.children?.[0]?.props).toMatchObject({ source: numero.svg, height: 64, width: 948 })
   await ui2.unmount()
   // passé l'échéance (un Clawd planté), tout revient : l'étape redessinée, plus de numéro
   await horloge.advance(11_000)
@@ -1325,4 +1351,16 @@ test('bandeau : le conseil de modèle de Haiku, montré quand il diffère de ce 
   await demande('encore une demande assez longue pour être jugée')
   await horloge.settle()
   expect(demandes).toHaveLength(avant)
+})
+
+test('bande partagée : la puce du conseil de modèle aussi, avec son dessin, cachée quand Clawd la tient', () => {
+  const M = 60_000
+  const conseil = { texte: '💡 Sonnet · Moyen', titre: 'Conseil pour la suite : Sonnet 5.5, effort Moyen' }
+  const plan = planBandeau({ android: null, git: null, usage: null, taches: [], conso: null, build: null, agents: [], busy: null, conseil }, 2 * M)
+  const el = sceneDuBandeau(plan, quandDe(2 * M)).elements.find(x => x.id === 'conseil')!
+  expect(el).toMatchObject({ genre: 'conseil', x: 0, ligne: 0, hauteur: HAUTEUR_DESSIN })
+  expect(el.dessin).toContain('>💡 Sonnet · Moyen<')
+  expect(el.dessin).not.toContain('<title')
+  // Clawd la tient : sa place reste, vide
+  expect(svgJauges([], quandDe(2 * M), { conseil, caches: new Set(['conseil']) }).svg).not.toContain('Sonnet')
 })

@@ -134,7 +134,7 @@ export type OptionsJauges = {
 export const idJauge = (j: Jauge) => (j.nom === '5 h' ? 'jauge-5h' : j.nom === '7 j' ? 'jauge-7j' : 'jauge-contexte')
 
 /** Où une jauge (ou la conso) est dessinée : en px depuis le bord gauche de son SVG */
-export type PlaceJauge = { id: string; genre: 'jauge' | 'conso'; x: number; largeur: number; etat: string; titre: string }
+export type PlaceJauge = { id: string; genre: 'jauge' | 'conso' | 'conseil'; x: number; largeur: number; etat: string; titre: string }
 
 /**
  * Les jauges en SVG (fond transparent, couleurs du texte selon le thème), à
@@ -180,9 +180,12 @@ export function svgJauges(l: readonly Jauge[], hhmm: (ms: number) => string, o: 
   if (o.conseil) {
     // l'émoji compte double dans la longueur : de quoi le loger
     const fin = x + Math.ceil(o.conseil.texte.length * CAR)
-    corps += `<g class="t"><title>${echappe(o.conseil.titre)}</title>`
-    corps += `<rect class="zone" x="${x}" y="0" width="${fin - x}" height="${HAUTEUR}" rx="4"/>`
-    corps += `<text class="cs" x="${x}" y="13">${echappe(o.conseil.texte)}</text></g>`
+    places.push({ id: 'conseil', genre: 'conseil', x, largeur: fin - x, etat: 'ok', titre: o.conseil.texte })
+    if (!o.caches?.has('conseil')) {
+      corps += `<g class="t"><title>${echappe(o.conseil.titre)}</title>`
+      corps += `<rect class="zone" x="${x}" y="0" width="${fin - x}" height="${HAUTEUR}" rx="4"/>`
+      corps += `<text class="cs" x="${x}" y="13">${echappe(o.conseil.texte)}</text></g>`
+    }
     x = fin + 14
   }
   const largeur = Math.max(1, x - 14)

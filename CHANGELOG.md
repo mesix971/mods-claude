@@ -100,6 +100,15 @@
 
 ## atelier
 
+- **0.9.0** — 2026-10-18 — La bande partagée donne aussi le dessin de chaque
+  élément (`dessin`, le SVG d'atelier à l'identique, sans son infobulle) :
+  un mod qui joue avec la bande promène une copie exacte de l'original. Ni le
+  nom des étapes ni la mission des sous-agents n'y figurent ; l'orbe en cours
+  (~24 Ko) n'en a pas.
+  Les dessins du bandeau sont posés à 17 px de haut : l'app les réduisait
+  (une ligne de texte fait ~17,2 px), et les places publiées glissaient de
+  4 % vers la droite. Ce que Clawd emprunte est dit dans le texte alternatif.
+  La puce 💡 du conseil de modèle est publiée elle aussi (`conseil`).
 - **0.8.0** — 2026-10-18 — Le conseil de modèle : à chaque demande que tu tapes, Haiku
   la lit (avec le projet, le plan, le build, les sous-agents et les quotas) et
   dit quel modèle et quel effort suffisent pour la suite. Une puce « 💡 Sonnet · Moyen »

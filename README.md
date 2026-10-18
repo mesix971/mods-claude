@@ -137,7 +137,8 @@ suivent ton thème clair ou sombre. Pas un mot : tout passe par ses gestes.
 - La bande partagée, pour un mod qui sait jouer sur toute la bande (une
   version de Clawd qui en est capable ; le Clawd de ce dépôt ne le fait pas
   encore) : atelier publie ce qu'il dessine et où (son état `atelier.scene`),
-  ne dessine plus ce que ce mod tient (son état `clawd.emprunts`, chaque
+  donne le dessin de chaque élément (à l'identique, sans son infobulle), ne
+  dessine plus ce que ce mod tient (son état `clawd.emprunts`, chaque
   emprunt avec son échéance) et pose son numéro par-dessus toute la bande
   (`clawd.grandeScene`). Atelier doit être chargé avant ce mod : c'est sa
   rangée qui couvre la bande.
