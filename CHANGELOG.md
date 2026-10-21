@@ -100,6 +100,12 @@
 
 ## atelier
 
+- **0.9.1** — 2026-10-21 — Ce que dessine un autre mod sous la bande (Clawd)
+  reste toujours au même endroit de l'arbre, bande vide, pleine ou masquée.
+  Avant, l'apparition de la première ligne (une pastille de conseil, les
+  quotas) le déplaçait : l'app recréait son image et son animation en cours
+  repartait d'un vieux point (ses cartons sautaient, sa bulle ne le suivait
+  plus).
 - **0.9.0** — 2026-10-18 — La bande partagée donne aussi le dessin de chaque
   élément (`dessin`, le SVG d'atelier à l'identique, sans son infobulle) :
   un mod qui joue avec la bande promène une copie exacte de l'original. Ni le

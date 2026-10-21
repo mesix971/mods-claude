@@ -1141,7 +1141,23 @@ export const register: Register = on => {
   // ------------------------------------------------------------ bandeau
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    if (e.props.hasSurvey || (await read($, isHidden))) return next(e)
+    if (e.props.hasSurvey) return next(e)
+    // ce que dessinent les autres mods (clawd) reste TOUJOURS au même endroit de
+    // l'arbre, bande vide, masquée ou non : sinon l'app recrée leur image, et une
+    // animation en cours (ses cartons) repart de son début
+    const enveloppe = async () => {
+      const dessous = await next(e)
+      if (dessous === null || dessous === undefined) return dessous
+      const { Box } = $.ui.resolve(e)
+      return (
+        <Box flexDirection="row" alignItems="flex-end">
+          <Box flexDirection="column" flexGrow={1} />
+          {dessous}
+          {null}
+        </Box>
+      )
+    }
+    if (await read($, isHidden)) return enveloppe()
     const a = await read($, android)
     const g = await read($, git)
     const u = await read($, usage)
@@ -1156,7 +1172,7 @@ export const register: Register = on => {
     const ca = conseilAffiche(await read($, conseil), (await read($, reglage)) ?? SANS_REGLAGE)
     const plan = planBandeau({ android: a, git: g, usage: u, taches: lt, conso: c, build: b, agents: la, busy: enCours, conseil: ca }, maintenant)
     // rien à montrer : le moteur dessine (et la bande partagée est vide)
-    if (plan.lignes.length === 0) return next(e)
+    if (plan.lignes.length === 0) return enveloppe()
     // on compose au lieu de remplacer : ce que dessinent les autres mods
     // (clawd) se place à droite de nos lignes, posé sur le bord du bas
     const dessous = await next(e)

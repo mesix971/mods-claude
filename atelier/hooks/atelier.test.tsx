@@ -346,6 +346,50 @@ test('rien à montrer : le bandeau laisse le moteur dessiner', async ($, on) => 
   }
 })
 
+test('ce que dessine Clawd reste au même endroit de l’arbre, bande vide, pleine ou masquée (sinon son image repart du début)', async ($, on) => {
+  mock.clock(on as never, { now: Date.UTC(2026, 9, 7, 6, 0) })
+  mock.env(on as never, {})
+  on('session.cwd', () => ({ value: 'C:/vide' }))
+  on('fs.exists', () => ({ value: false }))
+  on('process.run', () => ({ value: { exitCode: 1, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
+  on('ui.toast', () => ({ value: undefined }))
+  on('session.measure', ($, e) => ({ changed: e.changed }))
+  on('session.usage', () => ({ value: null }) as never)
+  on('ui.render', ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    return <Text>clawd</Text>
+  })
+  // le chemin jusqu'à son dessin : les types et les rangs de ses ancêtres
+  const chemin = (n: unknown, vise: string): string | null => {
+    const e = n as { type?: string; text?: string; children?: unknown[] }
+    if (!e || typeof e !== 'object') return null
+    if (e.type === 'Text' && (e.children ?? []).includes(vise)) return 'Text'
+    for (const [i, c] of (e.children ?? []).entries()) {
+      const s = chemin(c, vise)
+      if (s) return `${e.type}[${i}]>${s}`
+    }
+    return null
+  }
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  const racine = async () => chemin(await ui.find({ type: 'Box' }), 'clawd')
+  // bande vide : il est déjà dans la même enveloppe
+  const vide = await racine()
+  expect(vide).not.toBeNull()
+  // les quotas arrivent : la bande se remplit, il ne change pas de place
+  await $.session.measure({
+    context: { tokens: 920_000, window: 1_000_000, percent: 92 },
+    rateLimits: [{ kind: 'five_hour', percentUsed: 5, resetsAt: '2026-10-07T09:00:00Z' }],
+    changed: ['context', 'rateLimits'],
+  })
+  expect(await ui.find({ type: 'Svg' })).toBeDefined()
+  expect(await racine()).toBe(vide)
+  // masquée : toujours au même endroit
+  await ui.press({ key: 'hide' })
+  expect(await ui.find({ type: 'Svg' })).toBeUndefined()
+  expect(await racine()).toBe(vide)
+  await ui.unmount()
+})
+
 test('version calculée par le script : lue dans version.properties, pas dans un commentaire', async ($, on) => {
   const fichiers: Record<string, string> = {
     [`${CWD}/app/build.gradle.kts`]: `
