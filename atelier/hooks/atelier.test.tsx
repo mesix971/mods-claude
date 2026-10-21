@@ -11,7 +11,7 @@ import { decrit, estDiscret } from './outils'
 import { svgPastilles } from './pastilles'
 import { coutReponse, euros, tokensCourts } from './prix'
 import { aRanger } from './rangement'
-import { commandeSuite, contexteCourt, contexteLourd } from './suite'
+import { aChanger, commandeSuite, contexteCourt, contexteLourd, gachisTour, texteGachis } from './suite'
 import { ECHELLE, HAUTEUR_DESSIN, empruntsDe, grandeSceneDe, planBandeau, quandDe, sceneDuBandeau } from './scene'
 import { MAX_TACHES, ajouteTache, depuisTodos, horodate, interrompue, majTache, pastillesTaches, planFini, suitPlan, svgTaches, toutFait } from './taches'
 import { dureePause } from './temps'
@@ -1502,4 +1502,29 @@ test('bouton « Nouvelle conversation » : discret, puis il clignote quand le co
   await horloge.settle()
   expect(lances).toContain('suite')
   await ui.unmount()
+})
+
+test('nouvelle conversation : on change quand continuer ici gâche trop (ce que relit la conversation principale, moins ce qu’une neuve relirait)', () => {
+  const tour = (requetes: number, prompt: number) => {
+    let c = debutTour(null, null)
+    for (let i = 0; i < requetes; i++) c = ajouteReponse(c, 'claude-opus-5-5', { entree: 1000, lu: prompt - 2000, ecrit: 1000, sortie: 500 }, true, null)
+    // un sous-agent ne relit pas la conversation : il ne compte pas
+    c = ajouteReponse(c, 'claude-haiku-5-5', { entree: 5000, lu: 900_000, ecrit: 0, sortie: 100 }, false, null)
+    return finTour(c, null)
+  }
+  // 10 requêtes sur 250 k : 2,5 M relus, dont 2,1 M de trop
+  const lourd = tour(10, 250_000)
+  expect(lourd?.tour?.requetes).toBe(10)
+  expect(lourd?.tour?.relu).toBe(2_500_000)
+  expect(gachisTour(lourd)).toBe(2_100_000)
+  expect(aChanger(null, lourd)).toBe(true)
+  expect(texteGachis(null, lourd)).toBe('−2,1 M/tour')
+  // 3 requêtes sur 250 k : 630 k de trop, ça va encore
+  expect(aChanger(null, tour(3, 250_000))).toBe(false)
+  // un petit contexte ne vaut jamais une conversation neuve, même sur un long tour
+  expect(aChanger(null, tour(40, 100_000))).toBe(false)
+  // chaque requête relit déjà 450 k : même un tour court gâche trop
+  expect(aChanger(null, tour(1, 450_000))).toBe(true)
+  // sans tour mesuré : la taille du contexte décide
+  expect(aChanger({ fiveHour: null, sevenDay: null, contextPercent: 30, contextTokens: 300_000 }, null)).toBe(true)
 })

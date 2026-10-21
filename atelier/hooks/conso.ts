@@ -36,7 +36,7 @@ const VIDE: AtelierConso = { tour: null, session: { tokens: ZERO, dollars: 0, es
 export function debutTour(c: AtelierConso | null, coutSession: number | null): AtelierConso {
   // la taille du prompt reste celle du tour d'avant jusqu'à la première réponse : l'ambre ne clignote pas
   const dernierPrompt = c?.tour?.dernierPrompt ?? 0
-  return { ...(c ?? VIDE), tour: { tokens: ZERO, dollars: 0, estime: coutSession === null, enCours: true, dernierPrompt }, coutDebut: coutSession, estimeTour: 0 }
+  return { ...(c ?? VIDE), tour: { tokens: ZERO, dollars: 0, estime: coutSession === null, enCours: true, dernierPrompt, relu: 0, requetes: 0 }, coutDebut: coutSession, estimeTour: 0 }
 }
 
 /**
@@ -66,6 +66,9 @@ export function ajouteReponse(c: AtelierConso | null, modele: string, tokens: At
       dollars: exact ? Math.max(0, (coutSession as number) - (base.coutDebut as number)) : estimeTour,
       estime: !exact,
       dernierPrompt: principale ? tokens.entree + tokens.lu + tokens.ecrit : base.tour.dernierPrompt,
+      // ce que la conversation principale relit à chaque requête : ce qu'une conversation neuve économiserait
+      relu: (base.tour.relu ?? 0) + (principale ? tokens.entree + tokens.lu + tokens.ecrit : 0),
+      requetes: (base.tour.requetes ?? 0) + (principale ? 1 : 0),
     },
   }
 }

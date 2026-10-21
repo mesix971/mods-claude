@@ -70,6 +70,9 @@ export type AtelierConso = {
     enCours: boolean
     /** Le prompt de la dernière réponse de la conversation principale (entrée + cache) */
     dernierPrompt: number
+    /** Ce que la conversation principale a relu pendant le tour (la somme de ses prompts), et en combien de requêtes */
+    relu?: number
+    requetes?: number
   } | null
   session: { tokens: AtelierTokens; dollars: number; estime: boolean }
   /** Le coût de la session (/cost) au début du tour, pour en déduire celui du tour */

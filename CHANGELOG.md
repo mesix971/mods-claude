@@ -102,8 +102,10 @@
 
 - **0.10.0** — 2026-10-22 — Bouton 🆕 « Nouvelle conversation » sur la bande :
   il lance `/suite` si elle existe (une session neuve avec une note de
-  passation), sinon `/clear`. Il clignote, avec la taille du contexte, quand
-  celui-ci dépasse 250 k tokens ou 75 % de la fenêtre.
+  passation), sinon `/clear`. Il clignote quand continuer ici coûte trop : le
+  dernier tour a relu au moins 1,5 M tokens de plus qu'une conversation neuve
+  (sur un contexte d'au moins 150 k), ou chaque requête relit déjà 400 k ; il
+  affiche alors ce gâchis par tour (« −2,1 M/tour »).
 - **0.9.3** — 2026-10-21 — Bande vide ou masquée : atelier publie une bande
   partagée sans élément (et non plus rien), dès l'ouverture, et pose lui-même
   le numéro de Clawd sur toute la largeur. Avant, depuis la 0.9.1, un numéro
