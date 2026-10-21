@@ -163,6 +163,10 @@ suivent ton thème clair ou sombre. Pas un mot : tout passe par ses gestes.
 - `/tel` installe le dernier APK ; `/atelier` masque ou affiche le bandeau et
   donne la version. Caché avec son bouton « Masquer », le bandeau revient
   aussi avec `/atelier`.
+- 🆕 sur la bande ouvre une nouvelle conversation (ta commande `/suite` si tu
+  en as une, sinon `/clear`). Discret d'habitude, il clignote avec la taille
+  du contexte quand celui-ci devient lourd (250 k tokens, ou 75 % d'une petite
+  fenêtre) : c'est le moment d'en changer.
 
 ## Développer
 

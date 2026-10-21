@@ -11,6 +11,7 @@ import { decrit, estDiscret } from './outils'
 import { svgPastilles } from './pastilles'
 import { coutReponse, euros, tokensCourts } from './prix'
 import { aRanger } from './rangement'
+import { commandeSuite, contexteCourt, contexteLourd } from './suite'
 import { ECHELLE, HAUTEUR_DESSIN, empruntsDe, grandeSceneDe, planBandeau, quandDe, sceneDuBandeau } from './scene'
 import { MAX_TACHES, ajouteTache, depuisTodos, horodate, interrompue, majTache, pastillesTaches, planFini, suitPlan, svgTaches, toutFait } from './taches'
 import { dureePause } from './temps'
@@ -1443,4 +1444,62 @@ test('bande partagée : la puce du conseil de modèle aussi, avec son dessin, ca
   expect(el.dessin).not.toContain('<title')
   // Clawd la tient : sa place reste, vide
   expect(svgJauges([], quandDe(2 * M), { conseil, caches: new Set(['conseil']) }).svg).not.toContain('Sonnet')
+})
+
+test('nouvelle conversation : lourd au-delà de 250 k tokens (ou 75 % d’une petite fenêtre) ; ta /suite si tu l’as, sinon /clear', () => {
+  const u = (contextTokens: number | undefined, contextPercent: number | null) => ({ fiveHour: null, sevenDay: null, contextPercent, ...(contextTokens === undefined ? {} : { contextTokens }) })
+  expect(contexteLourd(null)).toBe(false)
+  expect(contexteLourd(u(249_000, 25))).toBe(false)
+  expect(contexteLourd(u(250_000, 25))).toBe(true)
+  expect(contexteLourd(u(150_000, 75))).toBe(true)
+  expect(contexteLourd(u(undefined, 80))).toBe(true)
+  expect(contexteCourt(u(312_400, 31))).toBe('312 k')
+  expect(contexteCourt(u(undefined, 81.6))).toBe('82 %')
+  expect(commandeSuite(['compact', 'suite', 'clear'])).toBe('suite')
+  expect(commandeSuite(['compact', 'clear'])).toBe('clear')
+})
+
+test('bouton « Nouvelle conversation » : discret, puis il clignote quand le contexte est lourd ; un clic lance /suite', async ($, on) => {
+  const horloge = mock.clock(on as never, { now: Date.UTC(2026, 9, 7, 6, 0) })
+  mock.env(on as never, {})
+  on('session.cwd', () => ({ value: 'C:/vide' }))
+  on('fs.exists', () => ({ value: false }))
+  on('process.run', () => ({ value: { exitCode: 1, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
+  on('ui.toast', () => ({ value: undefined }))
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  on('command.register', ($, e) => ({ value: { command: e.name } }) as never)
+  on('session.measure', ($, e) => ({ changed: e.changed }))
+  on('ui.render', ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    return <Text>clawd</Text>
+  })
+  let tokens = 100_000
+  on('session.usage', () => ({ value: { startedAt: 0, context: { tokens, window: 1_000_000, percent: tokens / 10_000 }, rateLimits: [] } }))
+  on('command.list', () => ({ value: [{ name: 'compact' }, { name: 'suite' }] }) as never)
+  const lances: string[] = []
+  on('command.run', ($, e) => {
+    lances.push(e.command)
+    return { text: '' } as never
+  })
+  await $.session.start({ cwd: 'C:/vide', surface: 'desktop', isInteractive: true })
+  await $.session.measure({ context: { tokens, window: 1_000_000, percent: 10 }, rateLimits: [], changed: ['context'] } as never)
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  const bouton = async () => JSON.stringify(await ui.find({ key: 'nouvelle' }))
+  // 100 k : discret, juste l'icône
+  expect(await bouton()).toContain('🆕')
+  expect(await bouton()).not.toContain('yellow')
+  // 300 k : il dit combien, et clignote (jaune une seconde sur deux)
+  tokens = 300_000
+  await $.session.measure({ context: { tokens, window: 1_000_000, percent: 30 }, rateLimits: [], changed: ['context'] } as never)
+  await horloge.advance(1000)
+  const a = await bouton()
+  await horloge.advance(1000)
+  const b = await bouton()
+  expect(a).toContain('Nouvelle conversation (300 k)')
+  expect([a, b].filter(x => x.includes('yellow'))).toHaveLength(1)
+  // un clic : ta /suite
+  await ui.press({ key: 'nouvelle' })
+  await horloge.settle()
+  expect(lances).toContain('suite')
+  await ui.unmount()
 })

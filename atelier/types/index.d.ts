@@ -168,6 +168,8 @@ declare module 'claude-code' {
       minute: number
       busy: string | null
       isHidden: boolean
+      /** Le bouton « Nouvelle conversation » clignote : il bascule chaque seconde tant que le contexte est lourd */
+      clignote: boolean
     }
     /** Le contrat de Clawd (l'autre mod du dépôt), qu'atelier lit seulement */
     clawd: {

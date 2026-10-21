@@ -26,6 +26,7 @@ import { decrit, estDiscret } from './outils'
 import { svgPastilles } from './pastilles'
 import { aRanger } from './rangement'
 import { CELLULE, ECHELLE, HAUTEUR_DESSIN, empruntsDe, grandeSceneDe, planBandeau, quandDe, sceneDuBandeau } from './scene'
+import { commandeSuite, contexteCourt, contexteLourd } from './suite'
 import { ajouteTache, depuisTaskList, depuisTodos, horodate, interrompue, majTache, planFini, resumeTaches, suitPlan, texteTaches, toutFait } from './taches'
 
 type $ = EngineInterface
@@ -50,6 +51,7 @@ const SANS_REGLAGE = { modele: null, effort: null }
 const minute = atom({ plugin: 'atelier', key: 'minute' } as const, 0)
 const busy = atom({ plugin: 'atelier', key: 'busy' } as const, null)
 const isHidden = atom({ plugin: 'atelier', key: 'isHidden' } as const, false)
+const clignote = atom({ plugin: 'atelier', key: 'clignote' } as const, false)
 
 // ---------------------------------------------------------------- utilitaires
 
@@ -869,6 +871,13 @@ export const register: Register = on => {
     // chaque minute : quotas relus, pastilles finies rangées, et le bandeau
     // redessiné (une fenêtre qui vient de se réinitialiser repasse à 0 %, le
     // trait du temps avance)
+    // le bouton « Nouvelle conversation » clignote tant que le contexte est lourd (une bascule par seconde) ; sinon, rien n'est redessiné
+    $.clock.every(1000, () => {
+      void (async () => {
+        if (contexteLourd(await read($, usage))) await update($, clignote, v => !v)
+        else if (await read($, clignote)) await update($, clignote, () => false)
+      })().catch(() => {})
+    })
     $.clock.every(60_000, () => {
       void rafraichirUsage($)
         .then(() => rangeLesFinis($))
@@ -1287,8 +1296,32 @@ export const register: Register = on => {
 
     // ↻ et Masquer : au bout de la ligne git, courte ; sur celle des quotas (sans git), ils la faisaient
     // passer à la ligne quand elle était longue, et la bande changeait de forme
+    // une conversation neuve : discret d'habitude, il clignote quand le contexte est lourd (le moment d'en changer)
+    const lourd = contexteLourd(u)
+    const allume = lourd && (await read($, clignote))
+    const nouvelle = (
+      <Button
+        key="nouvelle"
+        label="Nouvelle conversation"
+        hotkey="n"
+        plain
+        dimColor={!lourd}
+        onPress={async () => {
+          const noms = (await $.command.list().catch(() => [])).map(c => c.name)
+          await $.command.run({ command: commandeSuite(noms) }).catch(err => {
+            $.ui.toast(`Nouvelle conversation impossible pour l’instant : ${String(err).slice(0, 120)}`, { timeoutMs: 8000 })
+          })
+        }}
+      >
+        <Text color={allume ? 'yellow' : undefined} bold={lourd} dimColor={lourd && !allume}>
+          {lourd ? `🆕 Nouvelle conversation (${contexteCourt(u)})` : '🆕'}
+        </Text>
+      </Button>
+    )
     const commandes = (
       <Box flexDirection="row" alignItems="center">
+        <Text> </Text>
+        {nouvelle}
         <Text> </Text>
         <Button key="refresh" label="↻" plain dimColor onPress={() => refresh($)} />
         <Button
