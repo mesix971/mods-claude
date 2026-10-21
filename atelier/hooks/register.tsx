@@ -7,7 +7,7 @@
 //    faite).
 // 2. Garde-fous sur Bash et PowerShell : JBR d'Android Studio cassé corrigé,
 //    JAVA_HOME ajouté à gradlew, commandes destructrices soumises à ton accord,
-//    secrets bloqués avant commit/push, commit non demandé confirmé, pas
+//    secrets bloqués avant commit/push, push non demandé confirmé, pas
 //    d'attente bloquante, pas de `bash` WSL depuis PowerShell.
 //    adb et le JBR sont trouvés tout seuls (Windows, macOS, Linux).
 // 3. Rappels : réponse en anglais détectée, version bumpée sans CHANGELOG,
@@ -763,9 +763,10 @@ async function guard(
           deny: `Secrets détectés (${leaks.join(', ')}) : ajoute-les au .gitignore et retire-les de l’index (git rm --cached) avant de committer/pousser.`,
         }
       }
-    } else if (!DEMANDE_GIT.test(lastPrompt)) {
-      const ok = await confirm($, `Claude veut faire un \`git ${cmd.match(/\bgit\s+(commit|push)/)?.[1]}\` sans que tu l’aies demandé. Autoriser ?`)
-      if (!ok) return { deny: 'L’utilisateur n’a pas demandé de commit/push : propose-le au lieu de le faire.' }
+    } else if (/\bgit\s+push\b/.test(cmd) && !DEMANDE_GIT.test(lastPrompt)) {
+      // un commit se défait ; un push, beaucoup moins : seul le push demande l'accord
+      const ok = await confirm($, 'Claude veut faire un `git push` sans que tu l’aies demandé. Autoriser ?')
+      if (!ok) return { deny: 'L’utilisateur n’a pas demandé de push : propose-le au lieu de le faire.' }
     }
   }
 

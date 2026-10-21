@@ -100,6 +100,9 @@
 
 ## atelier
 
+- **0.9.2** — 2026-10-21 — Un commit ne demande plus ton accord, même non
+  demandé : il se défait facilement. Seul un push non demandé le demande
+  encore. Les secrets restent bloqués au commit comme au push.
 - **0.9.1** — 2026-10-21 — Ce que dessine un autre mod sous la bande (Clawd)
   reste toujours au même endroit de l'arbre, bande vide, pleine ou masquée.
   Avant, l'apparition de la première ligne (une pastille de conseil, les

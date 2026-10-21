@@ -153,7 +153,7 @@ suivent ton thème clair ou sombre. Pas un mot : tout passe par ses gestes.
   push forcé, `reset --hard`…) : il faut ton accord.
 - Secrets (`local.properties`, keystore, `google-services.json`, `.env`) en
   partance dans un commit ou un push : demande de confirmation.
-- Commit ou push non demandé : demande de confirmation.
+- Push non demandé : demande de confirmation (un commit passe sans demander).
 - Refusés : `bash` lancé depuis PowerShell (sous Windows, ça ouvre WSL) et les
   `Start-Sleep` de 20 s ou plus (mieux vaut une tâche de fond).
 

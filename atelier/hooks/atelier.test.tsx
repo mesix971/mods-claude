@@ -311,15 +311,18 @@ test('secret indexé : le commit est bloqué', async ($, on) => {
   expect(ran.length).toBe(0)
 })
 
-test('commit non demandé : confirmation ; demandé : direct', async ($, on) => {
+test('commit : toujours direct ; push non demandé : confirmation, demandé : direct', async ($, on) => {
   const { ran, asked } = shellStubs(on as never, { answer: 'Refuser' })
   await $.prompt.submit({ text: 'corrige le bug du minuteur' })
   await $.tool.call({ tool: 'Bash', command: 'git commit -am "fix: minuteur"' })
+  expect(asked.length).toBe(0)
+  expect(ran).toEqual(['git commit -am "fix: minuteur"'])
+  await $.tool.call({ tool: 'Bash', command: 'git push' })
   expect(asked.length).toBe(1)
-  expect(ran.length).toBe(0)
+  expect(ran.length).toBe(1)
   await $.prompt.submit({ text: 'ok commit et pousse' })
   await $.tool.call({ tool: 'Bash', command: 'git push' })
-  expect(ran).toEqual(['git push'])
+  expect(ran).toEqual(['git commit -am "fix: minuteur"', 'git push'])
 })
 
 test('PowerShell : pas de bash WSL ni d’attente bloquante', async ($, on) => {
