@@ -62,3 +62,13 @@ export function texteGachis(u: AtelierUsage | null, c: AtelierConso | null): str
   const g = gachisTour(c)
   return g > 0 ? `−${tokensCourts(g)}/tour` : contexteCourt(u)
 }
+
+/** Le texte du bouton quand il est temps de changer (« 🆕 Nouvelle conversation (−2,1 M/tour) »), sinon null */
+export function texteNouvelle(u: AtelierUsage | null, c: AtelierConso | null): string | null {
+  return aChanger(u, c) ? `🆕 Nouvelle conversation (${texteGachis(u, c)})` : null
+}
+
+/** Combien de cases de texte occupe un libellé (un emoji en prend deux) */
+export function cases(texte: string): number {
+  return [...texte].reduce((n, ch) => n + (/\p{Extended_Pictographic}/u.test(ch) ? 2 : 1), 0)
+}

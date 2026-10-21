@@ -26,7 +26,7 @@ import { decrit, estDiscret } from './outils'
 import { svgPastilles } from './pastilles'
 import { aRanger } from './rangement'
 import { CELLULE, ECHELLE, HAUTEUR_DESSIN, empruntsDe, grandeSceneDe, planBandeau, quandDe, sceneDuBandeau } from './scene'
-import { aChanger, commandeSuite, texteGachis } from './suite'
+import { aChanger, commandeSuite } from './suite'
 import { ajouteTache, depuisTaskList, depuisTodos, horodate, interrompue, majTache, planFini, resumeTaches, suitPlan, texteTaches, toutFait } from './taches'
 
 type $ = EngineInterface
@@ -1297,7 +1297,7 @@ export const register: Register = on => {
     // ↻ et Masquer : au bout de la ligne git, courte ; sur celle des quotas (sans git), ils la faisaient
     // passer à la ligne quand elle était longue, et la bande changeait de forme
     // une conversation neuve : discret d'habitude, il clignote quand continuer ici coûte trop (le moment d'en changer)
-    const lourd = aChanger(u, c)
+    const lourd = plan.nouvelle !== null
     const allume = lourd && (await read($, clignote))
     const nouvelle = (
       <Button
@@ -1314,15 +1314,17 @@ export const register: Register = on => {
         }}
       >
         <Text color={allume ? 'yellow' : undefined} bold={lourd} dimColor={lourd && !allume}>
-          {lourd ? `🆕 Nouvelle conversation (${texteGachis(u, c)})` : '🆕'}
+          {plan.nouvelle ?? '🆕'}
         </Text>
       </Button>
     )
+    // quand il est temps, le bouton se pose juste après les jauges (Clawd sait où il est) ; sinon, avec ↻ et Masquer
+    const apresJauges = lourd && quotas !== null
     const commandes = (
       <Box flexDirection="row" alignItems="center">
         <Text> </Text>
-        {nouvelle}
-        <Text> </Text>
+        {!apresJauges && nouvelle}
+        {!apresJauges && <Text> </Text>}
         <Button key="refresh" label="↻" plain dimColor onPress={() => refresh($)} />
         <Button
           key="hide"
@@ -1417,6 +1419,7 @@ export const register: Register = on => {
           {quotas && (
             <Box key="ligne-quotas" flexDirection="row" flexWrap="wrap" alignItems="center">
               {quotas}
+              {apresJauges && nouvelle}
               {!g && commandes}
             </Box>
           )}

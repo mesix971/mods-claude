@@ -1476,6 +1476,11 @@ test('bouton « Nouvelle conversation » : discret, puis il clignote quand le co
   let tokens = 100_000
   on('session.usage', () => ({ value: { startedAt: 0, context: { tokens, window: 1_000_000, percent: tokens / 10_000 }, rateLimits: [] } }))
   on('command.list', () => ({ value: [{ name: 'compact' }, { name: 'suite' }] }) as never)
+  let publiee: { elements?: { id: string; genre: string; x: number; largeur: number; ligne: number }[] } | null = null
+  on('state.set', ($, e, next) => {
+    if ((e as { key?: string }).key === 'scene') publiee = (e as { value?: typeof publiee }).value ?? null
+    return next(e)
+  })
   const lances: string[] = []
   on('command.run', ($, e) => {
     lances.push(e.command)
@@ -1497,6 +1502,19 @@ test('bouton « Nouvelle conversation » : discret, puis il clignote quand le co
   const b = await bouton()
   expect(a).toContain('Nouvelle conversation (300 k)')
   expect([a, b].filter(x => x.includes('yellow'))).toHaveLength(1)
+  // il est posé juste après les jauges, dans leur rangée…
+  const rangee = (await ui.find({ key: 'ligne-quotas' })) as { children?: { type?: string; props?: { label?: string } }[] } | undefined
+  const [premier, second] = rangee?.children ?? []
+  expect(premier?.type).toBe('Svg')
+  expect(second?.type).toBe('Button')
+  expect(second?.props?.label).toBe('Nouvelle conversation')
+  // … et la bande partagée dit où (pour que Clawd puisse le montrer) : juste au bout du dessin des jauges
+  await horloge.settle()
+  const jauges = (await ui.find({ type: 'Svg' }))?.props as { width: number }
+  const el = publiee?.elements?.find(x => x.id === 'nouvelle')
+  expect(el?.genre).toBe('bouton')
+  expect(Math.abs((el?.x ?? -99) - jauges.width)).toBeLessThan(1)
+  expect(el?.largeur).toBeGreaterThan(150)
   // un clic : ta /suite
   await ui.press({ key: 'nouvelle' })
   await horloge.settle()

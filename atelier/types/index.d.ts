@@ -115,9 +115,9 @@ export type AtelierAgent = {
 
 /** Un élément du bandeau qu'un autre mod du dépôt (Clawd) peut viser */
 export type AtelierElement = {
-  /** `jauge-5h`, `jauge-7j`, `jauge-contexte`, `conso`, `conseil` (la puce 💡 du conseil de modèle), `tache-<id>`, `agent-<id>`, `build` */
+  /** `jauge-5h`, `jauge-7j`, `jauge-contexte`, `conso`, `conseil` (la puce 💡 du conseil de modèle), `tache-<id>`, `agent-<id>`, `build`, `nouvelle` (le bouton 🆕, quand il est temps de changer de conversation) */
   id: string
-  genre: 'jauge' | 'conso' | 'conseil' | 'tache' | 'agent' | 'build'
+  genre: 'jauge' | 'conso' | 'conseil' | 'tache' | 'agent' | 'build' | 'bouton'
   /**
    * Ce qu'il montre : `attente` (le rond en pointillé), `encours` (l'orbe),
    * `faite` (la coche), `echec` (la croix) ; pour une jauge son niveau (`ok`,

@@ -16,6 +16,7 @@ import { estLourde, texteConso, titreConso } from './conso'
 import { idJauge, jauges, svgJauges } from './jauges'
 import type { Jauge } from './jauges'
 import { svgPastilles } from './pastilles'
+import { cases, texteNouvelle } from './suite'
 import type { Pastille } from './pastilles'
 import { pastillesTaches } from './taches'
 import { heure } from './temps'
@@ -46,6 +47,8 @@ export type Plan = {
   build: AtelierBuild | null
   /** Les pastilles de la ligne du bas : le build (sans projet Android : sinon il est sur la ligne 📱), les tâches, les sous-agents */
   groupes: Pastille[][]
+  /** Le bouton « Nouvelle conversation » quand il est temps d'en changer (posé juste après les jauges), sinon null */
+  nouvelle: string | null
 }
 
 const JOURS = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.']
@@ -75,7 +78,7 @@ export function planBandeau(x: EtatBandeau, maintenant: number): Plan {
     ...(groupes.length > 0 ? (['pastilles'] as const) : []),
     ...(x.busy ? (['occupe'] as const) : []),
   ]
-  return { lignes, jauges: lj, conso, conseil: x.conseil ?? null, build: bv, groupes }
+  return { lignes, jauges: lj, conso, conseil: x.conseil ?? null, build: bv, groupes, nouvelle: texteNouvelle(x.usage, x.conso) }
 }
 
 const genreDe = (id: string): AtelierElement['genre'] => (id.startsWith('agent-') ? 'agent' : id === 'build' ? 'build' : 'tache')
@@ -101,7 +104,12 @@ export function sceneDuBandeau(p: Plan, quand: (ms: number) => string): AtelierS
   const ligne = (nom: AtelierScene['lignes'][number]) => p.lignes.length - 1 - p.lignes.indexOf(nom)
   const elements: AtelierElement[] = []
   if (p.lignes.includes('quotas')) {
-    for (const pl of svgJauges(p.jauges, quand, { conso: p.conso, conseil: p.conseil }).places) {
+    const quotas = svgJauges(p.jauges, quand, { conso: p.conso, conseil: p.conseil })
+    // le bouton 🆕, juste après les jauges : sa place à quelques px près (un bouton se mesure en cases de texte, pas en px)
+    if (p.nouvelle) {
+      elements.push({ id: 'nouvelle', genre: 'bouton', etat: 'clignote', x: aLEchelle(quotas.largeur), largeur: +(cases(p.nouvelle) * CELLULE).toFixed(1), hauteur: HAUTEUR_DESSIN, ligne: ligne('quotas') })
+    }
+    for (const pl of quotas.places) {
       // son dessin seul, à l'identique : la même fonction, avec lui seul
       const j = p.jauges.find(j => idJauge(j) === pl.id)
       const seul = j
