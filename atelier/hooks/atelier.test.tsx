@@ -11,7 +11,7 @@ import { decrit, estDiscret } from './outils'
 import { svgPastilles } from './pastilles'
 import { coutReponse, euros, tokensCourts } from './prix'
 import { aRanger } from './rangement'
-import { aChanger, commandeSuite, contexteCourt, contexteLourd, gachisTour, texteGachis } from './suite'
+import { aChanger, commandeSuite, contexteCourt, contexteLourd, gachisTour, largeurBouton, texteGachis, tientApresJauges } from './suite'
 import { ECHELLE, HAUTEUR_DESSIN, empruntsDe, grandeSceneDe, planBandeau, quandDe, sceneDuBandeau } from './scene'
 import { MAX_TACHES, ajouteTache, depuisTodos, horodate, interrompue, majTache, pastillesTaches, planFini, suitPlan, svgTaches, toutFait } from './taches'
 import { dureePause } from './temps'
@@ -1492,7 +1492,7 @@ test('bouton « Nouvelle conversation » : discret, puis il clignote quand le co
   const bouton = async () => JSON.stringify(await ui.find({ key: 'nouvelle' }))
   // 100 k : discret, juste l'icône
   expect(await bouton()).toContain('🆕')
-  expect(await bouton()).not.toContain('yellow')
+  expect(await bouton()).not.toContain('primary')
   // 300 k : il dit combien, et clignote (jaune une seconde sur deux)
   tokens = 300_000
   await $.session.measure({ context: { tokens, window: 1_000_000, percent: 30 }, rateLimits: [], changed: ['context'] } as never)
@@ -1500,14 +1500,15 @@ test('bouton « Nouvelle conversation » : discret, puis il clignote quand le co
   const a = await bouton()
   await horloge.advance(1000)
   const b = await bouton()
-  expect(a).toContain('Nouvelle conversation (300 k)')
-  expect([a, b].filter(x => x.includes('yellow'))).toHaveLength(1)
+  // l'app de bureau dessine un bouton natif avec son libellé seul : tout est dans le libellé, et il clignote par son style
+  expect(a).toContain('🆕 Nouvelle conv.')
+  expect([a, b].filter(x => x.includes('"variant":"primary"'))).toHaveLength(1)
   // il est posé juste après les jauges, dans leur rangée…
   const rangee = (await ui.find({ key: 'ligne-quotas' })) as { children?: { type?: string; props?: { label?: string } }[] } | undefined
   const [premier, second] = rangee?.children ?? []
   expect(premier?.type).toBe('Svg')
   expect(second?.type).toBe('Button')
-  expect(second?.props?.label).toBe('Nouvelle conversation')
+  expect(second?.props?.label).toBe('🆕 Nouvelle conv.')
   // … et la bande partagée dit où (pour que Clawd puisse le montrer) : juste au bout du dessin des jauges
   await horloge.settle()
   const jauges = (await ui.find({ type: 'Svg' }))?.props as { width: number }
@@ -1530,14 +1531,15 @@ test('nouvelle conversation : on change quand continuer ici gâche trop (ce que 
     c = ajouteReponse(c, 'claude-haiku-5-5', { entree: 5000, lu: 900_000, ecrit: 0, sortie: 100 }, false, null)
     return finTour(c, null)
   }
-  // 10 requêtes sur 250 k : 2,5 M relus, dont 2,1 M de trop
+  // 10 requêtes sur 250 k : 2,5 M relus, dont 1,7 M de trop (une neuve relirait ~80 k par requête)
   const lourd = tour(10, 250_000)
   expect(lourd?.tour?.requetes).toBe(10)
   expect(lourd?.tour?.relu).toBe(2_500_000)
-  expect(gachisTour(lourd)).toBe(2_100_000)
+  expect(gachisTour(lourd)).toBe(1_700_000)
   expect(aChanger(null, lourd)).toBe(true)
-  expect(texteGachis(null, lourd)).toBe('−2,1 M/tour')
-  // 3 requêtes sur 250 k : 630 k de trop, ça va encore
+  // ce qu'il dit : ce que chaque requête relit, stable d'un tour à l'autre
+  expect(texteGachis(null, lourd)).toBe('250 k/req')
+  // 3 requêtes sur 250 k : 510 k de trop, ça va encore
   expect(aChanger(null, tour(3, 250_000))).toBe(false)
   // un petit contexte ne vaut jamais une conversation neuve, même sur un long tour
   expect(aChanger(null, tour(40, 100_000))).toBe(false)
@@ -1545,4 +1547,53 @@ test('nouvelle conversation : on change quand continuer ici gâche trop (ce que 
   expect(aChanger(null, tour(1, 450_000))).toBe(true)
   // sans tour mesuré : la taille du contexte décide
   expect(aChanger({ fiveHour: null, sevenDay: null, contextPercent: 30, contextTokens: 300_000 }, null)).toBe(true)
+})
+
+test('nouvelle conversation : allumé par un tour trop cher, il reste allumé tant que le contexte reste gros ; une conversation neuve l’éteint', () => {
+  const requete = (c: ReturnType<typeof debutTour>, prompt: number) => ajouteReponse(c, 'claude-opus-5-5', { entree: 1000, lu: prompt - 2000, ecrit: 1000, sortie: 500 }, true, null)
+  // un tour trop cher : 10 requêtes sur 250 k
+  let c = debutTour(null, null)
+  for (let i = 0; i < 10; i++) c = requete(c, 250_000)
+  let fini = finTour(c, null)
+  expect(fini?.signale).toBe(true)
+  // un petit tour ensuite (2 requêtes) : il ne s'éteint pas pour autant
+  c = debutTour(fini, null)
+  expect(aChanger(null, c)).toBe(true)
+  c = requete(requete(c, 260_000), 262_000)
+  fini = finTour(c, null)
+  expect(aChanger(null, fini)).toBe(true)
+  // une conversation neuve (ou compactée) : la première réponse relit peu, il s'éteint
+  c = requete(debutTour(fini, null), 82_000)
+  expect(aChanger(null, finTour(c, null))).toBe(false)
+})
+
+test('nouvelle conversation : le bouton ne se pose après les jauges que s’il y tient (sinon il passerait à la ligne)', () => {
+  // une bande de 95 colonnes (751 px), le coin de Clawd (116 px) : 635 px pour les jauges et le bouton
+  const bande = Math.round(95 * 7.9)
+  const bouton = largeurBouton('🆕 Nouvelle conv.', 7.9)
+  expect(bouton).toBeGreaterThan(150)
+  expect(tientApresJauges(400, '🆕 Nouvelle conv.', 7.9, bande)).toBe(true)
+  // ta bande de la capture : 5 h, 7 j, contexte, conso et conseil (~ 680 px) : il ne tient plus, il reste avec ↻ et Masquer
+  expect(tientApresJauges(680, '🆕 Nouvelle conv.', 7.9, bande)).toBe(false)
+  // largeur de la bande inconnue : on suppose que oui
+  expect(tientApresJauges(680, '🆕 Nouvelle conv.', 7.9, null)).toBe(true)
+})
+
+test('nouvelle conversation : sur la bande partagée, le bouton est après les pastilles (sinon après les jauges, s’il tient ; sinon pas publié)', () => {
+  const M = 60_000
+  const lourd = { fiveHour: null, sevenDay: null, contextPercent: 30, contextTokens: 300_000 }
+  const etat = (taches: { id: string; nom: string; etat: 'faite' | 'encours' | 'attente'; debut?: number; fin?: number }[]) =>
+    planBandeau({ android: null, git: null, usage: lourd, taches, conso: null, build: null, agents: [], busy: null }, 2 * M)
+  // une pastille en bas : le bouton juste après elle, sur la ligne du bas (la hauteur de Clawd)
+  const avec = etat([{ id: 'plan-1', nom: 'Lire', etat: 'attente' }])
+  const s = sceneDuBandeau(avec, quandDe(2 * M), 751)
+  const b = s.elements.find(e => e.id === 'nouvelle')
+  expect(b?.ligne).toBe(0)
+  expect(Math.abs((b?.x ?? -99) - svgPastilles(avec.groupes, false).largeur * ECHELLE)).toBeLessThan(0.1)
+  // pas de pastilles : après les jauges
+  const sans = sceneDuBandeau(etat([]), quandDe(2 * M), 751)
+  expect(sans.elements.find(e => e.id === 'nouvelle')?.ligne).toBe(0)
+  expect(sans.lignes).toEqual(['quotas'])
+  // une bande trop étroite : nulle part (il reste avec ↻ et Masquer), donc pas publié
+  expect(sceneDuBandeau(etat([]), quandDe(2 * M), 200).elements.find(e => e.id === 'nouvelle')).toBeUndefined()
 })

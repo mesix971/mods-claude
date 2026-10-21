@@ -3,14 +3,16 @@
 // vient de /cost quand le moteur le tient, sinon de la grille de prix.ts.
 //
 // La pastille passe à l'ambre quand chaque réponse relit plus de 400 k tokens :
-// au-delà, une conversation neuve (/clear) coûte bien moins, en quota comme en
+// au-delà, une conversation neuve (le bouton 🆕) coûte bien moins, en quota comme en
 // euros.
 
 import type { AtelierConso, AtelierTokens } from '../types'
 import { DATE_TARIFS, DATE_TAUX, DOLLARS_PAR_EURO, coutReponse, dollarsTexte, euros, tokensCourts, tokensLongs } from './prix'
+import { CONTEXTE_MIN, PROMPT_TROP, tourTropCher } from './suite'
 
 export const ZERO: AtelierTokens = { entree: 0, lu: 0, ecrit: 0, sortie: 0 }
-export const PROMPT_LOURD = 400_000
+/** Au-delà, la pastille passe à l'ambre : le même seuil que le bouton 🆕 (chaque requête relit trop) */
+export const PROMPT_LOURD = PROMPT_TROP
 
 const plus = (a: AtelierTokens, b: AtelierTokens): AtelierTokens => ({
   entree: a.entree + b.entree,
@@ -53,12 +55,16 @@ export function ajouteReponse(c: AtelierConso | null, modele: string, tokens: At
     dollars: coutSession ?? base.session.dollars + estimation,
     estime: coutSession === null,
   }
-  if (!base.tour?.enCours) return { ...base, session }
+  const prompt = tokens.entree + tokens.lu + tokens.ecrit
+  // la conversation principale relit peu (neuve, ou compactée) : il n'est plus temps d'en changer
+  const signale = principale && prompt < CONTEXTE_MIN ? false : base.signale
+  if (!base.tour?.enCours) return { ...base, session, signale }
   const estimeTour = base.estimeTour + estimation
   const exact = coutSession !== null && base.coutDebut !== null
   return {
     ...base,
     session,
+    signale,
     estimeTour,
     tour: {
       ...base.tour,
@@ -79,6 +85,8 @@ export function finTour(c: AtelierConso | null, coutSession: number | null): Ate
   const exact = coutSession !== null && c.coutDebut !== null
   return {
     ...c,
+    // un tour trop cher allume l'alerte « il est temps de changer » ; elle reste allumée (seul un petit contexte l'éteint)
+    signale: c.signale === true || tourTropCher(c.tour),
     session: coutSession !== null ? { ...c.session, dollars: coutSession, estime: false } : c.session,
     tour: { ...c.tour, enCours: false, ...(exact ? { dollars: Math.max(0, (coutSession as number) - (c.coutDebut as number)), estime: false } : {}) },
   }
@@ -115,7 +123,7 @@ export function titreConso(c: AtelierConso | null): string {
     `Session : ${euros(c.session.dollars)} (${dollarsTexte(c.session.dollars)}) · ${tokensCourts(total(c.session.tokens))} tokens vus par le bandeau`,
   ]
   if (estLourde(c)) {
-    lignes.push(`⚠ Chaque réponse relit ${tokensCourts(c.tour.dernierPrompt)} tokens : une conversation neuve (/clear) coûterait bien moins.`)
+    lignes.push(`⚠ Chaque réponse relit ${tokensCourts(c.tour.dernierPrompt)} tokens  : une conversation neuve (le bouton 🆕) coûterait bien moins.`)
   }
   lignes.push(`Tarifs du ${DATE_TARIFS} · 1 € = ${String(DOLLARS_PAR_EURO).replace('.', ',')} $ (BCE, ${DATE_TAUX})`)
   return lignes.join('\n')

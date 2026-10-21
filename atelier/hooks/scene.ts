@@ -16,7 +16,7 @@ import { estLourde, texteConso, titreConso } from './conso'
 import { idJauge, jauges, svgJauges } from './jauges'
 import type { Jauge } from './jauges'
 import { svgPastilles } from './pastilles'
-import { cases, texteNouvelle } from './suite'
+import { largeurBouton, placeBouton, texteNouvelle } from './suite'
 import type { Pastille } from './pastilles'
 import { pastillesTaches } from './taches'
 import { heure } from './temps'
@@ -100,15 +100,20 @@ const aLEchelle = (v: number) => +(v * ECHELLE).toFixed(1)
 /** Un dessin d'élément sans son infobulle : Clawd le promène dans une image, où elle ne servirait pas */
 const sansTitre = (svg: string) => svg.replace(/<title>[\s\S]*?<\/title>/g, '')
 
-export function sceneDuBandeau(p: Plan, quand: (ms: number) => string): AtelierScene {
+/** `bandePx` : la largeur de la bande en px, quand on la connaît (pour savoir si le bouton 🆕 tient après les jauges) */
+export function sceneDuBandeau(p: Plan, quand: (ms: number) => string, bandePx: number | null = null): AtelierScene {
   const ligne = (nom: AtelierScene['lignes'][number]) => p.lignes.length - 1 - p.lignes.indexOf(nom)
   const elements: AtelierElement[] = []
-  if (p.lignes.includes('quotas')) {
-    const quotas = svgJauges(p.jauges, quand, { conso: p.conso, conseil: p.conseil })
-    // le bouton 🆕, juste après les jauges : sa place à quelques px près (un bouton se mesure en cases de texte, pas en px)
-    if (p.nouvelle) {
-      elements.push({ id: 'nouvelle', genre: 'bouton', etat: 'clignote', x: aLEchelle(quotas.largeur), largeur: +(cases(p.nouvelle) * CELLULE).toFixed(1), hauteur: HAUTEUR_DESSIN, ligne: ligne('quotas') })
-    }
+  const quotas = p.lignes.includes('quotas') ? svgJauges(p.jauges, quand, { conso: p.conso, conseil: p.conseil }) : null
+  // le bouton 🆕 quand il est temps : là où le rendu le pose (même règle), sa place au px près pour son début,
+  // à quelques px près pour sa largeur (un bouton natif se mesure en cases de texte)
+  const pastillesPx = p.lignes.includes('pastilles') ? aLEchelle(svgPastilles(p.groupes, false).largeur) : null
+  const jaugesPx = quotas ? aLEchelle(quotas.largeur) : null
+  const place = p.nouvelle ? placeBouton(p.nouvelle, CELLULE, bandePx, pastillesPx, jaugesPx) : null
+  if (p.nouvelle && place) {
+    elements.push({ id: 'nouvelle', genre: 'bouton', etat: 'clignote', x: (place === 'pastilles' ? pastillesPx : jaugesPx) ?? 0, largeur: largeurBouton(p.nouvelle, CELLULE), hauteur: HAUTEUR_DESSIN, ligne: ligne(place === 'pastilles' ? 'pastilles' : 'quotas') })
+  }
+  if (quotas) {
     for (const pl of quotas.places) {
       // son dessin seul, à l'identique : la même fonction, avec lui seul
       const j = p.jauges.find(j => idJauge(j) === pl.id)

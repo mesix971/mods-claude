@@ -26,7 +26,7 @@ import { decrit, estDiscret } from './outils'
 import { svgPastilles } from './pastilles'
 import { aRanger } from './rangement'
 import { CELLULE, ECHELLE, HAUTEUR_DESSIN, empruntsDe, grandeSceneDe, planBandeau, quandDe, sceneDuBandeau } from './scene'
-import { aChanger, commandeSuite } from './suite'
+import { aChanger, commandeSuite, placeBouton } from './suite'
 import { ajouteTache, depuisTaskList, depuisTodos, horodate, interrompue, majTache, planFini, resumeTaches, suitPlan, texteTaches, toutFait } from './taches'
 
 type $ = EngineInterface
@@ -270,6 +270,10 @@ async function conseille($: $, texte: string) {
  * minute ; des appels rapprochés n'en font qu'un.
  */
 let sceneEcrite: string | null = null
+/** La largeur de la bande en px, retenue au dernier rendu sur desktop (null : inconnue) */
+let bandePx: number | null = null
+/** Quand tu as demandé une nouvelle conversation : un deuxième clic tout de suite après ne la relance pas */
+let suiteDemandee = 0
 let publication: Promise<void> | null = null
 let aRepublier = false
 function publieScene($: $): Promise<void> {
@@ -310,7 +314,7 @@ async function publieUneFois($: $) {
         )
     // bande vide ou masquée : une bande sans élément (pas null), pour dire qu'atelier est là et pose
     // lui-même le numéro de Clawd sur toute la largeur (null : pas d'atelier, Clawd le pose seul)
-    const s = plan && plan.lignes.length > 0 ? sceneDuBandeau(plan, quandDe(maintenant)) : { lignes: [], elements: [] }
+    const s = plan && plan.lignes.length > 0 ? sceneDuBandeau(plan, quandDe(maintenant), bandePx) : { lignes: [], elements: [] }
     const texte = JSON.stringify(s)
     if (texte === sceneEcrite) return
     await update($, scene, () => s)
@@ -874,7 +878,8 @@ export const register: Register = on => {
     // le bouton « Nouvelle conversation » clignote tant que continuer ici coûte trop (une bascule par seconde) ; sinon, rien n'est redessiné
     $.clock.every(1000, () => {
       void (async () => {
-        if (aChanger(await read($, usage), await read($, conso))) await update($, clignote, v => !v)
+        // bande masquée : rien à faire clignoter (et rien à redessiner)
+        if (!(await read($, isHidden)) && aChanger(await read($, usage), await read($, conso))) await update($, clignote, v => !v)
         else if (await read($, clignote)) await update($, clignote, () => false)
       })().catch(() => {})
     })
@@ -1128,8 +1133,20 @@ export const register: Register = on => {
     // un conseil encore en route parlait de l'autre conversation
     dernierConseil++
     await Promise.all([majTaches($, () => []), majAgents($, () => []), majConso($, () => null), update($, conseil, () => null).catch(() => {})])
+    // le contexte de l'autre conversation ne compte plus (le bouton 🆕 s'éteint)
+    await update($, usage, u => (u ? { fiveHour: u.fiveHour, sevenDay: u.sevenDay, contextPercent: null } : u)).catch(() => {})
     void publieScene($)
     return next(e)
+  })
+
+  // la conversation se compacte (/compact) : elle repart légère, il n'est plus temps d'en changer
+  on('session.compact', async ($, e, next) => {
+    const r = await next(e)
+    if (e.trigger !== 'precompute' && e.agentId === undefined && r.skip === undefined) {
+      await majConso($, c => (c ? { ...c, signale: false, ...(c.tour ? { tour: { ...c.tour, dernierPrompt: 0, relu: 0, requetes: 0 } } : {}) } : c))
+      void publieScene($)
+    }
+    return r
   })
 
   on('session.measure', async ($, e, next) => {
@@ -1219,6 +1236,10 @@ export const register: Register = on => {
     // dit aussi dans le texte alternatif : ce qui n'est pas dessiné reste annoncé
     const joueAvec = caches.size ? `Clawd joue avec : ${[...caches].join(', ')}` : ''
     let quotas: JSX.Element | null = null
+    // la largeur (px) du dessin des jauges, et celle de la bande : de quoi savoir si le bouton 🆕 tient après
+    let largeurJaugesPx = 0
+    let largeurPastillesPx = 0
+    if (e.surface === 'desktop') bandePx = Math.round(e.props.bodyColumns * CELLULE)
     if ((lj.length > 0 || pastilleC || plan.conseil) && e.surface === 'desktop') {
       const { Svg } = $.ui.resolve(e)
       const dessin = svgJauges(lj, quand, { maintenant, contexte: u ? { tokens: u.contextTokens, window: u.contextWindow } : undefined, conso: pastilleC, conseil: plan.conseil, caches })
@@ -1226,7 +1247,8 @@ export const register: Register = on => {
         .filter(Boolean)
         .join(' · ')
       // interactif : le survol d'une jauge dit sa projection, celui de la conso son détail
-      quotas = <Svg source={dessin.svg} alt={alt} width={+(dessin.largeur * ECHELLE).toFixed(1)} height={HAUTEUR_DESSIN} isInteractive />
+      largeurJaugesPx = +(dessin.largeur * ECHELLE).toFixed(1)
+      quotas = <Svg source={dessin.svg} alt={alt} width={largeurJaugesPx} height={HAUTEUR_DESSIN} isInteractive />
     } else if (lj.length > 0 || pastilleC || plan.conseil) {
       quotas = (
         <Box flexDirection="row" flexWrap="wrap" columnGap={2}>
@@ -1273,7 +1295,8 @@ export const register: Register = on => {
       const alt = [bv && !a ? pastilleBuild(bv, maintenant).titre : '', lt.length > 0 ? resumeTaches(lt) : '', la.length > 0 ? resumeAgents(la) : '', joueAvec]
         .filter(Boolean)
         .join(' · ')
-      ronds = <Svg source={dessin.svg} alt={alt} width={+(dessin.largeur * ECHELLE).toFixed(1)} height={HAUTEUR_DESSIN} isInteractive />
+      largeurPastillesPx = +(dessin.largeur * ECHELLE).toFixed(1)
+      ronds = <Svg source={dessin.svg} alt={alt} width={largeurPastillesPx} height={HAUTEUR_DESSIN} isInteractive />
     } else if (groupes.length > 0) {
       ronds = (
         <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
@@ -1302,29 +1325,51 @@ export const register: Register = on => {
     const nouvelle = (
       <Button
         key="nouvelle"
-        label="Nouvelle conversation"
-        hotkey="n"
-        plain
+        // l'app de bureau dessine un bouton natif avec ce libellé seul : tout ce qu'il dit est là
+        label={plan.nouvelle ?? '🆕'}
+        // il clignote en passant de « mis en avant » à normal (une seconde sur deux) ; discret d'habitude
+        {...(allume ? { variant: 'primary' as const } : {})}
         dimColor={!lourd}
         onPress={async () => {
-          const noms = (await $.command.list().catch(() => [])).map(c => c.name)
-          await $.command.run({ command: commandeSuite(noms) }).catch(err => {
+          // un deuxième clic juste après : la demande est déjà en route (elle attend la fin du tour en cours)
+          const maintenant = await $.clock.now()
+          if (maintenant - suiteDemandee < 60_000) {
+            $.ui.toast('Nouvelle conversation déjà demandée : elle part dès que Claude a fini son tour.', { timeoutMs: 6000 })
+            return
+          }
+          // sans la liste des commandes, on ne sait pas si /suite existe : rien ne part (surtout pas un /clear)
+          const liste = await $.command.list().catch(() => null)
+          if (!liste) {
+            $.ui.toast('Nouvelle conversation impossible pour l’instant : réessaie dans un instant.', { timeoutMs: 6000 })
+            return
+          }
+          const commande = commandeSuite(liste.map(c => c.name))
+          // sans /suite, c'est /clear : la conversation repart de zéro, on te demande d'abord
+          if (commande === 'clear' && !(await confirm($, 'Ouvrir une nouvelle conversation (/clear) ? Celle-ci reste dans l’historique.'))) return
+          suiteDemandee = maintenant
+          $.ui.toast(
+            commande === 'suite' ? 'Je prépare la note de passation (/suite), puis la nouvelle conversation…' : 'Nouvelle conversation…',
+            { timeoutMs: 6000 },
+          )
+          await $.command.run({ command: commande }).catch(err => {
+            suiteDemandee = 0
             $.ui.toast(`Nouvelle conversation impossible pour l’instant : ${String(err).slice(0, 120)}`, { timeoutMs: 8000 })
           })
         }}
-      >
-        <Text color={allume ? 'yellow' : undefined} bold={lourd} dimColor={lourd && !allume}>
-          {plan.nouvelle ?? '🆕'}
-        </Text>
-      </Button>
+      />
     )
     // quand il est temps, le bouton se pose juste après les jauges (Clawd sait où il est) ; sinon, avec ↻ et Masquer
-    const apresJauges = lourd && quotas !== null
+    // (seulement s'il tient sur la rangée des jauges : sinon il passerait à la ligne, et Clawd montrerait un endroit vide)
+    // sur desktop, là où sa place se connaît au px près : après les pastilles, sinon après les jauges, s'il y tient (même règle que la bande partagée)
+    const place =
+      lourd && plan.nouvelle !== null && e.surface === 'desktop'
+        ? placeBouton(plan.nouvelle, CELLULE, bandePx, ronds ? largeurPastillesPx : null, quotas ? largeurJaugesPx : null)
+        : null
     const commandes = (
       <Box flexDirection="row" alignItems="center">
         <Text> </Text>
-        {!apresJauges && nouvelle}
-        {!apresJauges && <Text> </Text>}
+        {!place && nouvelle}
+        {!place && <Text> </Text>}
         <Button key="refresh" label="↻" plain dimColor onPress={() => refresh($)} />
         <Button
           key="hide"
@@ -1419,13 +1464,14 @@ export const register: Register = on => {
           {quotas && (
             <Box key="ligne-quotas" flexDirection="row" flexWrap="wrap" alignItems="center">
               {quotas}
-              {apresJauges && nouvelle}
+              {place === 'jauges' && nouvelle}
               {!g && commandes}
             </Box>
           )}
           {ronds && (
             <Box flexDirection="row" alignItems="center">
               {ronds}
+              {place === 'pastilles' && nouvelle}
             </Box>
           )}
           {enCours && <Text color="cyan">⏳ {enCours}</Text>}

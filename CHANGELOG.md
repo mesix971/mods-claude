@@ -100,6 +100,14 @@
 
 ## atelier
 
+- **0.10.1** — 2026-10-22 — Bouton 🆕, vérifié sur de vraies sessions et sur
+  l'app : sur le bureau c'est un bouton natif (son libellé seul, « 🆕 Nouvelle
+  conv. ») qui clignote en passant de mis en avant à normal ; il se pose après
+  les pastilles (sinon après les jauges) seulement s'il y tient, sans passer à
+  la ligne ; une conversation neuve est estimée à 80 k par requête (relevé), et
+  l'alerte reste allumée tant que le contexte reste gros ; /clear ou /compact
+  l'éteint ; plus de raccourci « n », pas de /clear sans confirmation ni de
+  double envoi.
 - **0.10.0** — 2026-10-22 — Bouton 🆕 « Nouvelle conversation » sur la bande :
   il lance `/suite` si elle existe (une session neuve avec une note de
   passation), sinon `/clear`. Il clignote quand continuer ici coûte trop : le

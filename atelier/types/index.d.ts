@@ -77,6 +77,12 @@ export type AtelierConso = {
   session: { tokens: AtelierTokens; dollars: number; estime: boolean }
   /** Le coût de la session (/cost) au début du tour, pour en déduire celui du tour */
   coutDebut: number | null
+  /**
+   * Il est temps de changer de conversation : allumé à la fin du premier tour
+   * qui gâche trop, il le reste tant que le contexte reste gros (un petit tour
+   * ne l'éteint pas) ; éteint quand le contexte redescend (conversation neuve)
+   */
+  signale?: boolean
   /** La somme estimée du tour (grille de prix), quand /cost manque */
   estimeTour: number
 }
