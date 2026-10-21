@@ -306,7 +306,9 @@ async function publieUneFois($: $) {
           },
           maintenant,
         )
-    const s = plan && plan.lignes.length > 0 ? sceneDuBandeau(plan, quandDe(maintenant)) : null
+    // bande vide ou masquée : une bande sans élément (pas null), pour dire qu'atelier est là et pose
+    // lui-même le numéro de Clawd sur toute la largeur (null : pas d'atelier, Clawd le pose seul)
+    const s = plan && plan.lignes.length > 0 ? sceneDuBandeau(plan, quandDe(maintenant)) : { lignes: [], elements: [] }
     const texte = JSON.stringify(s)
     if (texte === sceneEcrite) return
     await update($, scene, () => s)
@@ -810,7 +812,8 @@ async function shell(
       // en tâche de fond : on le suit jusqu'à sa fin (classic.Stop)
       const fond = { id: resultat.backgroundTaskId, sortie: sortieFond(ran.text), commande: verdict.command.slice(0, 300) }
       await majBuild($, b => (ceBuild(b) ? { ...(b as AtelierBuild), fond } : b))
-    } else if (resultat?.interrupted) {
+    } else if (resultat?.interrupted || (ran.isError === true && /interrupt|aborted/i.test(ran.text ?? ''))) {
+      // (sur une erreur, le moteur ne donne que le texte, jamais l'enregistrement de l'outil : l'Échap se lit dans le texte)
       await majBuild($, b => (ceBuild(b) ? { ...(b as AtelierBuild), etat: 'fini', detail: 'interrompu', fin } : b))
     } else {
       const v = analyse(`${sortie}\n${ran.text ?? ''}`, ran.isError === true)
@@ -856,6 +859,8 @@ export const register: Register = on => {
     await $.command.register({ name: 'tel', description: 'Installe le dernier APK du projet sur le téléphone branché' })
     await $.command.register({ name: 'atelier', description: 'Affiche/masque le bandeau atelier et le rafraîchit' })
     const ran = await next(e)
+    // la bande partagée tout de suite (vide au départ) : Clawd sait qu'atelier est là et ne pose pas son numéro en double
+    void publieScene($)
     void refresh($)
     // une session neuve ou un module rechargé, sans fin de tour connue : le
     // délai du rangement part d'ici (sinon une vieille croix rouge attendrait
@@ -1146,15 +1151,30 @@ export const register: Register = on => {
     // ce que dessinent les autres mods (clawd) reste TOUJOURS au même endroit de
     // l'arbre, bande vide, masquée ou non : sinon l'app recrée leur image, et une
     // animation en cours (ses cartons) repart de son début
+    // le numéro que Clawd joue sur toute la bande (son dessin, qu'il publie) :
+    // posé par-dessus nos lignes, dans notre rangée, la seule qui couvre la bande
+    const numeroDeClawd = async (maintenant: number) => {
+      const gs = e.surface === 'desktop' ? grandeSceneDe(await read($, grandeSceneClawd), maintenant) : null
+      if (!gs) return null
+      const { Box, Svg } = $.ui.resolve(e)
+      // la bande ne se mesure qu'en cases : sa largeur en px, pour que le dessin la couvre à l'échelle 1
+      return (
+        <Box key="grande-scene" position="absolute" left={0} right={0} bottom={0}>
+          <Svg source={gs.svg} alt="Clawd joue sur la bande" width={Math.round(e.props.bodyColumns * CELLULE)} height={gs.hauteur} />
+        </Box>
+      )
+    }
     const enveloppe = async () => {
       const dessous = await next(e)
       if (dessous === null || dessous === undefined) return dessous
       const { Box } = $.ui.resolve(e)
+      // bande vide ou masquée : son numéro reste à nous (la bande partagée, vide, le lui dit)
+      const grandeScene = await numeroDeClawd(await $.clock.now())
       return (
         <Box flexDirection="row" alignItems="flex-end">
           <Box flexDirection="column" flexGrow={1} />
           {dessous}
-          {null}
+          {grandeScene}
         </Box>
       )
     }
@@ -1263,19 +1283,7 @@ export const register: Register = on => {
       )
     }
 
-    // le numéro que Clawd joue sur toute la bande (son dessin, qu'il publie) :
-    // posé par-dessus nos lignes, dans notre rangée, la seule qui couvre la bande
-    const gs = e.surface === 'desktop' ? grandeSceneDe(await read($, grandeSceneClawd), maintenant) : null
-    let grandeScene: JSX.Element | null = null
-    if (gs) {
-      const { Svg } = $.ui.resolve(e)
-      // la bande ne se mesure qu'en cases : sa largeur en px, pour que le dessin la couvre à l'échelle 1
-      grandeScene = (
-        <Box key="grande-scene" position="absolute" left={0} right={0} bottom={0}>
-          <Svg source={gs.svg} alt="Clawd joue sur la bande" width={Math.round(e.props.bodyColumns * CELLULE)} height={gs.hauteur} />
-        </Box>
-      )
-    }
+    const grandeScene = await numeroDeClawd(maintenant)
 
     // ↻ et Masquer : au bout de la ligne git, courte ; sur celle des quotas (sans git), ils la faisaient
     // passer à la ligne quand elle était longue, et la bande changeait de forme

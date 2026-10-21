@@ -100,6 +100,12 @@
 
 ## atelier
 
+- **0.9.3** — 2026-10-21 — Bande vide ou masquée : atelier publie une bande
+  partagée sans élément (et non plus rien), dès l'ouverture, et pose lui-même
+  le numéro de Clawd sur toute la largeur. Avant, depuis la 0.9.1, un numéro
+  joué bande vide ne couvrait que le coin de Clawd. Un build interrompu
+  (Échap) se lit dans le texte de l'erreur : « interrompu », et non plus un
+  échec.
 - **0.9.2** — 2026-10-21 — Un commit ne demande plus ton accord, même non
   demandé : il se défait facilement. Seul un push non demandé le demande
   encore. Les secrets restent bloqués au commit comme au push.

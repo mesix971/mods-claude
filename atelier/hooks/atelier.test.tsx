@@ -393,6 +393,39 @@ test('ce que dessine Clawd reste au même endroit de l’arbre, bande vide, plei
   await ui.unmount()
 })
 
+test('bande vide : atelier publie une bande sans élément et pose lui-même le numéro de Clawd sur toute la largeur', async ($, on) => {
+  const horloge = mock.clock(on as never, { now: Date.UTC(2026, 9, 7, 6, 0) })
+  mock.env(on as never, {})
+  on('session.cwd', () => ({ value: 'C:/vide' }))
+  on('fs.exists', () => ({ value: false }))
+  on('process.run', () => ({ value: { exitCode: 1, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
+  on('ui.toast', () => ({ value: undefined }))
+  on('session.usage', () => ({ value: null }) as never)
+  on('ui.render', ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    return <Text>clawd</Text>
+  })
+  let numero: { svg: string; hauteur: number; fin: number } | null = null
+  on('state.get', ($, e, next) => (e.plugin === 'clawd' && e.key === 'grandeScene' ? { value: { value: numero, version: 1 } } : next(e)))
+  let publiee: unknown = 'rien'
+  on('state.set', ($, e, next) => {
+    if ((e as { key?: string }).key === 'scene') publiee = (e as { value?: unknown }).value
+    return next(e)
+  })
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  on('command.register', ($, e) => ({ value: { command: e.name } }) as never)
+  await $.session.start({ cwd: 'C:/vide', surface: 'desktop', isInteractive: true })
+  await horloge.settle()
+  // pas null : atelier est là, bande vide
+  expect(publiee).toEqual({ lignes: [], elements: [] })
+  numero = { svg: '<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="64"/>', hauteur: 64, fin: horloge.now() + 10_000 }
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  const grande = (await ui.find({ key: 'grande-scene' })) as { props?: Record<string, unknown>; children?: { props?: Record<string, unknown> }[] } | undefined
+  expect(grande?.props).toMatchObject({ position: 'absolute', left: 0, right: 0, bottom: 0 })
+  expect(grande?.children?.[0]?.props).toMatchObject({ source: numero.svg, height: 64, width: 948 })
+  await ui.unmount()
+})
+
 test('version calculée par le script : lue dans version.properties, pas dans un commentaire', async ($, on) => {
   const fichiers: Record<string, string> = {
     [`${CWD}/app/build.gradle.kts`]: `
