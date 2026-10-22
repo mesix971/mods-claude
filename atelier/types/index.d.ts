@@ -127,7 +127,8 @@ export type AtelierElement = {
   /**
    * Ce qu'il montre : `attente` (le rond en pointillé), `encours` (l'orbe),
    * `faite` (la coche), `echec` (la croix) ; pour une jauge son niveau (`ok`,
-   * `attention`, `critique`) ; pour la conso `ok` ou `lourde`
+   * `attention`, `critique`) ; pour la conso `ok` ou `lourde` ; pour le bouton
+   * 🆕 `a-montrer` (il n'est publié que quand il est temps de le montrer)
    */
   etat: string
   /** Sa place dans le dessin desktop : en px CSS depuis le bord gauche du bandeau */
@@ -177,8 +178,6 @@ declare module 'claude-code' {
       minute: number
       busy: string | null
       isHidden: boolean
-      /** Le bouton « Nouvelle conversation » clignote : il bascule chaque seconde tant que le contexte est lourd */
-      clignote: boolean
     }
     /** Le contrat de Clawd (l'autre mod du dépôt), qu'atelier lit seulement */
     clawd: {

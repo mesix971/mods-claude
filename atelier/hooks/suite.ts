@@ -1,13 +1,15 @@
 // Le bouton « Nouvelle conversation » de la bande : il ouvre une conversation
-// neuve (la commande `/suite` si tu en as une, sinon `/clear`). Il ne clignote
-// pas : il s'écrit toujours « New conv », et se signale quand continuer ici coûte trop : à chaque requête, Claude relit toute la
-// conversation ; une conversation neuve, repartie d'une note de passation, en
-// relirait bien moins. Ce que le dernier tour aurait économisé, c'est le gâchis.
+// neuve (la commande `/suite` si tu en as une, sinon `/clear`). Il ne change
+// jamais, ni de place ni d'allure : quand continuer ici coûte trop, la bande
+// partagée dit où il est, et c'est Clawd qui vient le montrer. À chaque
+// requête, Claude relit toute la conversation ; une conversation neuve,
+// repartie d'une note de passation, en relirait bien moins. Ce que le dernier
+// tour aurait économisé, c'est le gâchis.
 
 import type { AtelierConso, AtelierUsage } from '../types'
 import { tokensCourts } from './prix'
 
-/** Le libellé du bouton, toujours le même (il ne clignote pas) */
+/** Le libellé du bouton, toujours le même */
 export const LIBELLE_NOUVELLE = '🆕 New conv'
 
 /** Au-delà de ce contexte (en tokens), une conversation devient lourde : il est temps d'en ouvrir une neuve */
@@ -73,17 +75,7 @@ export function aChanger(u: AtelierUsage | null, c: AtelierConso | null): boolea
   return t ? tourTropCher(t) : contexteLourd(u)
 }
 
-/** Ce que le bouton dit quand il clignote : ce que chaque requête relit (« 384 k/req », stable d'un tour à l'autre), sinon la taille du contexte */
-export function texteGachis(u: AtelierUsage | null, c: AtelierConso | null): string {
-  const p = c?.tour?.dernierPrompt ?? 0
-  return p > 0 ? `${tokensCourts(p)}/req` : contexteCourt(u)
-}
-
-/**
- * Le libellé du bouton quand il est temps de changer, sinon null. Court : il
- * doit tenir après les jauges (l'app de bureau dessine un bouton natif avec ce
- * libellé seul ; ce que relit chaque requête est déjà dans la pastille de la conso)
- */
+/** Le libellé du bouton quand il est temps de changer (Clawd vient le montrer), sinon null */
 export function texteNouvelle(u: AtelierUsage | null, c: AtelierConso | null): string | null {
   return aChanger(u, c) ? LIBELLE_NOUVELLE : null
 }
@@ -97,29 +89,15 @@ export function cases(texte: string): number {
 export const COIN_CLAWD = 116
 
 /**
- * Le bouton tient-il juste après les jauges, sur la même rangée, sans passer
- * à la ligne ni mordre sur le coin de Clawd ? (largeurs en px ; la bande
- * inconnue : on suppose que oui)
+ * Le bouton, posé à `xPx` sur sa rangée, y tient-il sans passer à la ligne ni
+ * mordre sur le coin de Clawd ? (en px ; la bande inconnue : on suppose que oui)
  */
-export function tientApresJauges(jaugesPx: number, texte: string, cellule: number, bandePx: number | null): boolean {
+export function tient(xPx: number, texte: string, cellule: number, bandePx: number | null): boolean {
   if (!bandePx) return true
-  return jaugesPx + largeurBouton(texte, cellule) <= bandePx - COIN_CLAWD
+  return xPx + largeurBouton(texte, cellule) <= bandePx - COIN_CLAWD
 }
 
 /** La largeur (px) d'un bouton natif de l'app : son libellé, plus ses bords (environ trois cases) */
 export function largeurBouton(texte: string, cellule: number): number {
   return +((cases(texte) + 3) * cellule).toFixed(1)
-}
-
-/**
- * Où poser le bouton quand il est temps (là où sa place se connaît au px près,
- * pour que Clawd puisse le montrer) : après les pastilles de la ligne du bas
- * (presque vide, à la hauteur de Clawd), sinon après les jauges, s'il y tient ;
- * null : nulle part sans passer à la ligne, il reste avec ↻ et Masquer.
- * Largeurs en px ; null : la rangée n'existe pas.
- */
-export function placeBouton(texte: string, cellule: number, bandePx: number | null, pastillesPx: number | null, jaugesPx: number | null): 'pastilles' | 'jauges' | null {
-  if (pastillesPx !== null && tientApresJauges(pastillesPx, texte, cellule, bandePx)) return 'pastilles'
-  if (jaugesPx !== null && tientApresJauges(jaugesPx, texte, cellule, bandePx)) return 'jauges'
-  return null
 }

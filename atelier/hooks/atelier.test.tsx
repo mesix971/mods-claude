@@ -11,8 +11,8 @@ import { decrit, estDiscret } from './outils'
 import { svgPastilles } from './pastilles'
 import { coutReponse, euros, tokensCourts } from './prix'
 import { aRanger } from './rangement'
-import { aChanger, commandeSuite, contexteCourt, contexteLourd, gachisTour, largeurBouton, texteGachis, tientApresJauges } from './suite'
-import { ECHELLE, HAUTEUR_DESSIN, empruntsDe, grandeSceneDe, planBandeau, quandDe, sceneDuBandeau } from './scene'
+import { aChanger, commandeSuite, contexteCourt, contexteLourd, gachisTour, largeurBouton, tient } from './suite'
+import { ECHELLE, HAUTEUR_DESSIN, casesGit, empruntsDe, grandeSceneDe, planBandeau, quandDe, sceneDuBandeau, textesGit } from './scene'
 import { MAX_TACHES, ajouteTache, depuisTodos, horodate, interrompue, majTache, pastillesTaches, planFini, suitPlan, svgTaches, toutFait } from './taches'
 import { dureePause } from './temps'
 
@@ -1459,7 +1459,7 @@ test('nouvelle conversation : lourd au-delà de 250 k tokens (ou 75 % d’une pe
   expect(commandeSuite(['compact', 'clear'])).toBe('clear')
 })
 
-test('bouton « Nouvelle conversation » : toujours écrit « New conv », sans clignoter, posé après les jauges quand le contexte est lourd ; un clic lance /suite', async ($, on) => {
+test('bouton « Nouvelle conversation » : toujours le même, à la même place, discret ; quand il est temps, seule la bande partagée le dit (pour Clawd) ; un clic lance /suite', async ($, on) => {
   const horloge = mock.clock(on as never, { now: Date.UTC(2026, 9, 7, 6, 0) })
   mock.env(on as never, {})
   on('session.cwd', () => ({ value: 'C:/vide' }))
@@ -1490,30 +1490,36 @@ test('bouton « Nouvelle conversation » : toujours écrit « New conv », sans 
   await $.session.measure({ context: { tokens, window: 1_000_000, percent: 10 }, rateLimits: [], changed: ['context'] } as never)
   const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
   const bouton = async () => JSON.stringify(await ui.find({ key: 'nouvelle' }))
-  // 100 k : discret, mais déjà écrit
-  expect(await bouton()).toContain('🆕 New conv')
-  expect(await bouton()).not.toContain('primary')
-  // 400 k : il ne clignote jamais, même après plusieurs secondes
+  // sans git ici : en tête de ↻ et Masquer, au bout de la rangée des jauges
+  const rangee = async () => {
+    const r = (await ui.find({ key: 'ligne-quotas' })) as { children?: { type?: string }[] } | undefined
+    // sans les poignées des clics, renumérotées à chaque dessin
+    return { premier: r?.children?.[0]?.type, second: JSON.stringify(r?.children?.slice(1)).replace(/"handle":\d+/g, '') }
+  }
+  // 100 k : pas encore temps ; rien de publié pour Clawd
+  await horloge.settle()
+  const avant = { bouton: await bouton(), rangee: await rangee() }
+  expect(avant.bouton).toContain('🆕 New conv')
+  expect(avant.bouton).toContain('"dimColor":true')
+  expect(avant.rangee.premier).toBe('Svg')
+  expect(avant.rangee.second).toContain('🆕 New conv')
+  expect(publiee?.elements?.find(x => x.id === 'nouvelle')).toBeUndefined()
+  // 400 k : il est temps ; le bouton ne change en rien (ni place, ni allure, même au fil des secondes)…
   tokens = 400_000
   await $.session.measure({ context: { tokens, window: 1_000_000, percent: 40 }, rateLimits: [], changed: ['context'] } as never)
   await horloge.advance(1000)
   const a = await bouton()
   await horloge.advance(1000)
-  const b = await bouton()
-  expect(a).toContain('🆕 New conv')
-  expect([a, b].filter(x => x.includes('"variant":"primary"'))).toHaveLength(0)
-  // il est posé juste après les jauges, dans leur rangée…
-  const rangee = (await ui.find({ key: 'ligne-quotas' })) as { children?: { type?: string; props?: { label?: string } }[] } | undefined
-  const [premier, second] = rangee?.children ?? []
-  expect(premier?.type).toBe('Svg')
-  expect(second?.type).toBe('Button')
-  expect(second?.props?.label).toBe('🆕 New conv')
-  // … et la bande partagée dit où (pour que Clawd puisse le montrer) : juste au bout du dessin des jauges
+  expect(a).toBe(avant.bouton)
+  expect(await bouton()).toBe(avant.bouton)
+  expect(await rangee()).toEqual(avant.rangee)
+  // … seule la bande partagée dit où il est, pour que Clawd vienne le montrer : au bout des jauges, derrière une case vide
   await horloge.settle()
   const jauges = (await ui.find({ type: 'Svg' }))?.props as { width: number }
   const el = publiee?.elements?.find(x => x.id === 'nouvelle')
   expect(el?.genre).toBe('bouton')
-  expect(Math.abs((el?.x ?? -99) - jauges.width)).toBeLessThan(1)
+  expect(el?.etat).toBe('a-montrer')
+  expect(Math.abs((el?.x ?? -99) - (jauges.width + 7.9))).toBeLessThan(1)
   expect(el?.largeur).toBeGreaterThan(100)
   // un clic : ta /suite
   await ui.press({ key: 'nouvelle' })
@@ -1536,8 +1542,6 @@ test('nouvelle conversation : on change quand continuer ici gâche trop (ce que 
   expect(lourd?.tour?.relu).toBe(5_250_000)
   expect(gachisTour(lourd)).toBe(4_050_000)
   expect(aChanger(null, lourd)).toBe(true)
-  // ce qu'il dit : ce que chaque requête relit, stable d'un tour à l'autre
-  expect(texteGachis(null, lourd)).toBe('350 k/req')
   // 3 requêtes sur 350 k : 810 k de trop, ça va encore ; 10 sur 250 k (sous le plancher de 300 k) aussi
   expect(aChanger(null, tour(3, 350_000))).toBe(false)
   expect(aChanger(null, tour(10, 250_000))).toBe(false)
@@ -1567,33 +1571,41 @@ test('nouvelle conversation : allumé par un tour trop cher, il reste allumé ta
   expect(aChanger(null, finTour(c, null))).toBe(false)
 })
 
-test('nouvelle conversation : le bouton ne se pose après les jauges que s’il y tient (sinon il passerait à la ligne)', () => {
-  // une bande de 95 colonnes (751 px), le coin de Clawd (116 px) : 635 px pour les jauges et le bouton
+test('nouvelle conversation : le bouton n’est publié pour Clawd que s’il tient sur sa rangée (sinon il passerait à la ligne)', () => {
+  // une bande de 95 colonnes (751 px), le coin de Clawd (116 px) : 635 px pour la rangée
   const bande = Math.round(95 * 7.9)
-  const bouton = largeurBouton('🆕 Nouvelle conv.', 7.9)
-  expect(bouton).toBeGreaterThan(150)
-  expect(tientApresJauges(400, '🆕 Nouvelle conv.', 7.9, bande)).toBe(true)
-  // ta bande de la capture : 5 h, 7 j, contexte, conso et conseil (~ 680 px) : il ne tient plus, il reste avec ↻ et Masquer
-  expect(tientApresJauges(680, '🆕 Nouvelle conv.', 7.9, bande)).toBe(false)
+  const bouton = largeurBouton('🆕 New conv', 7.9)
+  expect(bouton).toBeGreaterThan(100)
+  expect(tient(400, '🆕 New conv', 7.9, bande)).toBe(true)
+  expect(tient(600, '🆕 New conv', 7.9, bande)).toBe(false)
   // largeur de la bande inconnue : on suppose que oui
-  expect(tientApresJauges(680, '🆕 Nouvelle conv.', 7.9, null)).toBe(true)
+  expect(tient(600, '🆕 New conv', 7.9, null)).toBe(true)
 })
 
-test('nouvelle conversation : sur la bande partagée, le bouton est après les pastilles (sinon après les jauges, s’il tient ; sinon pas publié)', () => {
+test('nouvelle conversation : sur la bande partagée, le bouton est là où il est toujours (au bout de la ligne git, sinon des jauges), seulement quand il est temps', () => {
   const M = 60_000
   const lourd = { fiveHour: null, sevenDay: null, contextPercent: 30, contextTokens: 300_000 }
-  const etat = (taches: { id: string; nom: string; etat: 'faite' | 'encours' | 'attente'; debut?: number; fin?: number }[]) =>
-    planBandeau({ android: null, git: null, usage: lourd, taches, conso: null, build: null, agents: [], busy: null }, 2 * M)
-  // une pastille en bas : le bouton juste après elle, sur la ligne du bas (la hauteur de Clawd)
-  const avec = etat([{ id: 'plan-1', nom: 'Lire', etat: 'attente' }])
-  const s = sceneDuBandeau(avec, quandDe(2 * M), 751)
+  const leger = { fiveHour: null, sevenDay: null, contextPercent: 5, contextTokens: 50_000 }
+  const git = { branch: 'main', changed: 3, ahead: 1, hasUpstream: true, hasRemote: true, warnings: [] }
+  const etat = (g: typeof git | null, usage = lourd) =>
+    planBandeau({ android: null, git: g, usage, taches: [{ id: 'plan-1', nom: 'Lire', etat: 'attente' }], conso: null, build: null, agents: [], busy: null }, 2 * M)
+  // les textes de la ligne git, tels que le bandeau les écrit : 🌿 compte deux cases
+  expect(textesGit(git)).toEqual({ branche: '🌿 main', modifs: '  · 3 modifs', distant: '  · 1 commit non poussé ', alertes: [] })
+  expect(casesGit(git)).toBe(7 + 12 + 24)
+  // avec git : au bout de ses textes, derrière une case vide, sur sa ligne (la troisième depuis le bas)
+  const s = sceneDuBandeau(etat(git), quandDe(2 * M), 751)
+  expect(s.lignes).toEqual(['git', 'quotas', 'pastilles'])
   const b = s.elements.find(e => e.id === 'nouvelle')
-  expect(b?.ligne).toBe(0)
-  expect(Math.abs((b?.x ?? -99) - svgPastilles(avec.groupes, false).largeur * ECHELLE)).toBeLessThan(0.1)
-  // pas de pastilles : après les jauges
-  const sans = sceneDuBandeau(etat([]), quandDe(2 * M), 751)
-  expect(sans.elements.find(e => e.id === 'nouvelle')?.ligne).toBe(0)
-  expect(sans.lignes).toEqual(['quotas'])
-  // une bande trop étroite : nulle part (il reste avec ↻ et Masquer), donc pas publié
-  expect(sceneDuBandeau(etat([]), quandDe(2 * M), 200).elements.find(e => e.id === 'nouvelle')).toBeUndefined()
+  expect(b?.ligne).toBe(2)
+  expect(Math.abs((b?.x ?? -99) - 44 * 7.9)).toBeLessThan(0.1)
+  // sans git : au bout du dessin des jauges, derrière une case vide
+  const sansGit = etat(null)
+  const q = sceneDuBandeau(sansGit, quandDe(2 * M), 751).elements.find(e => e.id === 'nouvelle')
+  expect(q?.ligne).toBe(1)
+  const jaugesPx = svgJauges(sansGit.jauges, quandDe(2 * M), { conso: sansGit.conso, conseil: sansGit.conseil }).largeur * ECHELLE
+  expect(Math.abs((q?.x ?? -99) - (jaugesPx + 7.9))).toBeLessThan(0.2)
+  // pas encore temps : rien de publié (le bouton est là quand même, Clawd ne vient pas)
+  expect(sceneDuBandeau(etat(git, leger), quandDe(2 * M), 751).elements.find(e => e.id === 'nouvelle')).toBeUndefined()
+  // une bande trop étroite : il passerait à la ligne, pas publié
+  expect(sceneDuBandeau(etat(git), quandDe(2 * M), 300).elements.find(e => e.id === 'nouvelle')).toBeUndefined()
 })

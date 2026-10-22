@@ -16,7 +16,7 @@ import { estLourde, texteConso, titreConso } from './conso'
 import { idJauge, jauges, svgJauges } from './jauges'
 import type { Jauge } from './jauges'
 import { svgPastilles } from './pastilles'
-import { largeurBouton, placeBouton, texteNouvelle } from './suite'
+import { cases, largeurBouton, texteNouvelle, tient } from './suite'
 import type { Pastille } from './pastilles'
 import { pastillesTaches } from './taches'
 import { heure } from './temps'
@@ -47,8 +47,32 @@ export type Plan = {
   build: AtelierBuild | null
   /** Les pastilles de la ligne du bas : le build (sans projet Android : sinon il est sur la ligne 📱), les tâches, les sous-agents */
   groupes: Pastille[][]
-  /** Le bouton « Nouvelle conversation » quand il est temps d'en changer (posé juste après les jauges), sinon null */
+  /** Le bouton « Nouvelle conversation » quand il est temps d'en changer (Clawd vient le montrer), sinon null */
   nouvelle: string | null
+  /** La ligne git (le bouton 🆕 est au bout : sa place en dépend) */
+  git: AtelierGit | null
+}
+
+/** Les textes de la ligne git, dans l'ordre, tels que le bandeau les écrit (distant : null sans remote) */
+export function textesGit(g: AtelierGit): { branche: string; modifs: string; distant: string | null; alertes: string[] } {
+  return {
+    branche: `🌿 ${g.branch}`,
+    modifs: `  · ${g.changed} modif${g.changed > 1 ? 's' : ''}`,
+    distant: !g.hasRemote
+      ? null
+      : !g.hasUpstream
+        ? '  · branche jamais poussée '
+        : g.ahead > 0
+          ? `  · ${g.ahead} commit${g.ahead > 1 ? 's' : ''} non poussé${g.ahead > 1 ? 's' : ''} `
+          : '  · à jour avec GitHub ',
+    alertes: g.warnings.map(w => `  · ⚠ ${w}`),
+  }
+}
+
+/** Ce qu'occupent les textes de la ligne git, en cases */
+export function casesGit(g: AtelierGit): number {
+  const t = textesGit(g)
+  return [t.branche, t.modifs, t.distant ?? '', ...t.alertes].reduce((n, s) => n + cases(s), 0)
 }
 
 const JOURS = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.']
@@ -78,7 +102,7 @@ export function planBandeau(x: EtatBandeau, maintenant: number): Plan {
     ...(groupes.length > 0 ? (['pastilles'] as const) : []),
     ...(x.busy ? (['occupe'] as const) : []),
   ]
-  return { lignes, jauges: lj, conso, conseil: x.conseil ?? null, build: bv, groupes, nouvelle: texteNouvelle(x.usage, x.conso) }
+  return { lignes, jauges: lj, conso, conseil: x.conseil ?? null, build: bv, groupes, nouvelle: texteNouvelle(x.usage, x.conso), git: x.git }
 }
 
 const genreDe = (id: string): AtelierElement['genre'] => (id.startsWith('agent-') ? 'agent' : id === 'build' ? 'build' : 'tache')
@@ -100,18 +124,20 @@ const aLEchelle = (v: number) => +(v * ECHELLE).toFixed(1)
 /** Un dessin d'élément sans son infobulle : Clawd le promène dans une image, où elle ne servirait pas */
 const sansTitre = (svg: string) => svg.replace(/<title>[\s\S]*?<\/title>/g, '')
 
-/** `bandePx` : la largeur de la bande en px, quand on la connaît (pour savoir si le bouton 🆕 tient après les jauges) */
+/** `bandePx` : la largeur de la bande en px, quand on la connaît (pour savoir si le bouton 🆕 tient sur sa rangée) */
 export function sceneDuBandeau(p: Plan, quand: (ms: number) => string, bandePx: number | null = null): AtelierScene {
   const ligne = (nom: AtelierScene['lignes'][number]) => p.lignes.length - 1 - p.lignes.indexOf(nom)
   const elements: AtelierElement[] = []
   const quotas = p.lignes.includes('quotas') ? svgJauges(p.jauges, quand, { conso: p.conso, conseil: p.conseil }) : null
-  // le bouton 🆕 quand il est temps : là où le rendu le pose (même règle), sa place au px près pour son début,
-  // à quelques px près pour sa largeur (un bouton natif se mesure en cases de texte)
-  const pastillesPx = p.lignes.includes('pastilles') ? aLEchelle(svgPastilles(p.groupes, false).largeur) : null
-  const jaugesPx = quotas ? aLEchelle(quotas.largeur) : null
-  const place = p.nouvelle ? placeBouton(p.nouvelle, CELLULE, bandePx, pastillesPx, jaugesPx) : null
-  if (p.nouvelle && place) {
-    elements.push({ id: 'nouvelle', genre: 'bouton', etat: 'a-montrer', x: (place === 'pastilles' ? pastillesPx : jaugesPx) ?? 0, largeur: largeurBouton(p.nouvelle, CELLULE), hauteur: HAUTEUR_DESSIN, ligne: ligne(place === 'pastilles' ? 'pastilles' : 'quotas') })
+  // le bouton 🆕 quand il est temps (Clawd vient le montrer) : là où il est toujours, en tête de ↻ et Masquer, derrière
+  // une case vide ; au bout de la ligne git (ses textes en cases), sinon au bout du dessin des jauges. Publié
+  // seulement s'il tient sur sa rangée : sinon il passe à la ligne, et Clawd montrerait un endroit vide
+  if (p.nouvelle) {
+    const x = p.git && p.lignes.includes('git') ? casesGit(p.git) * CELLULE : quotas ? aLEchelle(quotas.largeur) : null
+    if (x !== null && tient(x + CELLULE, p.nouvelle, CELLULE, bandePx)) {
+      const rangee = p.git && p.lignes.includes('git') ? 'git' : 'quotas'
+      elements.push({ id: 'nouvelle', genre: 'bouton', etat: 'a-montrer', x: +(x + CELLULE).toFixed(1), largeur: largeurBouton(p.nouvelle, CELLULE), hauteur: HAUTEUR_DESSIN, ligne: ligne(rangee) })
+    }
   }
   if (quotas) {
     for (const pl of quotas.places) {

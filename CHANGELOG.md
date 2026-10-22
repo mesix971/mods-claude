@@ -100,6 +100,12 @@
 
 ## atelier
 
+- **0.10.4** — 2026-10-22 — Le bouton 🆕 « New conv » ne bouge plus jamais :
+  toujours au bout de la ligne git (sinon des jauges), en tête de ↻ et Masquer,
+  toujours discret. Quand il est temps de changer, seule la bande partagée publie
+  sa place, calculée sur les textes de la ligne, pour qu'un mod comme Clawd
+  vienne le montrer. « Commit
+  + push » passe après lui, pour ne plus le décaler à chaque fin de tour.
 - **0.10.3** — 2026-10-22 — Le bouton 🆕 s'écrit toujours « New conv » et ne
   clignote plus. Quand il est temps de changer, il se pose toujours après les
   jauges et la bande partagée publie sa place (état `a-montrer`) : l'idée est

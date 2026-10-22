@@ -25,8 +25,8 @@ import { COULEURS, jauges, resumeJauges, svgJauges, texteJauges } from './jauges
 import { decrit, estDiscret } from './outils'
 import { svgPastilles } from './pastilles'
 import { aRanger } from './rangement'
-import { CELLULE, ECHELLE, HAUTEUR_DESSIN, empruntsDe, grandeSceneDe, planBandeau, quandDe, sceneDuBandeau } from './scene'
-import { LIBELLE_NOUVELLE, commandeSuite, placeBouton } from './suite'
+import { CELLULE, ECHELLE, HAUTEUR_DESSIN, empruntsDe, grandeSceneDe, planBandeau, quandDe, sceneDuBandeau, textesGit } from './scene'
+import { LIBELLE_NOUVELLE, commandeSuite } from './suite'
 import { ajouteTache, depuisTaskList, depuisTodos, horodate, interrompue, majTache, planFini, resumeTaches, suitPlan, texteTaches, toutFait } from './taches'
 
 type $ = EngineInterface
@@ -1198,6 +1198,7 @@ export const register: Register = on => {
     if (await read($, isHidden)) return enveloppe()
     const a = await read($, android)
     const g = await read($, git)
+    const tg = g ? textesGit(g) : null
     const u = await read($, usage)
     await read($, minute) // redessin chaque minute
     const enCours = await read($, busy)
@@ -1227,7 +1228,7 @@ export const register: Register = on => {
     // dit aussi dans le texte alternatif : ce qui n'est pas dessiné reste annoncé
     const joueAvec = caches.size ? `Clawd joue avec : ${[...caches].join(', ')}` : ''
     let quotas: JSX.Element | null = null
-    // la largeur (px) du dessin des jauges, et celle de la bande : de quoi savoir si le bouton 🆕 tient après
+    // la largeur (px) des dessins, et celle de la bande (la bande partagée dit si le bouton 🆕 y tient sans passer à la ligne)
     let largeurJaugesPx = 0
     let largeurPastillesPx = 0
     if (e.surface === 'desktop') bandePx = Math.round(e.props.bodyColumns * CELLULE)
@@ -1310,14 +1311,14 @@ export const register: Register = on => {
 
     // ↻ et Masquer : au bout de la ligne git, courte ; sur celle des quotas (sans git), ils la faisaient
     // passer à la ligne quand elle était longue, et la bande changeait de forme
-    // une conversation neuve : toujours écrit « New conv », sans clignoter ; discret tant qu'il n'est pas temps d'en changer
-    const lourd = plan.nouvelle !== null
+    // une conversation neuve : toujours le même, à la même place, discret ; quand il est temps d'en changer,
+    // c'est Clawd qui vient le montrer (la bande partagée dit où il est), le bouton lui-même ne change pas
     const nouvelle = (
       <Button
         key="nouvelle"
         // l'app de bureau dessine un bouton natif avec ce libellé seul : tout ce qu'il dit est là
         label={LIBELLE_NOUVELLE}
-        dimColor={!lourd}
+        dimColor
         onPress={async () => {
           // un deuxième clic juste après : la demande est déjà en route (elle attend la fin du tour en cours)
           const maintenant = await $.clock.now()
@@ -1346,33 +1347,47 @@ export const register: Register = on => {
         }}
       />
     )
-    // quand il est temps, le bouton se pose juste après les jauges (Clawd sait où il est) ; sinon, avec ↻ et Masquer
-    // (seulement s'il tient sur la rangée des jauges : sinon il passerait à la ligne, et Clawd montrerait un endroit vide)
-    // sur desktop, là où sa place se connaît au px près : après les pastilles, sinon après les jauges, s'il y tient (même règle que la bande partagée)
-    const place =
-      lourd && plan.nouvelle !== null && e.surface === 'desktop'
-        ? placeBouton(plan.nouvelle, CELLULE, bandePx, ronds ? largeurPastillesPx : null, quotas ? largeurJaugesPx : null)
-        : null
-    const commandes = (
-      <Box flexDirection="row" alignItems="center">
-        <Text> </Text>
-        {!place && nouvelle}
-        {!place && <Text> </Text>}
-        <Button key="refresh" label="↻" plain dimColor onPress={() => refresh($)} />
-        <Button
-          key="hide"
-          label="Masquer"
-          role="dismiss"
-          dimColor
-          onPress={async () => {
-            await update($, isHidden, () => true)
-            void publieScene($)
-            // sans ça, rien ne dit comment le faire revenir
-            $.ui.toast('Bandeau atelier masqué : tape /atelier pour le ré-afficher', { timeoutMs: 8000 })
-          }}
-        />
-      </Box>
+    // Commit + push : sur la ligne git, quand il y a de quoi (pas pendant un tour)
+    const commit = g && (g.changed > 0 || g.ahead > 0) && !e.props.isWorking && (
+      <Button
+        key="commit"
+        label={g.changed > 0 ? 'Commit + push' : 'Push'}
+        hotkey="c"
+        dimColor
+        onPress={() =>
+          $.prompt.submit({
+            text:
+              g.changed > 0
+                ? 'Commit (message conventionnel en français) et pousse les changements en cours, puis vérifie que le push est bien passé.'
+                : 'Pousse les commits en attente et vérifie que le push est bien passé.',
+            asUser: true,
+          })
+        }
+      />
     )
+    // 🆕 en tête : ce qui le précède ne dépend que des textes de la ligne (sceneDuBandeau calcule sa place de la même façon) ;
+    // Commit + push après lui, sinon il le décalerait à chaque fin de tour, sous les yeux de Clawd qui le montre
+    // chacun posé à part sur la rangée (pas dans une boîte) : quand elle est pleine, ce qui suit 🆕 passe à la ligne,
+    // pas 🆕 avec (il resterait sinon là où Clawd ne le montre pas)
+    const commandes = [
+      <Text key="avant-nouvelle"> </Text>,
+      nouvelle,
+      <Text key="apres-nouvelle"> </Text>,
+      commit,
+      <Button key="refresh" label="↻" plain dimColor onPress={() => refresh($)} />,
+      <Button
+        key="hide"
+        label="Masquer"
+        role="dismiss"
+        dimColor
+        onPress={async () => {
+          await update($, isHidden, () => true)
+          void publieScene($)
+          // sans ça, rien ne dit comment le faire revenir
+          $.ui.toast('Bandeau atelier masqué : tape /atelier pour le ré-afficher', { timeoutMs: 8000 })
+        }}
+      />,
+    ]
 
     return (
       <Box flexDirection="row" alignItems="flex-end">
@@ -1413,53 +1428,31 @@ export const register: Register = on => {
               )}
             </Box>
           )}
-          {g && (
+          {g && tg && (
             <Box key="ligne-git" flexDirection="row" flexWrap="wrap">
-              <Text>🌿 {g.branch}</Text>
-              <Text dimColor={g.changed === 0}>{`  · ${g.changed} modif${g.changed > 1 ? 's' : ''}`}</Text>
-              {g.hasRemote && (
+              {/* les textes de textesGit, tels quels : la place du bouton 🆕 publiée pour Clawd en dépend */}
+              <Text>{tg.branche}</Text>
+              <Text dimColor={g.changed === 0}>{tg.modifs}</Text>
+              {tg.distant !== null && (
                 <Text color={g.ahead > 0 || !g.hasUpstream ? 'yellow' : undefined} dimColor={g.ahead === 0 && g.hasUpstream}>
-                  {!g.hasUpstream
-                    ? '  · branche jamais poussée '
-                    : g.ahead > 0
-                      ? `  · ${g.ahead} commit${g.ahead > 1 ? 's' : ''} non poussé${g.ahead > 1 ? 's' : ''} `
-                      : '  · à jour avec GitHub '}
+                  {tg.distant}
                 </Text>
               )}
-              {g.warnings.map(w => (
-                <Text color="yellow">{`  · ⚠ ${w}`}</Text>
+              {tg.alertes.map(w => (
+                <Text color="yellow">{w}</Text>
               ))}
-              {(g.changed > 0 || g.ahead > 0) && !e.props.isWorking && (
-                <Button
-                  key="commit"
-                  label={g.changed > 0 ? 'Commit + push' : 'Push'}
-                  hotkey="c"
-                  dimColor
-                  onPress={() =>
-                    $.prompt.submit({
-                      text:
-                        g.changed > 0
-                          ? 'Commit (message conventionnel en français) et pousse les changements en cours, puis vérifie que le push est bien passé.'
-                          : 'Pousse les commits en attente et vérifie que le push est bien passé.',
-                      asUser: true,
-                    })
-                  }
-                />
-              )}
               {commandes}
             </Box>
           )}
           {quotas && (
             <Box key="ligne-quotas" flexDirection="row" flexWrap="wrap" alignItems="center">
               {quotas}
-              {place === 'jauges' && nouvelle}
               {!g && commandes}
             </Box>
           )}
           {ronds && (
             <Box flexDirection="row" alignItems="center">
               {ronds}
-              {place === 'pastilles' && nouvelle}
             </Box>
           )}
           {enCours && <Text color="cyan">⏳ {enCours}</Text>}
