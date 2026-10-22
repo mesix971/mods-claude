@@ -164,10 +164,9 @@ suivent ton thème clair ou sombre. Pas un mot : tout passe par ses gestes.
   donne la version. Caché avec son bouton « Masquer », le bandeau revient
   aussi avec `/atelier`.
 - 🆕 sur la bande ouvre une nouvelle conversation (ta commande `/suite` si tu
-  en as une, sinon `/clear`). Discret d'habitude, il clignote quand continuer
-  ici coûte trop : chaque requête relit toute la conversation, et le dernier
-  tour a relu au moins 4 M tokens de plus qu'une conversation neuve (sur un contexte d'au moins 300 k). Il dit
-  alors ce gâchis par tour (« −2,1 M/tour »).
+  en as une, sinon `/clear`). Toujours écrit « New conv », sans clignoter ; quand continuer
+  ici coûte trop, il se pose après les jauges : chaque requête relit toute la conversation, et le dernier
+  tour a relu au moins 4 M tokens de plus qu'une conversation neuve (sur un contexte d'au moins 300 k).
 
 ## Développer
 

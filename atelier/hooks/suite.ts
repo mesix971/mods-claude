@@ -1,11 +1,14 @@
 // Le bouton « Nouvelle conversation » de la bande : il ouvre une conversation
-// neuve (la commande `/suite` si tu en as une, sinon `/clear`), et clignote
-// quand continuer ici coûte trop : à chaque requête, Claude relit toute la
+// neuve (la commande `/suite` si tu en as une, sinon `/clear`). Il ne clignote
+// pas : il s'écrit toujours « New conv », et se signale quand continuer ici coûte trop : à chaque requête, Claude relit toute la
 // conversation ; une conversation neuve, repartie d'une note de passation, en
 // relirait bien moins. Ce que le dernier tour aurait économisé, c'est le gâchis.
 
 import type { AtelierConso, AtelierUsage } from '../types'
 import { tokensCourts } from './prix'
+
+/** Le libellé du bouton, toujours le même (il ne clignote pas) */
+export const LIBELLE_NOUVELLE = '🆕 New conv'
 
 /** Au-delà de ce contexte (en tokens), une conversation devient lourde : il est temps d'en ouvrir une neuve */
 export const SEUIL_TOKENS = 250_000
@@ -82,7 +85,7 @@ export function texteGachis(u: AtelierUsage | null, c: AtelierConso | null): str
  * libellé seul ; ce que relit chaque requête est déjà dans la pastille de la conso)
  */
 export function texteNouvelle(u: AtelierUsage | null, c: AtelierConso | null): string | null {
-  return aChanger(u, c) ? '🆕 Nouvelle conv.' : null
+  return aChanger(u, c) ? LIBELLE_NOUVELLE : null
 }
 
 /** Combien de cases de texte occupe un libellé (un emoji en prend deux) */

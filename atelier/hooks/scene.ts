@@ -111,7 +111,7 @@ export function sceneDuBandeau(p: Plan, quand: (ms: number) => string, bandePx: 
   const jaugesPx = quotas ? aLEchelle(quotas.largeur) : null
   const place = p.nouvelle ? placeBouton(p.nouvelle, CELLULE, bandePx, pastillesPx, jaugesPx) : null
   if (p.nouvelle && place) {
-    elements.push({ id: 'nouvelle', genre: 'bouton', etat: 'clignote', x: (place === 'pastilles' ? pastillesPx : jaugesPx) ?? 0, largeur: largeurBouton(p.nouvelle, CELLULE), hauteur: HAUTEUR_DESSIN, ligne: ligne(place === 'pastilles' ? 'pastilles' : 'quotas') })
+    elements.push({ id: 'nouvelle', genre: 'bouton', etat: 'a-montrer', x: (place === 'pastilles' ? pastillesPx : jaugesPx) ?? 0, largeur: largeurBouton(p.nouvelle, CELLULE), hauteur: HAUTEUR_DESSIN, ligne: ligne(place === 'pastilles' ? 'pastilles' : 'quotas') })
   }
   if (quotas) {
     for (const pl of quotas.places) {

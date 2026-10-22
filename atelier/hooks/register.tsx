@@ -26,7 +26,7 @@ import { decrit, estDiscret } from './outils'
 import { svgPastilles } from './pastilles'
 import { aRanger } from './rangement'
 import { CELLULE, ECHELLE, HAUTEUR_DESSIN, empruntsDe, grandeSceneDe, planBandeau, quandDe, sceneDuBandeau } from './scene'
-import { aChanger, commandeSuite, placeBouton } from './suite'
+import { LIBELLE_NOUVELLE, commandeSuite, placeBouton } from './suite'
 import { ajouteTache, depuisTaskList, depuisTodos, horodate, interrompue, majTache, planFini, resumeTaches, suitPlan, texteTaches, toutFait } from './taches'
 
 type $ = EngineInterface
@@ -51,7 +51,6 @@ const SANS_REGLAGE = { modele: null, effort: null }
 const minute = atom({ plugin: 'atelier', key: 'minute' } as const, 0)
 const busy = atom({ plugin: 'atelier', key: 'busy' } as const, null)
 const isHidden = atom({ plugin: 'atelier', key: 'isHidden' } as const, false)
-const clignote = atom({ plugin: 'atelier', key: 'clignote' } as const, false)
 
 // ---------------------------------------------------------------- utilitaires
 
@@ -875,14 +874,6 @@ export const register: Register = on => {
     // chaque minute : quotas relus, pastilles finies rangées, et le bandeau
     // redessiné (une fenêtre qui vient de se réinitialiser repasse à 0 %, le
     // trait du temps avance)
-    // le bouton « Nouvelle conversation » clignote tant que continuer ici coûte trop (une bascule par seconde) ; sinon, rien n'est redessiné
-    $.clock.every(1000, () => {
-      void (async () => {
-        // bande masquée : rien à faire clignoter (et rien à redessiner)
-        if (!(await read($, isHidden)) && aChanger(await read($, usage), await read($, conso))) await update($, clignote, v => !v)
-        else if (await read($, clignote)) await update($, clignote, () => false)
-      })().catch(() => {})
-    })
     $.clock.every(60_000, () => {
       void rafraichirUsage($)
         .then(() => rangeLesFinis($))
@@ -1319,16 +1310,13 @@ export const register: Register = on => {
 
     // ↻ et Masquer : au bout de la ligne git, courte ; sur celle des quotas (sans git), ils la faisaient
     // passer à la ligne quand elle était longue, et la bande changeait de forme
-    // une conversation neuve : discret d'habitude, il clignote quand continuer ici coûte trop (le moment d'en changer)
+    // une conversation neuve : toujours écrit « New conv », sans clignoter ; discret tant qu'il n'est pas temps d'en changer
     const lourd = plan.nouvelle !== null
-    const allume = lourd && (await read($, clignote))
     const nouvelle = (
       <Button
         key="nouvelle"
         // l'app de bureau dessine un bouton natif avec ce libellé seul : tout ce qu'il dit est là
-        label={plan.nouvelle ?? '🆕'}
-        // il clignote en passant de « mis en avant » à normal (une seconde sur deux) ; discret d'habitude
-        {...(allume ? { variant: 'primary' as const } : {})}
+        label={LIBELLE_NOUVELLE}
         dimColor={!lourd}
         onPress={async () => {
           // un deuxième clic juste après : la demande est déjà en route (elle attend la fin du tour en cours)

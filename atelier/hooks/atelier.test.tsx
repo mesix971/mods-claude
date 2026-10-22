@@ -1459,7 +1459,7 @@ test('nouvelle conversation : lourd au-delà de 250 k tokens (ou 75 % d’une pe
   expect(commandeSuite(['compact', 'clear'])).toBe('clear')
 })
 
-test('bouton « Nouvelle conversation » : discret, puis il clignote quand le contexte est lourd ; un clic lance /suite', async ($, on) => {
+test('bouton « Nouvelle conversation » : toujours écrit « New conv », sans clignoter, posé après les jauges quand le contexte est lourd ; un clic lance /suite', async ($, on) => {
   const horloge = mock.clock(on as never, { now: Date.UTC(2026, 9, 7, 6, 0) })
   mock.env(on as never, {})
   on('session.cwd', () => ({ value: 'C:/vide' }))
@@ -1490,32 +1490,31 @@ test('bouton « Nouvelle conversation » : discret, puis il clignote quand le co
   await $.session.measure({ context: { tokens, window: 1_000_000, percent: 10 }, rateLimits: [], changed: ['context'] } as never)
   const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
   const bouton = async () => JSON.stringify(await ui.find({ key: 'nouvelle' }))
-  // 100 k : discret, juste l'icône
-  expect(await bouton()).toContain('🆕')
+  // 100 k : discret, mais déjà écrit
+  expect(await bouton()).toContain('🆕 New conv')
   expect(await bouton()).not.toContain('primary')
-  // 300 k : il dit combien, et clignote (jaune une seconde sur deux)
-  tokens = 300_000
-  await $.session.measure({ context: { tokens, window: 1_000_000, percent: 30 }, rateLimits: [], changed: ['context'] } as never)
+  // 400 k : il ne clignote jamais, même après plusieurs secondes
+  tokens = 400_000
+  await $.session.measure({ context: { tokens, window: 1_000_000, percent: 40 }, rateLimits: [], changed: ['context'] } as never)
   await horloge.advance(1000)
   const a = await bouton()
   await horloge.advance(1000)
   const b = await bouton()
-  // l'app de bureau dessine un bouton natif avec son libellé seul : tout est dans le libellé, et il clignote par son style
-  expect(a).toContain('🆕 Nouvelle conv.')
-  expect([a, b].filter(x => x.includes('"variant":"primary"'))).toHaveLength(1)
+  expect(a).toContain('🆕 New conv')
+  expect([a, b].filter(x => x.includes('"variant":"primary"'))).toHaveLength(0)
   // il est posé juste après les jauges, dans leur rangée…
   const rangee = (await ui.find({ key: 'ligne-quotas' })) as { children?: { type?: string; props?: { label?: string } }[] } | undefined
   const [premier, second] = rangee?.children ?? []
   expect(premier?.type).toBe('Svg')
   expect(second?.type).toBe('Button')
-  expect(second?.props?.label).toBe('🆕 Nouvelle conv.')
+  expect(second?.props?.label).toBe('🆕 New conv')
   // … et la bande partagée dit où (pour que Clawd puisse le montrer) : juste au bout du dessin des jauges
   await horloge.settle()
   const jauges = (await ui.find({ type: 'Svg' }))?.props as { width: number }
   const el = publiee?.elements?.find(x => x.id === 'nouvelle')
   expect(el?.genre).toBe('bouton')
   expect(Math.abs((el?.x ?? -99) - jauges.width)).toBeLessThan(1)
-  expect(el?.largeur).toBeGreaterThan(150)
+  expect(el?.largeur).toBeGreaterThan(100)
   // un clic : ta /suite
   await ui.press({ key: 'nouvelle' })
   await horloge.settle()

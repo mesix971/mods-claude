@@ -100,6 +100,10 @@
 
 ## atelier
 
+- **0.10.3** — 2026-10-22 — Le bouton 🆕 s'écrit toujours « New conv » et ne
+  clignote plus. Quand il est temps de changer, il se pose toujours après les
+  jauges et la bande partagée publie sa place (état `a-montrer`) : l'idée est
+  que Clawd vienne le montrer de temps en temps, pas encore fait.
 - **0.10.2** — 2026-10-22 — Le bouton 🆕 clignote moins vite : il faut maintenant
   un contexte d'au moins 300 k (avant 150 k) et un gâchis d'au moins 4 M tokens
   sur le tour (avant 1,5 M), ou 400 k relus par requête. Sur une fenêtre de 1 M,
