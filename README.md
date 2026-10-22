@@ -166,7 +166,7 @@ suivent ton thème clair ou sombre. Pas un mot : tout passe par ses gestes.
 - 🆕 sur la bande ouvre une nouvelle conversation (ta commande `/suite` si tu
   en as une, sinon `/clear`). Discret d'habitude, il clignote quand continuer
   ici coûte trop : chaque requête relit toute la conversation, et le dernier
-  tour a relu au moins 1,5 M tokens de plus qu'une conversation neuve. Il dit
+  tour a relu au moins 4 M tokens de plus qu'une conversation neuve (sur un contexte d'au moins 300 k). Il dit
   alors ce gâchis par tour (« −2,1 M/tour »).
 
 ## Développer

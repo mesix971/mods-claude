@@ -1531,16 +1531,17 @@ test('nouvelle conversation : on change quand continuer ici gâche trop (ce que 
     c = ajouteReponse(c, 'claude-haiku-5-5', { entree: 5000, lu: 900_000, ecrit: 0, sortie: 100 }, false, null)
     return finTour(c, null)
   }
-  // 10 requêtes sur 250 k : 2,5 M relus, dont 1,7 M de trop (une neuve relirait ~80 k par requête)
-  const lourd = tour(10, 250_000)
-  expect(lourd?.tour?.requetes).toBe(10)
-  expect(lourd?.tour?.relu).toBe(2_500_000)
-  expect(gachisTour(lourd)).toBe(1_700_000)
+  // 15 requêtes sur 350 k : 5,25 M relus, dont 4,05 M de trop (une neuve relirait ~80 k par requête)
+  const lourd = tour(15, 350_000)
+  expect(lourd?.tour?.requetes).toBe(15)
+  expect(lourd?.tour?.relu).toBe(5_250_000)
+  expect(gachisTour(lourd)).toBe(4_050_000)
   expect(aChanger(null, lourd)).toBe(true)
   // ce qu'il dit : ce que chaque requête relit, stable d'un tour à l'autre
-  expect(texteGachis(null, lourd)).toBe('250 k/req')
-  // 3 requêtes sur 250 k : 510 k de trop, ça va encore
-  expect(aChanger(null, tour(3, 250_000))).toBe(false)
+  expect(texteGachis(null, lourd)).toBe('350 k/req')
+  // 3 requêtes sur 350 k : 810 k de trop, ça va encore ; 10 sur 250 k (sous le plancher de 300 k) aussi
+  expect(aChanger(null, tour(3, 350_000))).toBe(false)
+  expect(aChanger(null, tour(10, 250_000))).toBe(false)
   // un petit contexte ne vaut jamais une conversation neuve, même sur un long tour
   expect(aChanger(null, tour(40, 100_000))).toBe(false)
   // chaque requête relit déjà 450 k : même un tour court gâche trop
@@ -1551,15 +1552,15 @@ test('nouvelle conversation : on change quand continuer ici gâche trop (ce que 
 
 test('nouvelle conversation : allumé par un tour trop cher, il reste allumé tant que le contexte reste gros ; une conversation neuve l’éteint', () => {
   const requete = (c: ReturnType<typeof debutTour>, prompt: number) => ajouteReponse(c, 'claude-opus-5-5', { entree: 1000, lu: prompt - 2000, ecrit: 1000, sortie: 500 }, true, null)
-  // un tour trop cher : 10 requêtes sur 250 k
+  // un tour trop cher : 15 requêtes sur 350 k
   let c = debutTour(null, null)
-  for (let i = 0; i < 10; i++) c = requete(c, 250_000)
+  for (let i = 0; i < 15; i++) c = requete(c, 350_000)
   let fini = finTour(c, null)
   expect(fini?.signale).toBe(true)
   // un petit tour ensuite (2 requêtes) : il ne s'éteint pas pour autant
   c = debutTour(fini, null)
   expect(aChanger(null, c)).toBe(true)
-  c = requete(requete(c, 260_000), 262_000)
+  c = requete(requete(c, 360_000), 362_000)
   fini = finTour(c, null)
   expect(aChanger(null, fini)).toBe(true)
   // une conversation neuve (ou compactée) : la première réponse relit peu, il s'éteint

@@ -37,9 +37,9 @@ export function commandeSuite(noms: readonly string[]): string {
  */
 export const PROMPT_NEUF = 80_000
 /** Au-delà de ce gâchis sur un tour, continuer ici coûte trop */
-export const SEUIL_GACHIS = 1_500_000
+export const SEUIL_GACHIS = 4_000_000
 /** En dessous de ce contexte, une conversation neuve ne vaut pas ce qu'elle fait perdre */
-export const CONTEXTE_MIN = 150_000
+export const CONTEXTE_MIN = 300_000
 /** Au-delà de ce prompt, même un tour court gâche beaucoup (chaque requête relit tout) */
 export const PROMPT_TROP = 400_000
 

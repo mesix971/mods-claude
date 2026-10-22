@@ -100,6 +100,10 @@
 
 ## atelier
 
+- **0.10.2** — 2026-10-22 — Le bouton 🆕 clignote moins vite : il faut maintenant
+  un contexte d'au moins 300 k (avant 150 k) et un gâchis d'au moins 4 M tokens
+  sur le tour (avant 1,5 M), ou 400 k relus par requête. Sur une fenêtre de 1 M,
+  les anciens seuils s'allumaient dès qu'une session avait un peu travaillé.
 - **0.10.1** — 2026-10-22 — Bouton 🆕, vérifié sur de vraies sessions et sur
   l'app : sur le bureau c'est un bouton natif (son libellé seul, « 🆕 Nouvelle
   conv. ») qui clignote en passant de mis en avant à normal ; il se pose après
