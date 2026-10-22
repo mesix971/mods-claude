@@ -25,7 +25,7 @@ import { COULEURS, jauges, resumeJauges, svgJauges, texteJauges } from './jauges
 import { decrit, estDiscret } from './outils'
 import { svgPastilles } from './pastilles'
 import { aRanger } from './rangement'
-import { CELLULE, ECHELLE, HAUTEUR_DESSIN, empruntsDe, grandeSceneDe, planBandeau, quandDe, sceneDuBandeau, textesGit } from './scene'
+import { CELLULE, ECHELLE, HAUTEUR_DESSIN, empruntsDe, grandeSceneDe, planBandeau, quandDe, quotasCoupes, sceneDuBandeau, textesGit } from './scene'
 import { LIBELLE_NOUVELLE, commandeSuite } from './suite'
 import { ajouteTache, depuisTaskList, depuisTodos, horodate, interrompue, majTache, planFini, resumeTaches, suitPlan, texteTaches, toutFait } from './taches'
 
@@ -1228,19 +1228,35 @@ export const register: Register = on => {
     // dit aussi dans le texte alternatif : ce qui n'est pas dessiné reste annoncé
     const joueAvec = caches.size ? `Clawd joue avec : ${[...caches].join(', ')}` : ''
     let quotas: JSX.Element | null = null
+    // la conso et le conseil, sur la rangée du dessous quand ils pousseraient Clawd hors de la bande (même règle que la bande partagée)
+    let suite: JSX.Element | null = null
     // la largeur (px) des dessins, et celle de la bande (la bande partagée dit si le bouton 🆕 y tient sans passer à la ligne)
     let largeurJaugesPx = 0
     let largeurPastillesPx = 0
-    if (e.surface === 'desktop') bandePx = Math.round(e.props.bodyColumns * CELLULE)
+    if (e.surface === 'desktop') {
+      const px = Math.round(e.props.bodyColumns * CELLULE)
+      // une nouvelle largeur (la première, ou la fenêtre redimensionnée) : la bande partagée suit, sans attendre un autre changement
+      if (px !== bandePx) {
+        bandePx = px
+        void publieScene($)
+      }
+    }
     if ((lj.length > 0 || pastilleC || plan.conseil) && e.surface === 'desktop') {
       const { Svg } = $.ui.resolve(e)
-      const dessin = svgJauges(lj, quand, { maintenant, contexte: u ? { tokens: u.contextTokens, window: u.contextWindow } : undefined, conso: pastilleC, conseil: plan.conseil, caches })
-      const alt = [lj.length > 0 ? resumeJauges(lj, quand) : '', pastilleC ? `Conso : ${pastilleC.texte}` : '', plan.conseil ? `Conseil : ${plan.conseil.texte}` : '', joueAvec]
+      const coupe = quotasCoupes(plan, quand, bandePx)
+      const contexte = u ? { tokens: u.contextTokens, window: u.contextWindow } : undefined
+      const dessin = svgJauges(lj, quand, { maintenant, contexte, caches, ...(coupe ? {} : { conso: pastilleC, conseil: plan.conseil }) })
+      const altConso = [pastilleC ? `Conso : ${pastilleC.texte}` : '', plan.conseil ? `Conseil : ${plan.conseil.texte}` : '']
+      const alt = [lj.length > 0 ? resumeJauges(lj, quand) : '', ...(coupe ? [] : altConso), joueAvec]
         .filter(Boolean)
         .join(' · ')
       // interactif : le survol d'une jauge dit sa projection, celui de la conso son détail
       largeurJaugesPx = +(dessin.largeur * ECHELLE).toFixed(1)
       quotas = <Svg source={dessin.svg} alt={alt} width={largeurJaugesPx} height={HAUTEUR_DESSIN} isInteractive />
+      if (coupe) {
+        const bas = svgJauges([], quand, { conso: pastilleC, conseil: plan.conseil, caches })
+        suite = <Svg source={bas.svg} alt={[...altConso, joueAvec].filter(Boolean).join(' · ')} width={+(bas.largeur * ECHELLE).toFixed(1)} height={HAUTEUR_DESSIN} isInteractive />
+      }
     } else if (lj.length > 0 || pastilleC || plan.conseil) {
       quotas = (
         <Box flexDirection="row" flexWrap="wrap" columnGap={2}>
@@ -1391,7 +1407,9 @@ export const register: Register = on => {
 
     return (
       <Box flexDirection="row" alignItems="flex-end">
-        <Box flexDirection="column" flexGrow={1}>
+        {/* nos lignes rétrécissent (et coupent ce qui dépasse) plutôt que de pousser ce que dessinent les autres
+            mods à droite (le coin de Clawd) hors de la bande : un dessin trop large ne passe pas à la ligne */}
+        <Box flexDirection="column" flexGrow={1} minWidth={0} overflow="hidden">
           {a && (
             <Box flexDirection="row" flexWrap="wrap">
               <Text bold>{`📱 ${a.versionName ?? '?'}${a.versionCode !== null ? ` (${a.versionCode})` : ''}`}</Text>
@@ -1447,6 +1465,12 @@ export const register: Register = on => {
           {quotas && (
             <Box key="ligne-quotas" flexDirection="row" flexWrap="wrap" alignItems="center">
               {quotas}
+              {!g && !suite && commandes}
+            </Box>
+          )}
+          {suite && (
+            <Box key="ligne-suite" flexDirection="row" flexWrap="wrap" alignItems="center">
+              {suite}
               {!g && commandes}
             </Box>
           )}

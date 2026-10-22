@@ -100,6 +100,11 @@
 
 ## atelier
 
+- **0.10.5** — 2026-10-22 — Le coin de Clawd n'est plus jamais poussé hors de
+  la bande. Quand jauges, conso et conseil ne tiennent pas à côté de lui, la
+  conso et le conseil passent sur la rangée du dessous (ligne `suite` de la bande
+  partagée), avec 🆕, ↻ et Masquer ; et nos lignes rétrécissent plutôt que de le
+  pousser. La bande partagée est republiée dès que la largeur change.
 - **0.10.4** — 2026-10-22 — Le bouton 🆕 « New conv » ne bouge plus jamais :
   toujours au bout de la ligne git (sinon des jauges), en tête de ↻ et Masquer,
   toujours discret. Quand il est temps de changer, seule la bande partagée publie

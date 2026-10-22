@@ -150,8 +150,8 @@ export type AtelierElement = {
 
 /** La bande partagée : ce qu'atelier dessine, ligne par ligne, et où */
 export type AtelierScene = {
-  /** Les lignes du bandeau, de haut en bas */
-  lignes: ('android' | 'git' | 'quotas' | 'pastilles' | 'occupe')[]
+  /** Les lignes du bandeau, de haut en bas (`suite` : la conso et le conseil, sous les jauges quand ils ne tiennent pas à côté) */
+  lignes: ('android' | 'git' | 'quotas' | 'suite' | 'pastilles' | 'occupe')[]
   elements: AtelierElement[]
 }
 

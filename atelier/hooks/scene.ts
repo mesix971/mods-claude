@@ -16,7 +16,7 @@ import { estLourde, texteConso, titreConso } from './conso'
 import { idJauge, jauges, svgJauges } from './jauges'
 import type { Jauge } from './jauges'
 import { svgPastilles } from './pastilles'
-import { cases, largeurBouton, texteNouvelle, tient } from './suite'
+import { COIN_CLAWD, cases, largeurBouton, texteNouvelle, tient } from './suite'
 import type { Pastille } from './pastilles'
 import { pastillesTaches } from './taches'
 import { heure } from './temps'
@@ -125,22 +125,51 @@ const aLEchelle = (v: number) => +(v * ECHELLE).toFixed(1)
 const sansTitre = (svg: string) => svg.replace(/<title>[\s\S]*?<\/title>/g, '')
 
 /** `bandePx` : la largeur de la bande en px, quand on la connaît (pour savoir si le bouton 🆕 tient sur sa rangée) */
+/** Le jeu laissé au moins entre le dessin des jauges et le coin de Clawd (px) : une estimation des largeurs de texte n'y pousse pas Clawd */
+const MARGE_QUOTAS = 16
+
+/**
+ * La conso et le conseil passent-ils sur la rangée du dessous (`suite`) ?
+ * Oui quand, à la suite des jauges, ils pousseraient le coin de Clawd hors de
+ * la bande : un dessin ne passe pas à la ligne. Largeur de la bande inconnue : non.
+ */
+export function quotasCoupes(p: Plan, quand: (ms: number) => string, bandePx: number | null): boolean {
+  if (!bandePx || !p.lignes.includes('quotas') || p.jauges.length === 0 || !(p.conso || p.conseil)) return false
+  return aLEchelle(svgJauges(p.jauges, quand, { conso: p.conso, conseil: p.conseil }).largeur) > bandePx - COIN_CLAWD - MARGE_QUOTAS
+}
+
+/** Les lignes telles qu'elles sont dessinées : coupées, la conso et le conseil ont la leur (`suite`), sous les jauges */
+export const lignesDessinees = (p: Plan, coupe: boolean): AtelierScene['lignes'] =>
+  coupe ? p.lignes.flatMap(l => (l === 'quotas' ? (['quotas', 'suite'] as const) : [l])) : p.lignes
+
 export function sceneDuBandeau(p: Plan, quand: (ms: number) => string, bandePx: number | null = null): AtelierScene {
-  const ligne = (nom: AtelierScene['lignes'][number]) => p.lignes.length - 1 - p.lignes.indexOf(nom)
+  const coupe = quotasCoupes(p, quand, bandePx)
+  const lignes = lignesDessinees(p, coupe)
+  const ligne = (nom: AtelierScene['lignes'][number]) => lignes.length - 1 - lignes.indexOf(nom)
   const elements: AtelierElement[] = []
-  const quotas = p.lignes.includes('quotas') ? svgJauges(p.jauges, quand, { conso: p.conso, conseil: p.conseil }) : null
+  // les dessins des quotas, chacun sur sa rangée : les jauges, la conso et le conseil ensemble, ou coupés en deux
+  const quotas: { d: ReturnType<typeof svgJauges>; rangee: 'quotas' | 'suite' }[] = !p.lignes.includes('quotas')
+    ? []
+    : coupe
+      ? [
+          { d: svgJauges(p.jauges, quand), rangee: 'quotas' },
+          { d: svgJauges([], quand, { conso: p.conso, conseil: p.conseil }), rangee: 'suite' },
+        ]
+      : [{ d: svgJauges(p.jauges, quand, { conso: p.conso, conseil: p.conseil }), rangee: 'quotas' }]
+  const dernier = quotas.at(-1)
   // le bouton 🆕 quand il est temps (Clawd vient le montrer) : là où il est toujours, en tête de ↻ et Masquer, derrière
-  // une case vide ; au bout de la ligne git (ses textes en cases), sinon au bout du dessin des jauges. Publié
+  // une case vide ; au bout de la ligne git (ses textes en cases), sinon au bout du dernier dessin des quotas. Publié
   // seulement s'il tient sur sa rangée : sinon il passe à la ligne, et Clawd montrerait un endroit vide
   if (p.nouvelle) {
-    const x = p.git && p.lignes.includes('git') ? casesGit(p.git) * CELLULE : quotas ? aLEchelle(quotas.largeur) : null
+    const surGit = p.git !== null && p.lignes.includes('git')
+    const x = surGit && p.git ? casesGit(p.git) * CELLULE : dernier ? aLEchelle(dernier.d.largeur) : null
     if (x !== null && tient(x + CELLULE, p.nouvelle, CELLULE, bandePx)) {
-      const rangee = p.git && p.lignes.includes('git') ? 'git' : 'quotas'
+      const rangee = surGit ? 'git' : (dernier?.rangee ?? 'quotas')
       elements.push({ id: 'nouvelle', genre: 'bouton', etat: 'a-montrer', x: +(x + CELLULE).toFixed(1), largeur: largeurBouton(p.nouvelle, CELLULE), hauteur: HAUTEUR_DESSIN, ligne: ligne(rangee) })
     }
   }
-  if (quotas) {
-    for (const pl of quotas.places) {
+  for (const { d, rangee } of quotas) {
+    for (const pl of d.places) {
       // son dessin seul, à l'identique : la même fonction, avec lui seul
       const j = p.jauges.find(j => idJauge(j) === pl.id)
       const seul = j
@@ -150,7 +179,7 @@ export function sceneDuBandeau(p: Plan, quand: (ms: number) => string, bandePx: 
           : pl.id === 'conseil' && p.conseil
             ? svgJauges([], quand, { conseil: p.conseil })
             : null
-      elements.push({ id: pl.id, genre: pl.genre, etat: pl.etat, x: aLEchelle(pl.x), largeur: aLEchelle(pl.largeur), hauteur: HAUTEUR_DESSIN, ligne: ligne('quotas'), ...(seul ? { dessin: sansTitre(seul.svg) } : {}) })
+      elements.push({ id: pl.id, genre: pl.genre, etat: pl.etat, x: aLEchelle(pl.x), largeur: aLEchelle(pl.largeur), hauteur: HAUTEUR_DESSIN, ligne: ligne(rangee), ...(seul ? { dessin: sansTitre(seul.svg) } : {}) })
     }
   }
   if (p.lignes.includes('pastilles')) {
@@ -171,7 +200,7 @@ export function sceneDuBandeau(p: Plan, quand: (ms: number) => string, bandePx: 
       })
     }
   }
-  return { lignes: p.lignes, elements }
+  return { lignes, elements }
 }
 
 type Emprunt = { id: string; jusqua: number }

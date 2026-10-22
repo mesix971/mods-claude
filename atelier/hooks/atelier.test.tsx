@@ -1609,3 +1609,76 @@ test('nouvelle conversation : sur la bande partagée, le bouton est là où il e
   // une bande trop étroite : il passerait à la ligne, pas publié
   expect(sceneDuBandeau(etat(git), quandDe(2 * M), 300).elements.find(e => e.id === 'nouvelle')).toBeUndefined()
 })
+
+test('bande étroite : la conso et le conseil passent sous les jauges plutôt que de pousser Clawd hors de la bande', () => {
+  const M = 60_000
+  const maintenant = Date.UTC(2026, 9, 22, 10, 0)
+  const quand = quandDe(maintenant)
+  // ta capture : 5 h, 7 j (avec l'heure de son reset), contexte, la conso du tour et le conseil
+  const usage = {
+    fiveHour: { percent: 32, resetsAt: new Date(maintenant + 2 * 3600_000).toISOString() },
+    sevenDay: { percent: 21, resetsAt: new Date(maintenant + 20 * 3600_000).toISOString() },
+    contextPercent: 21,
+    contextTokens: 210_000,
+  }
+  const conso = ajouteReponse(debutTour(null, 10), 'claude-sonnet-5-5', { entree: 2_000, lu: 200_000, ecrit: 5_000, sortie: 2_000 }, true, 10.21)
+  const plan = planBandeau({ android: null, git: null, usage, taches: [], conso, build: null, agents: [], busy: null, conseil: { texte: '💡 Sonnet · Faible', titre: 'Conseil' } }, maintenant)
+  const tout = svgJauges(plan.jauges, quand, { conso: plan.conso, conseil: plan.conseil }).largeur * ECHELLE
+  // une bande où tout tient à côté du coin de Clawd (116 px), avec du jeu : une seule rangée
+  const large = sceneDuBandeau(plan, quand, Math.ceil(tout + 116 + 40))
+  expect(large.lignes).toEqual(['quotas'])
+  expect(large.elements.find(e => e.id === 'conso')?.ligne).toBe(0)
+  // une bande à peine plus étroite que le tout et le coin de Clawd : la conso et le conseil descendent d'une rangée
+  const etroite = sceneDuBandeau(plan, quand, Math.floor(tout + 116 + 10))
+  expect(etroite.lignes).toEqual(['quotas', 'suite'])
+  expect(etroite.elements.find(e => e.id === 'jauge-5h')?.ligne).toBe(1)
+  const c = etroite.elements.find(e => e.id === 'conso')
+  const s = etroite.elements.find(e => e.id === 'conseil')
+  expect(c?.ligne).toBe(0)
+  expect(c?.x).toBe(0)
+  expect(s?.ligne).toBe(0)
+  expect(s!.x).toBeGreaterThan(c!.largeur)
+  // la rangée des jauges, seule, tient avec le coin de Clawd
+  expect(svgJauges(plan.jauges, quand).largeur * ECHELLE + 116).toBeLessThan(tout + 116 + 10)
+  // largeur de la bande inconnue : rien ne bouge
+  expect(sceneDuBandeau(plan, quand, null).lignes).toEqual(['quotas'])
+  // le bouton 🆕, quand il est temps, suit : au bout de la conso et du conseil, sur leur rangée
+  // (chaque requête relit 450 k : il est temps)
+  const lourde = ajouteReponse(debutTour(null, 10), 'claude-sonnet-5-5', { entree: 2_000, lu: 450_000, ecrit: 5_000, sortie: 2_000 }, true, 10.21)
+  const lourd = planBandeau({ android: null, git: null, usage: { ...usage, contextPercent: 46, contextTokens: 459_000 }, taches: [], conso: lourde, build: null, agents: [], busy: null, conseil: { texte: '💡 Sonnet · Faible', titre: 'Conseil' } }, maintenant + M)
+  const b = sceneDuBandeau(lourd, quand, Math.floor(tout + 116 + 10)).elements.find(e => e.id === 'nouvelle')
+  const bas = svgJauges([], quand, { conso: lourd.conso, conseil: lourd.conseil }).largeur * ECHELLE
+  expect(b?.ligne).toBe(0)
+  expect(Math.abs((b?.x ?? -99) - (bas + 7.9))).toBeLessThan(0.2)
+})
+
+test('bandeau desktop étroit : la conso descend sur sa rangée, et nos lignes rétrécissent au lieu de pousser Clawd', async ($, on) => {
+  const horloge = mock.clock(on as never, { now: Date.UTC(2026, 9, 22, 10, 0) })
+  mock.env(on as never, {})
+  on('session.cwd', () => ({ value: 'C:/vide' }))
+  on('fs.exists', () => ({ value: false }))
+  on('process.run', () => ({ value: { exitCode: 1, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
+  on('ui.toast', () => ({ value: undefined }))
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  on('command.register', ($, e) => ({ value: { command: e.name } }) as never)
+  on('session.measure', ($, e) => ({ changed: e.changed }))
+  on('ui.render', ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    return <Text>clawd</Text>
+  })
+  const fenetres = [
+    { kind: 'five_hour', percentUsed: 32, resetsAt: '2026-10-22T12:00:00Z' },
+    { kind: 'seven_day', percentUsed: 21, resetsAt: '2026-10-29T07:00:00Z' },
+  ]
+  on('session.usage', () => ({ value: { startedAt: 0, context: { tokens: 210_000, window: 1_000_000, percent: 21 }, rateLimits: fenetres } }) as never)
+  await $.session.start({ cwd: 'C:/vide', surface: 'desktop', isInteractive: true })
+  await $.session.measure({ context: { tokens: 210_000, window: 1_000_000, percent: 21 }, rateLimits: fenetres, changed: ['context', 'rateLimits'] } as never)
+  // 40 colonnes (316 px) : rien ne tient à côté du coin de Clawd
+  const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 40 }, surface: 'desktop' })
+  await horloge.settle()
+  const arbre = (await ui.find({ key: 'ligne-quotas' })) as unknown
+  expect(arbre).toBeTruthy()
+  // la colonne de nos lignes peut rétrécir : le coin de Clawd, à côté, reste dans la bande
+  expect(JSON.stringify(await ui.find({ type: 'Box' }))).toContain('"minWidth":0')
+  await ui.unmount()
+})
