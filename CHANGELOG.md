@@ -100,6 +100,22 @@
 
 ## atelier
 
+- **0.10.6** — 2026-10-24 — Chasse aux bugs (audit de 181 agents, constats
+  revérifiés). Garde-fous : la commande est lue comme le shell la lit (module
+  `commande.ts`), une règle ne vise que son outil — plus de question pour un
+  `gh … -f`, un `grep connectedCheck` ou un message de commit, chacune
+  bloquait le tour ; secrets cherchés dans le bon dépôt, suppressions et
+  `GARDE_FOU_OK=1` respectés ; ta réponse sous « Other » transmise ; seule ta
+  demande autorise un push. Plus de raccourcis clavier sur les boutons (un « c »
+  tapé lançait le commit + push). Bande : les commandes ont leur rangée quand
+  elles ne tiennent pas, la conso ne fait plus changer les rangées à chaque
+  tour, rien de coupé n'est publié pour Clawd, la largeur suit la fenêtre la plus
+  étroite. État : git sans verrou (plus de commit de Claude qui échoue), git lent
+  sans perte de la ligne, en retard / branche supprimée / HEAD détachée, Commit
+  seul sans remote, orbe et « ⏳ » orphelins nettoyés au rechargement, un build
+  échoué montre sa croix rouge, pas de double /suite, rangement différé pendant
+  un numéro de Clawd, heures passées avec leur jour, heure du tel juste au
+  changement d'heure, rappels et toasts pas rejoués après un rechargement.
 - **0.10.5** — 2026-10-22 — Le coin de Clawd n'est plus jamais poussé hors de
   la bande. Quand jauges, conso et conseil ne tiennent pas à côté de lui, la
   conso et le conseil passent sur la rangée du dessous (ligne `suite` de la bande

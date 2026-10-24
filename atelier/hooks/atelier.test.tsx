@@ -12,7 +12,8 @@ import { svgPastilles } from './pastilles'
 import { coutReponse, euros, tokensCourts } from './prix'
 import { aRanger } from './rangement'
 import { aChanger, commandeSuite, contexteCourt, contexteLourd, gachisTour, largeurBouton, tient } from './suite'
-import { ECHELLE, HAUTEUR_DESSIN, casesGit, empruntsDe, grandeSceneDe, planBandeau, quandDe, sceneDuBandeau, textesGit } from './scene'
+import { ECHELLE, HAUTEUR_DESSIN, casesGit, largeurCommandes, empruntsDe, grandeSceneDe, libelleCommit, planBandeau, quandDe, sceneDuBandeau, textesGit } from './scene'
+import { attenteBloquante, consentiGardeFou, destructif, envoisGit } from './commande'
 import { MAX_TACHES, ajouteTache, depuisTodos, horodate, interrompue, majTache, pastillesTaches, planFini, suitPlan, svgTaches, toutFait } from './taches'
 import { dureePause } from './temps'
 
@@ -133,8 +134,9 @@ test('bandeau : APK plus récent que le tel, git en avance, quota 5 h', async ($
     expect(await ui.find({ key: 'install' })).toBeDefined()
     expect(await ui.find({ key: 'commit' })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /📱 5\.7\.0 \(30\)/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /APK 5\.7\.0-debug 01:52/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /tel 5\.7\.0-debug 22:11 ⚠ pas à jour/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /APK 5\.7\.0-debug jeu\. 01:52/ })).toBeDefined()
+    // installé le 30/09, vu le 03/10 : le jour avec l'heure (sinon on le lirait comme aujourd'hui)
+    expect(await ui.find({ type: 'Text', text: /tel 5\.7\.0-debug mer\. 22:11 ⚠ pas à jour/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /2 commits non poussés/ })).toBeDefined()
     // ↻ et Masquer au bout de la ligne git, courte : la ligne des quotas ne passe plus à la ligne
     expect(JSON.stringify((await ui.find({ key: 'ligne-git' }))?.children)).toContain('Masquer')
@@ -245,6 +247,7 @@ test('↻ relit les quotas, une fenêtre déjà réinitialisée repart à 0 %, e
 function shellStubs(on: Parameters<Parameters<typeof test>[1] extends infer F ? F extends ($: never, on: infer O) => unknown ? (o: O) => void : never : never>[0], opts: { answer: string | null; staged?: string }) {
   const ran: string[] = []
   const asked: string[] = []
+  const lances: string[][] = []
   const norm = (p: string) => p.replace(/\\/g, '/')
   on('session.cwd', () => ({ value: CWD }))
   on('ui.toast', () => ({ value: undefined }))
@@ -260,6 +263,7 @@ function shellStubs(on: Parameters<Parameters<typeof test>[1] extends infer F ? 
   })
   mock.env(on as never, {})
   on('process.run', ($, e) => {
+    lances.push([...e.argv])
     const cmd = e.argv.join(' ')
     if (cmd.includes('diff --cached --name-only')) return { value: ok(opts.staged ?? '') }
     if (cmd.includes('ls-files')) return { value: ok(opts.staged ?? '') }
@@ -277,7 +281,7 @@ function shellStubs(on: Parameters<Parameters<typeof test>[1] extends infer F ? 
       return { result: { stdout: 'ok', stderr: '', interrupted: false } }
     })
   }
-  return { ran, asked }
+  return { ran, asked, lances }
 }
 
 test('JBR d’Android Studio cassé corrigé et JAVA_HOME ajouté à gradlew', async ($, on) => {
@@ -324,6 +328,111 @@ test('commit : toujours direct ; push non demandé : confirmation, demandé : di
   await $.prompt.submit({ text: 'ok commit et pousse' })
   await $.tool.call({ tool: 'Bash', command: 'git push' })
   expect(ran).toEqual(['git commit -am "fix: minuteur"', 'git push'])
+})
+
+test('garde-fous : une commande qui CITE une commande dangereuse ne demande rien ; les vraies, si', () => {
+  const silencieux = [
+    'cd "/c/Users/moi/projets/app" && git push origin main 2>&1 | tail -1 && gh workflow run verdict.yml -R moi/autre -f essai=true',
+    'gh api -X POST repos/moi/autre/dispatches -f event_type=lecon-poussee',
+    './gradlew tasks --all | grep -i connectedCheck',
+    'rg -n "connectedAndroidTest" app/build.gradle.kts',
+    'adb logcat -d | grep -i uninstall',
+    'adb shell screencap -p /sdcard/c.png && adb pull /sdcard/c.png c.png && rm -rf anciennes',
+    "git commit -q -F - <<'EOF'\nfix: plus de git reset --hard ni de git push --force\nEOF",
+    'git commit -qm "fix(atelier): git branch -D et git clean -fd"',
+    'git restore --staged .',
+    'git push -u origin main --follow-tags',
+  ]
+  for (const c of silencieux) expect(destructif(c)).toBeNull()
+  const dangereux = [
+    'git push --force origin main', 'git push -f', 'git push origin +main', 'cd x && git reset --hard HEAD~1', 'git clean -fdx', 'git branch -D vieux',
+    'git checkout -- .', 'git restore .', 'adb shell pm clear com.x', 'adb shell "pm clear com.x"', 'adb -s R5 uninstall com.x', 'adb shell rm -rf /sdcard/x',
+    './gradlew connectedAndroidTest', './gradlew :app:connectedDebugAndroidTest', 'Clear-RecycleBin -Force', 'bash -c "git push -f"',
+    "bash <<'EOF'\ngit reset --hard\nEOF", '(cd x && git push -f)',
+  ]
+  for (const c of dangereux) expect(destructif(c)).not.toBeNull()
+  // la question montre la commande en cause, même loin dans une longue commande
+  expect(destructif(`${'echo x && '.repeat(60)}git push -f`)?.texte).toBe('git push -f')
+  // en PowerShell, l'antislash n'échappe rien : un chemin qui finit par \" ne cache pas la suite
+  expect(destructif('Get-Content "C:\\x\\" ; git push -f', 'PowerShell')).not.toBeNull()
+  expect(destructif('& "C:\\Program Files\\Git\\cmd\\git.exe" push -f', 'PowerShell')).not.toBeNull()
+  // ce qui se cache dans un bloc, un if, une sous-commande, une ligne continuée ou un préfixe : vu quand même
+  for (const [c, shell] of [
+    ['git commit -m x; if ($?) { git push --force }', 'PowerShell'],
+    ['$repos | ForEach-Object { git -C $_ reset --hard }', 'PowerShell'],
+    ['foreach ($d in $l) { git clean -fd }', 'PowerShell'],
+    ['timeout 60 git reset --hard', 'Bash'],
+    ['nice -n 10 git clean -fdx', 'Bash'],
+    ['echo $(git clean -fd)', 'Bash'],
+    ['echo `git reset --hard`', 'Bash'],
+    ['git push \\\n  --force origin main', 'Bash'],
+    ['git push `\n  --force origin main', 'PowerShell'],
+    ['if git push -f; then echo ok; fi', 'Bash'],
+    ["python - <<'EOF'\nimport os\nos.system('git reset --hard')\nEOF", 'Bash'],
+  ] as const) {
+    expect(destructif(c, shell)).not.toBeNull()
+  }
+  // le dépôt visé par un commit ou un push : le -C de l'appel, sinon le dernier cd (git -c … commit compris)
+  expect(envoisGit('cd "/c/Users/moi/projets/autre" && git add -A && git -c user.name=m commit -q -m x && git push', 'C:/Users/moi/projets/app')).toEqual([
+    { sous: 'commit', depot: 'C:/Users/moi/projets/autre', tout: true, nonSuivis: true, ajoutes: [] },
+    { sous: 'push', depot: 'C:/Users/moi/projets/autre', tout: false, nonSuivis: false, ajoutes: [] },
+  ])
+  expect(envoisGit('git commit -qm "fix: seul git push demande"', 'C:/x')).toEqual([{ sous: 'commit', depot: null, tout: false, nonSuivis: false, ajoutes: [] }])
+  // un git add .env de la même commande : ses chemins comptent (l'index ne les a pas encore quand on regarde) ; commit -a n'emporte pas les non suivis
+  expect(envoisGit('git add .env app/x.kt && git commit -m x', 'C:/x')[0]).toMatchObject({ ajoutes: ['.env', 'app/x.kt'], tout: false, nonSuivis: false })
+  expect(envoisGit('git commit -am x', 'C:/x')[0]).toMatchObject({ tout: true, nonSuivis: false })
+  // cd ~/… : dans ton dossier personnel quand il est connu, sinon le dépôt de la session
+  expect(envoisGit('cd ~/projets/autre && git push', 'C:/x', 'Bash', 'C:/Users/moi')[0]?.depot).toBe('C:/Users/moi/projets/autre')
+  expect(envoisGit('cd ~/projets/autre && git push', 'C:/x')[0]?.depot).toBeNull()
+  // ton accord au garde-fou global : posé devant la commande, pas cité dans un message
+  expect(consentiGardeFou('GARDE_FOU_OK=1 git commit -m x')).toBe(true)
+  expect(consentiGardeFou("$env:GARDE_FOU_OK = '1'; git commit -m x", 'PowerShell')).toBe(true)
+  expect(consentiGardeFou('git commit -m "doc: GARDE_FOU_OK=1 expliqué"')).toBe(false)
+  // les attentes bloquantes : additionnées, abréviations et alias compris ; une boucle d'attente est bloquante
+  expect(attenteBloquante('Start-Sleep -Seconds 1; Start-Sleep -Seconds 300')).toBe(301)
+  expect(attenteBloquante('Start-Sleep -Sec 300')).toBe(300)
+  expect(attenteBloquante('sleep 30')).toBe(30)
+  expect(attenteBloquante('Start-Sleep -Milliseconds 500')).toBe(0.5)
+  expect(attenteBloquante('while ($true) { if (Test-Path x) { break }; Start-Sleep 5 }')).toBeGreaterThanOrEqual(20)
+})
+
+test('garde-fous : un gh -f ne passe plus pour un push forcé, et ce que tu écris sous « Other » arrive à Claude', async ($, on) => {
+  const { ran, asked } = shellStubs(on as never, { answer: 'non, lance plutôt les tests' })
+  await $.prompt.submit({ text: 'pousse et lance le verdict' })
+  await $.tool.call({ tool: 'Bash', command: 'git push origin main && gh workflow run verdict.yml -f essai=true' })
+  expect(asked).toEqual([])
+  expect(ran.length).toBe(1)
+  const r = await $.tool.call({ tool: 'Bash', command: 'git reset --hard HEAD~1' })
+  expect(asked.length).toBe(1)
+  expect(JSON.stringify(r)).toContain('non, lance plutôt les tests')
+  expect(ran.length).toBe(1)
+})
+
+test('garde-fous : les secrets sont cherchés dans le dépôt du cd, et GARDE_FOU_OK=1 ne redemande pas', async ($, on) => {
+  const { ran, asked, lances } = shellStubs(on as never, { answer: 'Refuser', staged: 'local.properties\n' })
+  await $.prompt.submit({ text: 'commit' })
+  await $.tool.call({ tool: 'Bash', command: 'cd "/c/Users/moi/projets/autre" && git commit -m "x"' })
+  expect(lances.filter(a => a.includes('--cached')).map(a => a[a.indexOf('-C') + 1])).toEqual(['C:/Users/moi/projets/autre'])
+  expect(asked.length).toBe(1)
+  await $.tool.call({ tool: 'Bash', command: 'GARDE_FOU_OK=1 git commit -m "x"' })
+  expect(asked.length).toBe(1)
+  expect(ran).toEqual(['GARDE_FOU_OK=1 git commit -m "x"'])
+})
+
+test('ligne git : en retard, branche supprimée, HEAD détachée, sans remote', () => {
+  const base = { branch: 'main', changed: 0, ahead: 0, hasUpstream: true, hasRemote: true, warnings: [] }
+  expect(textesGit({ ...base, behind: 2 }).distant).toBe('  · 2 commits en retard sur GitHub ')
+  expect(textesGit({ ...base, ahead: 1, behind: 2 }).distant).toBe('  · 1 commit non poussé, 2 en retard ')
+  expect(textesGit({ ...base, gone: true }).distant).toBe('  · branche supprimée sur GitHub ')
+  expect(textesGit({ ...base, detached: true, branch: 'HEAD (no branch)' })).toMatchObject({ branche: '🌿 HEAD', distant: '  · HEAD détachée ', alerte: true })
+  expect(textesGit(base)).toMatchObject({ distant: '  · à jour avec GitHub ', alerte: false })
+  // le bouton : pas de push impossible
+  expect(libelleCommit({ ...base, changed: 2 })).toBe('Commit + push')
+  expect(libelleCommit({ ...base, changed: 2, hasRemote: false })).toBe('Commit')
+  expect(libelleCommit({ ...base, ahead: 1 })).toBe('Push')
+  expect(libelleCommit({ ...base, ahead: 1, hasRemote: false })).toBeNull()
+  expect(libelleCommit({ ...base, ahead: 1, gone: true })).toBeNull()
+  expect(libelleCommit(base)).toBeNull()
 })
 
 test('PowerShell : pas de bash WSL ni d’attente bloquante', async ($, on) => {
@@ -1247,7 +1356,8 @@ test('bandeau : la bande partagée est publiée, ce que Clawd tient n’est plus
   } as never)
   // la bande partagée dit où est chaque étape
   await horloge.settle()
-  expect(publiee).toMatchObject({ lignes: ['pastilles'], elements: [{ id: 'tache-plan-1', x: 0, ligne: 0 }, { id: 'tache-plan-2', x: 16.1, etat: 'encours' }] })
+  // (sans ligne git ni quotas, les commandes ont leur propre rangée : sinon ↻ et Masquer ne seraient nulle part)
+  expect(publiee).toMatchObject({ lignes: ['commandes', 'pastilles'], elements: [{ id: 'tache-plan-1', x: 0, ligne: 0 }, { id: 'tache-plan-2', x: 16.1, etat: 'encours' }] })
   const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
   const source = async () => String((await ui.find({ type: 'Svg' }))?.props?.source)
   expect(await source()).toContain('Corriger le bug')
@@ -1590,7 +1700,7 @@ test('nouvelle conversation : sur la bande partagée, le bouton est là où il e
   const etat = (g: typeof git | null, usage = lourd) =>
     planBandeau({ android: null, git: g, usage, taches: [{ id: 'plan-1', nom: 'Lire', etat: 'attente' }], conso: null, build: null, agents: [], busy: null }, 2 * M)
   // les textes de la ligne git, tels que le bandeau les écrit : 🌿 compte deux cases
-  expect(textesGit(git)).toEqual({ branche: '🌿 main', modifs: '  · 3 modifs', distant: '  · 1 commit non poussé ', alertes: [] })
+  expect(textesGit(git)).toEqual({ branche: '🌿 main', modifs: '  · 3 modifs', distant: '  · 1 commit non poussé ', alerte: true, alertes: [] })
   expect(casesGit(git)).toBe(7 + 12 + 24)
   // avec git : au bout de ses textes, derrière une case vide, sur sa ligne (la troisième depuis le bas)
   const s = sceneDuBandeau(etat(git), quandDe(2 * M), 751)
@@ -1606,8 +1716,12 @@ test('nouvelle conversation : sur la bande partagée, le bouton est là où il e
   expect(Math.abs((q?.x ?? -99) - (jaugesPx + 7.9))).toBeLessThan(0.2)
   // pas encore temps : rien de publié (le bouton est là quand même, Clawd ne vient pas)
   expect(sceneDuBandeau(etat(git, leger), quandDe(2 * M), 751).elements.find(e => e.id === 'nouvelle')).toBeUndefined()
-  // une bande trop étroite : il passerait à la ligne, pas publié
-  expect(sceneDuBandeau(etat(git), quandDe(2 * M), 300).elements.find(e => e.id === 'nouvelle')).toBeUndefined()
+  // une bande étroite : les commandes ne tiennent plus au bout de la ligne git, elles ont leur rangée (sous la ligne git)
+  const etroite = sceneDuBandeau(etat(git), quandDe(2 * M), 300)
+  expect(etroite.lignes).toEqual(['git', 'commandes', 'quotas', 'pastilles'])
+  expect(etroite.elements.find(e => e.id === 'nouvelle')).toMatchObject({ x: 7.9, ligne: 2 })
+  // trop étroite même pour lui seul : pas publié
+  expect(sceneDuBandeau(etat(git), quandDe(2 * M), 200).elements.find(e => e.id === 'nouvelle')).toBeUndefined()
 })
 
 test('bande étroite : la conso et le conseil passent sous les jauges plutôt que de pousser Clawd hors de la bande', () => {
@@ -1625,7 +1739,7 @@ test('bande étroite : la conso et le conseil passent sous les jauges plutôt qu
   const plan = planBandeau({ android: null, git: null, usage, taches: [], conso, build: null, agents: [], busy: null, conseil: { texte: '💡 Sonnet · Faible', titre: 'Conseil' } }, maintenant)
   const tout = svgJauges(plan.jauges, quand, { conso: plan.conso, conseil: plan.conseil }).largeur * ECHELLE
   // une bande où tout tient à côté du coin de Clawd (116 px), avec du jeu : une seule rangée
-  const large = sceneDuBandeau(plan, quand, Math.ceil(tout + 116 + 40))
+  const large = sceneDuBandeau(plan, quand, Math.ceil(tout + 116 + 40 + largeurCommandes(null)))
   expect(large.lignes).toEqual(['quotas'])
   expect(large.elements.find(e => e.id === 'conso')?.ligne).toBe(0)
   // une bande à peine plus étroite que le tout et le coin de Clawd : la conso et le conseil descendent d'une rangée
@@ -1650,6 +1764,28 @@ test('bande étroite : la conso et le conseil passent sous les jauges plutôt qu
   const bas = svgJauges([], quand, { conso: lourd.conso, conseil: lourd.conseil }).largeur * ECHELLE
   expect(b?.ligne).toBe(0)
   expect(Math.abs((b?.x ?? -99) - (bas + 7.9))).toBeLessThan(0.2)
+})
+
+test('bande partagée : rien de coupé au bord n’est publié, et la conso ne fait pas changer les rangées d’un tour à l’autre', () => {
+  // 40 étapes : la rangée des pastilles dépasse une bande de 60 colonnes ; ce qui est coupé n'est pas annoncé à Clawd
+  const taches = Array.from({ length: 40 }, (_, i) => ({ id: `plan-${i}`, nom: `Étape ${i}`, etat: 'attente' as const }))
+  const p = planBandeau({ android: null, git: null, usage: null, taches, conso: null, build: null, agents: [], busy: null }, 0)
+  const bande = Math.round(60 * 7.9)
+  const s = sceneDuBandeau(p, quandDe(0), bande)
+  const pastilles = s.elements.filter(e => e.genre === 'tache')
+  expect(pastilles.length).toBeGreaterThan(10)
+  expect(pastilles.length).toBeLessThan(40)
+  for (const e of s.elements) expect(e.x + e.largeur).toBeLessThanOrEqual(bande - 116 + 0.5)
+  // début de tour (« tour 0 · 0,00 € ») et fin de tour (« tour 1,3 M · 0,38 € ») : les mêmes rangées, à toutes les largeurs
+  const maintenant = Date.UTC(2026, 9, 22, 10, 0)
+  const usage = { fiveHour: { percent: 32, resetsAt: new Date(maintenant + 7200_000).toISOString() }, sevenDay: null, contextPercent: 21, contextTokens: 210_000 }
+  const plan = (conso: ReturnType<typeof debutTour>) => planBandeau({ android: null, git: null, usage, taches: [], conso, build: null, agents: [], busy: null, conseil: { texte: '💡 Sonnet · Faible', titre: '' } }, maintenant)
+  const debut = plan(debutTour(null, 10))
+  const fin = plan(ajouteReponse(debutTour(null, 10), 'claude-opus-5-5', { entree: 2_000, lu: 1_300_000, ecrit: 5_000, sortie: 2_000 }, true, 10.38))
+  expect(fin.conso!.texte.length).toBeGreaterThan(debut.conso!.texte.length)
+  for (let b = 300; b <= 1000; b += 3) {
+    expect(sceneDuBandeau(debut, quandDe(maintenant), b).lignes).toEqual(sceneDuBandeau(fin, quandDe(maintenant), b).lignes)
+  }
 })
 
 test('bandeau desktop étroit : la conso descend sur sa rangée, et nos lignes rétrécissent au lieu de pousser Clawd', async ($, on) => {

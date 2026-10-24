@@ -91,11 +91,14 @@ suivent ton thème clair ou sombre. Pas un mot : tout passe par ses gestes.
 **Le bandeau au-dessus du prompt**
 
 - 📱 Version déclarée, dernier APK construit et version installée sur le
-  téléphone (date comprise). Boutons **Installer sur le tel** (`i`) et
-  **Lancer** (`l`). La version est lue dans le script Gradle, `pubspec.yaml`,
+  téléphone (date comprise). Boutons **Installer sur le tel** et
+  **Lancer**. La version est lue dans le script Gradle, `pubspec.yaml`,
   ou `version.properties` quand le script la calcule.
-- 🌿 Branche, nombre de modifs, commits non poussés, alerte si la version est
-  bumpée sans CHANGELOG. Bouton **Commit + push** (`c`).
+- 🌿 Branche, nombre de modifs, commits non poussés ou en retard, branche
+  supprimée sur GitHub, alerte si la version est bumpée sans CHANGELOG. Bouton
+  **Commit + push** (**Commit** seul dans un dépôt sans remote). Pas de
+  raccourci clavier : une lettre tapée alors que le focus était resté dans la
+  bande déclenchait le bouton.
 - Jauges des quotas 5 h et 7 j et du contexte, à lire d'un coup d'œil :
   - **couleur** : vert, ambre ou rouge selon le niveau, et la barre pulse en
     critique ;
@@ -150,12 +153,20 @@ suivent ton thème clair ou sombre. Pas un mot : tout passe par ses gestes.
   remplacé par celui qui marche. `JAVA_HOME` est ajouté à `gradlew` quand il
   manque.
 - Commandes destructrices (`pm clear`, `uninstall`, `connectedAndroidTest`,
-  push forcé, `reset --hard`…) : il faut ton accord.
+  push forcé, `reset --hard`…) : il faut ton accord. La commande est lue comme
+  le shell la lit : chaque règle ne vise que son outil (un message de commit, un
+  `grep` ou un heredoc qui citent une commande ne demandent rien), et la
+  question montre la commande en cause. Ce que tu écris sous « Other » est
+  transmis à Claude.
 - Secrets (`local.properties`, keystore, `google-services.json`, `.env`) en
-  partance dans un commit ou un push : demande de confirmation.
+  partance dans un commit ou un push : demande de confirmation, dans le dépôt
+  visé (celui du `cd` ou du `-C`). Une suppression ne compte pas, et
+  `GARDE_FOU_OK=1` (ton accord déjà donné au garde-fou global) non plus.
 - Push non demandé : demande de confirmation (un commit passe sans demander).
+  Seule ta demande compte, pas une notification de tâche de fond.
 - Refusés : `bash` lancé depuis PowerShell (sous Windows, ça ouvre WSL) et les
-  `Start-Sleep` de 20 s ou plus (mieux vaut une tâche de fond).
+  attentes de 20 s ou plus au premier plan (`Start-Sleep` et `sleep`,
+  additionnés, et les boucles d'attente) : mieux vaut une tâche de fond.
 
 **Divers**
 

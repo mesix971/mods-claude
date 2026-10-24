@@ -22,6 +22,12 @@ export type AtelierGit = {
   ahead: number
   hasUpstream: boolean
   hasRemote: boolean
+  /** Commits de GitHub pas encore tirés */
+  behind?: number
+  /** La branche suivie a été supprimée sur GitHub */
+  gone?: boolean
+  /** HEAD détachée (pas sur une branche) */
+  detached?: boolean
   /** Alertes de cohérence version/CHANGELOG */
   warnings: string[]
 }
@@ -150,8 +156,8 @@ export type AtelierElement = {
 
 /** La bande partagée : ce qu'atelier dessine, ligne par ligne, et où */
 export type AtelierScene = {
-  /** Les lignes du bandeau, de haut en bas (`suite` : la conso et le conseil, sous les jauges quand ils ne tiennent pas à côté) */
-  lignes: ('android' | 'git' | 'quotas' | 'suite' | 'pastilles' | 'occupe')[]
+  /** Les lignes du bandeau, de haut en bas (`suite` : la conso et le conseil, sous les jauges quand ils ne tiennent pas à côté ; `commandes` : 🆕, Commit, ↻ et Masquer, quand ils ne tiennent pas au bout de leur rangée) */
+  lignes: ('android' | 'git' | 'commandes' | 'quotas' | 'suite' | 'pastilles' | 'occupe')[]
   elements: AtelierElement[]
 }
 
@@ -178,6 +184,8 @@ declare module 'claude-code' {
       minute: number
       busy: string | null
       isHidden: boolean
+      /** Ce qu'atelier a déjà dit dans cette session (un rechargement du module ne le fait pas répéter) : les seuils de quota annoncés, les alertes git montrées, le rappel « réponds en français » à envoyer */
+      memoire: { seuilsVus: string[]; alertes: string; rappelFrancais: boolean }
     }
     /** Le contrat de Clawd (l'autre mod du dépôt), qu'atelier lit seulement */
     clawd: {

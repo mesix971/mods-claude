@@ -19,13 +19,15 @@ import type { EngineInterface, Register, ToolCallResult } from 'claude-code'
 import type { AtelierAgent, AtelierAndroid, AtelierBuild, AtelierConso, AtelierGit, AtelierTache, AtelierUsage } from '../types'
 import { ajouteAgent, causeDe, couleurModele, finAgent, nettoieAgents, pingAgent, resumeAgents } from './agents'
 import { analyse, estBuild, pastilleBuild, quoiBuild, sortieFond } from './build'
+import { attenteBloquante, consentiGardeFou, destructif, envoisGit } from './commande'
+import type { EnvoiGit } from './commande'
 import { aJuger, conseilAffiche, deToi, lisConseil, promptConseil } from './conseil'
 import { ajouteReponse, debutTour, finTour, mesureCout, tokensDe } from './conso'
 import { COULEURS, jauges, resumeJauges, svgJauges, texteJauges } from './jauges'
 import { decrit, estDiscret } from './outils'
 import { svgPastilles } from './pastilles'
 import { aRanger } from './rangement'
-import { CELLULE, ECHELLE, HAUTEUR_DESSIN, empruntsDe, grandeSceneDe, planBandeau, quandDe, quotasCoupes, sceneDuBandeau, textesGit } from './scene'
+import { CELLULE, ECHELLE, HAUTEUR_DESSIN, empruntsDe, grandeSceneDe, commandesAPart, libelleCommit, planBandeau, quandDe, quandPasse, quotasCoupes, sceneDuBandeau, textesGit } from './scene'
 import { LIBELLE_NOUVELLE, commandeSuite } from './suite'
 import { ajouteTache, depuisTaskList, depuisTodos, horodate, interrompue, majTache, planFini, resumeTaches, suitPlan, texteTaches, toutFait } from './taches'
 
@@ -51,6 +53,7 @@ const SANS_REGLAGE = { modele: null, effort: null }
 const minute = atom({ plugin: 'atelier', key: 'minute' } as const, 0)
 const busy = atom({ plugin: 'atelier', key: 'busy' } as const, null)
 const isHidden = atom({ plugin: 'atelier', key: 'isHidden' } as const, false)
+const memoire = atom({ plugin: 'atelier', key: 'memoire' } as const, { seuilsVus: [], alertes: '', rappelFrancais: false })
 
 // ---------------------------------------------------------------- utilitaires
 
@@ -269,10 +272,27 @@ async function conseille($: $, texte: string) {
  * minute ; des appels rapprochés n'en font qu'un.
  */
 let sceneEcrite: string | null = null
-/** La largeur de la bande en px, retenue au dernier rendu sur desktop (null : inconnue) */
+/** La largeur de la bande en px, la plus étroite des dessins desktop vus depuis peu (null : inconnue) */
 let bandePx: number | null = null
-/** Quand tu as demandé une nouvelle conversation : un deuxième clic tout de suite après ne la relance pas */
+/**
+ * Les largeurs vues (px → dernière fois) : une session dessinée par deux
+ * fenêtres de bureau de largeurs différentes publie une seule bande partagée,
+ * réglée sur la plus étroite (sinon elle changerait à chaque rendu, et Clawd
+ * viserait des places fausses une fois sur deux). Le rendu repasse chaque
+ * minute : une fenêtre pas revue depuis 90 s est partie, ou a changé de taille.
+ */
+const largeursVues = new Map<number, number>()
+function noteLargeur(px: number, maintenant: number): number {
+  largeursVues.set(px, maintenant)
+  for (const [l, t] of largeursVues) if (maintenant - t > 90_000) largeursVues.delete(l)
+  return Math.min(...largeursVues.keys())
+}
+/** Quand ta demande de nouvelle conversation est partie : un deuxième clic tout de suite après ne la relance pas */
 let suiteDemandee = 0
+/** Depuis quand une demande attend son tour (null : aucune) : tant qu'elle attend, un deuxième clic ne la double pas */
+let suiteEnFile: number | null = null
+/** Un clic sur 🆕 se décide (posé avant toute attente : deux clics rapprochés ne passent pas tous les deux) */
+let suiteSeDecide = false
 let publication: Promise<void> | null = null
 let aRepublier = false
 function publieScene($: $): Promise<void> {
@@ -327,6 +347,8 @@ async function publieUneFois($: $) {
 async function rangeLesFinis($: $) {
   try {
     const maintenant = await $.clock.now()
+    // Clawd joue sur la bande : la ranger maintenant décalerait ses copies (son dessin est figé) ; ce sera la minute suivante
+    if (grandeSceneDe(await read($, grandeSceneClawd), maintenant) || empruntsDe(await read($, empruntsClawd), maintenant).size > 0) return
     const r = aRanger(maintenant, await read($, finDuTour), await read($, build), await read($, agents), await read($, taches))
     if (!r) return
     // ce qui a recommencé entre-temps reste
@@ -411,13 +433,21 @@ async function findApks($: $, dir: string, depth = 0): Promise<{ path: string; n
   return out
 }
 
-/** Horloge du tel → epoch : `date` du tel donne l'heure locale et l'epoch. */
+/**
+ * Horloge du tel → epoch : `date` du tel donne l'heure locale et l'epoch. Le
+ * décalage vaut pour MAINTENANT : une date d'avant un changement d'heure ne
+ * l'a plus. Quand le tel est dans le fuseau du PC (branché en USB, c'est le
+ * cas), une heure du tel se lit donc comme une heure locale du PC, qui
+ * connaît l'heure d'été de chaque date.
+ */
 async function phoneClockOffset($: $, adb: string, serial: string) {
   const r = await run($, [adb, '-s', serial, 'shell', 'date', '+%s_%Y-%m-%dT%H:%M:%S'])
   const m = r?.stdout.trim().match(/^(\d+)_(\S+)$/)
   if (!m) return null
   // décalage = heure locale lue comme UTC − vrai epoch
-  return Date.parse(`${m[2]}Z`) - Number(m[1]) * 1000
+  const epoch = Number(m[1]) * 1000
+  const decalage = Date.parse(`${m[2]}Z`) - epoch
+  return { decalage, memeFuseau: decalage === -new Date(epoch).getTimezoneOffset() * 60_000 }
 }
 
 async function refreshAndroid($: $, cwd: string): Promise<AtelierAndroid | null> {
@@ -494,8 +524,8 @@ async function refreshAndroid($: $, cwd: string): Promise<AtelierAndroid | null>
   const updated = out.match(/lastUpdateTime=(\d{4}-\d\d-\d\d) (\d\d:\d\d:\d\d)/)
   let updatedMs: number | null = null
   if (updated) {
-    const offset = await phoneClockOffset($, adb, serial)
-    if (offset !== null) updatedMs = Date.parse(`${updated[1]}T${updated[2]}Z`) - offset
+    const h = await phoneClockOffset($, adb, serial)
+    if (h !== null) updatedMs = h.memeFuseau ? Date.parse(`${updated[1]}T${updated[2]}`) : Date.parse(`${updated[1]}T${updated[2]}Z`) - h.decalage
   }
   info.installed = { pkg, versionName: vName, versionCode: vCode, updatedMs }
 
@@ -521,19 +551,27 @@ const VERSION_FILES = [
   'version.properties',
 ]
 
-async function refreshGit($: $, cwd: string): Promise<AtelierGit | null> {
-  const st = await run($, ['git', '-C', cwd, 'status', '--porcelain=v1', '-b'])
-  if (!st || st.exitCode !== 0) return null
+/**
+ * L'état git du dossier : null si ce n'est pas un dépôt, undefined si on ne
+ * sait pas (git trop lent ou pas lancé : la bande garde l'état d'avant au lieu
+ * de perdre sa ligne git). Sans verrou (`--no-optional-locks`) : un `git
+ * status` de fond ne fait jamais échouer un `git commit` de Claude.
+ */
+async function refreshGit($: $, cwd: string): Promise<AtelierGit | null | undefined> {
+  const st = await run($, ['git', '--no-optional-locks', '-C', cwd, 'status', '--porcelain=v1', '-b'])
+  if (!st) return undefined
+  if (st.exitCode !== 0) return null
   const lines = st.stdout.split(/\r?\n/).filter(Boolean)
   const head = lines[0] ?? ''
   const files = lines.slice(1).map(l => l.slice(3).replace(/^"|"$/g, ''))
   const branch = head.replace(/^## (No commits yet on )?/, '').split('...')[0]?.trim() ?? '?'
-  const remote = await run($, ['git', '-C', cwd, 'remote'])
+  const remote = await run($, ['git', '--no-optional-locks', '-C', cwd, 'remote'])
+  if (!remote) return undefined
 
   const warnings: string[] = []
   const touched = files.filter(f => VERSION_FILES.includes(f))
   if (touched.length > 0) {
-    const diff = await run($, ['git', '-C', cwd, 'diff', 'HEAD', '-U0', '--', ...touched])
+    const diff = await run($, ['git', '--no-optional-locks', '-C', cwd, 'diff', 'HEAD', '-U0', '--', ...touched])
     const bumped = (diff?.stdout ?? '')
       .split(/\r?\n/)
       .some(l => /^\+(?!\+)/.test(l) && (/versionName|versionCode|^\+version:|"version"\s*:|appVersion|__version__|VERSION\s*=/.test(l) || /version[._-]?(major|minor|patch)\s*[=:]/i.test(l)))
@@ -553,8 +591,11 @@ async function refreshGit($: $, cwd: string): Promise<AtelierGit | null> {
     branch,
     changed: files.length,
     ahead: Number(head.match(/ahead (\d+)/)?.[1] ?? 0),
+    behind: Number(head.match(/behind (\d+)/)?.[1] ?? 0),
+    gone: /\[gone\]\s*$/.test(head),
+    detached: /^## HEAD \(no branch\)/.test(head),
     hasUpstream: head.includes('...'),
-    hasRemote: (remote?.stdout.trim() ?? '') !== '',
+    hasRemote: remote.stdout.trim() !== '',
     warnings,
   }
 }
@@ -602,7 +643,8 @@ function refresh($: $) {
       const cwd = slash(await $.session.cwd())
       const [a, g] = await Promise.all([refreshAndroid($, cwd), refreshGit($, cwd)])
       await update($, android, () => a)
-      await update($, git, () => g)
+      // git trop lent ou pas lancé : on garde ce qu'on savait (sinon la ligne git disparaît, et toute la bande bouge)
+      if (g !== undefined) await update($, git, () => g)
       void publieScene($)
     } catch {
       // module rechargé ou session fermée en plein rafraîchissement : on laisse tomber
@@ -633,7 +675,9 @@ async function installApk($: $) {
     if (/INSTALL_FAILED_VERSION_DOWNGRADE/.test(out)) {
       return '❌ Version plus ancienne que celle du tel (downgrade refusé).'
     }
-    return `❌ Échec : ${out.match(/Failure \[[^\]]+\]/)?.[0] ?? (out.trim().split(/\r?\n/).pop() ?? 'adb muet')}`
+    // (adb muet : rien à citer ; pas lancé ou pas fini en 3 min : le dire, au lieu d'un « Échec : » vide)
+    const derniere = out.trim().split(/\r?\n/).pop()
+    return `❌ Échec : ${out.match(/Failure \[[^\]]+\]/)?.[0] ?? (derniere || (r ? 'adb muet' : 'adb injoignable ou pas fini en 3 min (une confirmation attend sur le tel ?)'))}`
   } finally {
     await update($, busy, () => null)
     void publieScene($)
@@ -651,53 +695,68 @@ async function launchApp($: $) {
 
 // ------------------------------------------------------------ garde-fous
 
-const DESTRUCTIF: [RegExp, string][] = [
-  [/\bpm\s+clear\b/, 'efface toutes les données de l’app sur le tel'],
-  [/\b(adb\b.*\buninstall|pm\s+uninstall)\b/, 'désinstalle une app (données perdues)'],
-  [/\bconnected(AndroidTest|Check)\b/, 'les tests instrumentés peuvent vider les données de l’app installée'],
-  [/\bgit\s+push\b.*(\s--force\b|\s-f\b|\s--force-with-lease\b)/, 'push forcé : réécrit l’historique distant'],
-  [/\bgit\s+reset\s+--hard\b/, 'jette les modifications non commitées'],
-  [/\bgit\s+clean\s+-\w*f/, 'supprime les fichiers non suivis'],
-  [/\bgit\s+branch\s+-D\b/, 'supprime une branche non fusionnée'],
-  [/\bgit\s+checkout\s+(--\s+)?\.(\s|$)|\bgit\s+restore\s+\.(\s|$)/, 'annule toutes les modifications en cours'],
-  [/\bClear-RecycleBin\b|\bFormat-Volume\b|\bformat\s+[a-z]:/i, 'suppression définitive'],
-  [/\badb\b.*\bshell\b.*\brm\s+-r/, 'supprime des fichiers sur le tel'],
-]
-
 const SECRET = /(^|\/)(local\.properties|google-services\.json|key\.properties|\.env(\.(?!example$|sample$)[^/]+)?)$|\.(jks|keystore)$/i
 
-async function secretsAboutToLeave($: $, command: string) {
-  const cwd = slash(await $.session.cwd())
+/**
+ * Les fichiers sensibles que les commits et pushs de la commande enverraient,
+ * dépôt par dépôt (celui du `cd` ou du `-C` de chaque appel, sinon celui de la
+ * session). Une suppression n'envoie rien : elle ne compte pas.
+ */
+async function secretsAboutToLeave($: $, envois: readonly EnvoiGit[]) {
+  const session = slash(await $.session.cwd())
   const lists: string[] = []
-  const add = async (argv: string[]) => {
-    const r = await run($, ['git', '-C', cwd, ...argv])
+  const add = async (depot: string, argv: string[]) => {
+    const r = await run($, ['git', '--no-optional-locks', '-C', depot, ...argv])
     if (r?.exitCode === 0) lists.push(...r.stdout.split(/\r?\n/).filter(Boolean))
   }
-  if (/\bgit\s+push\b/.test(command)) {
-    await add(['ls-files'])
-  }
-  if (/\bgit\s+commit\b/.test(command)) {
-    await add(['diff', '--cached', '--name-only'])
-    // `git add -A && git commit`, `commit -a` : ce qui n'est pas encore indexé part aussi
-    if (/\bgit\s+add\s+(-A|--all|\.)|\bcommit\s+(-\w*a|--all)\b/.test(command)) {
-      await add(['ls-files', '--others', '--modified', '--exclude-standard'])
+  const faits = new Set<string>()
+  for (const e of envois) {
+    const depot = e.depot ?? session
+    const cle = `${e.sous}|${depot}|${e.tout}`
+    if (faits.has(cle)) continue
+    faits.add(cle)
+    if (e.sous === 'push') {
+      await add(depot, ['ls-files'])
+      continue
     }
+    await add(depot, ['diff', '--cached', '--name-only', '--diff-filter=d'])
+    // `git add -A && git commit`, `commit -a` : ce qui n'est pas encore indexé part aussi ; un `git add .env` de la
+    // même commande n'est pas encore dans l'index quand on regarde : ses chemins comptent tels quels
+    if (e.tout) await add(depot, ['diff', '--name-only', '--diff-filter=d'])
+    if (e.nonSuivis) await add(depot, ['ls-files', '--others', '--exclude-standard'])
+    lists.push(...e.ajoutes)
   }
   return [...new Set(lists.filter(f => SECRET.test(f)))]
 }
 
-async function confirm($: $, question: string) {
+/**
+ * Ta réponse à une question du garde-fou : true si tu autorises, sinon ce
+ * qu'il faut en dire à Claude (ton refus, ce que tu as écrit sous « Other »,
+ * ou la question fermée sans réponse, et en `-p`, où personne ne répond).
+ */
+async function confirm($: $, question: string): Promise<true | string> {
   try {
-    return (await $.ui.ask(question, ['Autoriser', 'Refuser'])) === 'Autoriser'
+    const r = (await $.ui.ask(question, ['Autoriser', 'Refuser'])).trim()
+    if (r === 'Autoriser') return true
+    return r === 'Refuser' ? 'refusé par l’utilisateur' : `l’utilisateur a répondu « ${r.slice(0, 300)} » au lieu d’autoriser`
   } catch {
-    return false // fenêtre fermée, ou pas d'humain (-p) : on refuse
+    return 'question fermée sans réponse'
   }
 }
 
+/** La dernière demande écrite par toi (ou par le bouton « Commit + push », une routine, `claude -p`) : elle seule dit si un push est voulu */
 let lastPrompt = ''
 let jbrToastShown = false
 
 const DEMANDE_GIT = /commit|push|pouss|envoie|\b(oui|ok|go|vas[- ]y|valide)\b/i
+
+/** Ce qui vient de toi, pour le push : pas une notification de tâche de fond, ni le message d'une autre session (sans origine connue : comme avant, ta demande) */
+const demandeDeToi = (o: { kind: string; name?: string } | undefined) =>
+  !o ||
+  deToi(o) || o?.kind === 'sdk' || o?.kind === 'scheduled-trigger' || o?.kind === 'auto-continuation' || o?.kind === 'slack-ping' || (o?.kind === 'plugin' && o.name === 'atelier')
+
+/** La commande simple en cause, telle qu'elle est écrite (jamais un extrait qui la couperait avant elle) */
+const extrait = (cmd: string, texte: string) => `${texte.slice(0, 300)}${cmd.length > texte.length ? `\n(dans une commande de ${cmd.length} caractères)` : ''}`
 
 async function guard(
   $: $,
@@ -718,7 +777,8 @@ async function guard(
   const jbr = chemins.length > 0 || /gradlew/.test(cmd) ? await trouverJbr($) : null
   if (jbr) {
     for (const c of new Set(chemins)) {
-      if (slash(c) === jbr || (await $.fs.exists(`${slash(c)}/lib/jvm.cfg`))) continue
+      // (un chemin qu'on ne peut pas vérifier, sur un partage réseau : on n'y touche pas)
+      if (slash(c) === jbr || (await $.fs.exists(`${slash(c)}/lib/jvm.cfg`).catch(() => true))) continue
       cmd = cmd.split(c).join(c.includes('\\') ? jbr.replace(/\//g, '\\') : jbr)
       if (!jbrToastShown) {
         $.ui.toast(`atelier : JBR introuvable remplacé par ${jbr}`)
@@ -730,7 +790,7 @@ async function guard(
   // gradlew sans JAVA_HOME valable : on lui donne le JBR d'Android Studio
   if (jbr && /gradlew/.test(cmd) && !/JAVA_HOME/.test(cmd)) {
     const javaHome = await $.env.get('JAVA_HOME')
-    if (!javaHome || !(await $.fs.exists(`${slash(javaHome)}/lib/jvm.cfg`))) {
+    if (!javaHome || !(await $.fs.exists(`${slash(javaHome)}/lib/jvm.cfg`).catch(() => true))) {
       cmd =
         tool === 'Bash'
           ? `export JAVA_HOME="${jbr}"; ${cmd}`
@@ -742,42 +802,57 @@ async function guard(
     if (/(^|[;|&\s])(bash|wsl)(\.exe)?\s+(-c|-lc|\S+\.sh)\b/.test(cmd)) {
       return { deny: '`bash` lancé depuis PowerShell ouvre WSL sur ce PC : utilise directement l’outil Bash (Git Bash).' }
     }
-    const sleep = cmd.match(/Start-Sleep\s+(?:-(s|Seconds|ms|Milliseconds)\s+)?(\d+)/i)
-    if (sleep && !isBackground) {
-      const secs = /^m/i.test(sleep[1] ?? '') ? Number(sleep[2]) / 1000 : Number(sleep[2])
-      if (secs >= 20) {
-        return {
-          deny: `Attente bloquante de ${Math.round(secs)} s refusée : lance la tâche avec run_in_background (ou Monitor) et laisse la notification te réveiller.`,
-        }
+    const secs = attenteBloquante(cmd)
+    if (!isBackground && secs >= 20) {
+      return {
+        deny: `Attente bloquante de ${Math.round(secs)} s refusée : lance la tâche avec run_in_background (ou Monitor) et laisse la notification te réveiller.`,
       }
     }
   }
 
-  for (const [re, why] of DESTRUCTIF) {
-    if (re.test(cmd)) {
-      const ok = await confirm($, `⚠️ Commande destructrice (${why}) :\n${cmd.slice(0, 300)}\nAutoriser ?`)
-      if (!ok) return { deny: `Refusé par l’utilisateur via le garde-fou atelier (${why}). Ne réessaie pas sans son accord explicite.` }
-      break
-    }
+  // chaque règle ne vise que son outil : un message de commit, un grep ou un heredoc qui citent une commande ne demandent rien
+  const d = destructif(cmd, tool)
+  if (d) {
+    const ok = await confirm($, `⚠️ Commande destructrice (${d.raison}) :\n${extrait(cmd, d.texte)}\nAutoriser ?`)
+    if (ok !== true) return { deny: `Pas d’accord (${ok}) via le garde-fou atelier (${d.raison}). Ne réessaie pas sans son accord explicite.` }
   }
 
-  if (/\bgit\s+(commit|push)\b/.test(cmd)) {
-    const leaks = await secretsAboutToLeave($, cmd)
+  const maison = (await $.env.get('USERPROFILE')) ?? (await $.env.get('HOME'))
+  const envois = envoisGit(cmd, slash(await $.session.cwd()), tool, maison ? slash(maison) : undefined)
+  if (envois.length > 0) {
+    // garde-fou.ps1 a déjà eu ton accord (GARDE_FOU_OK=1) : pas une deuxième question pour la même chose
+    const leaks = consentiGardeFou(cmd, tool) ? [] : await secretsAboutToLeave($, envois)
     if (leaks.length > 0) {
       const ok = await confirm($, `🔑 Fichiers sensibles sur le point de partir dans git : ${leaks.join(', ')}. Autoriser quand même ?`)
-      if (!ok) {
+      if (ok !== true) {
         return {
-          deny: `Secrets détectés (${leaks.join(', ')}) : ajoute-les au .gitignore et retire-les de l’index (git rm --cached) avant de committer/pousser.`,
+          deny: `Secrets détectés (${leaks.join(', ')}), pas d’accord (${ok}) : ajoute-les au .gitignore et retire-les de l’index (git rm --cached) avant de committer/pousser.`,
         }
       }
-    } else if (/\bgit\s+push\b/.test(cmd) && !DEMANDE_GIT.test(lastPrompt)) {
+    }
+    // (accepter des secrets n'est pas accepter un push que tu n'as pas demandé : deux questions distinctes)
+    if (envois.some(e => e.sous === 'push') && !DEMANDE_GIT.test(lastPrompt)) {
       // un commit se défait ; un push, beaucoup moins : seul le push demande l'accord
       const ok = await confirm($, 'Claude veut faire un `git push` sans que tu l’aies demandé. Autoriser ?')
-      if (!ok) return { deny: 'L’utilisateur n’a pas demandé de push : propose-le au lieu de le faire.' }
+      if (ok !== true) return { deny: `Pas de push sans demande (${ok}) : propose-le au lieu de le faire.` }
     }
   }
 
   return { command: cmd }
+}
+
+/**
+ * Les verdicts des builds finis pendant qu'un autre build tenait la pastille
+ * (par leur début) : si l'autre est refusé, on remet le verdict, pas
+ * l'instantané « en cours » d'un build qui ne finira plus jamais
+ */
+const verdictsRetenus = new Map<number, AtelierBuild>()
+function retiens(b: AtelierBuild) {
+  verdictsRetenus.set(b.debut, b)
+  for (const vieux of verdictsRetenus.keys()) {
+    if (verdictsRetenus.size <= 10) break
+    verdictsRetenus.delete(vieux)
+  }
 }
 
 const TOUCHE_ETAT = /gradlew|\badb\b|flutter|\bgit\b|release\.ps1|build\.gradle|pubspec/i
@@ -810,19 +885,28 @@ async function shell(
     const fin = (await maintenantOuRien($)) ?? debutBuild
     const resultat = ran.result as { stdout?: string; stderr?: string; interrupted?: boolean; backgroundTaskId?: string } | undefined
     const sortie = `${resultat?.stdout ?? ''}\n${resultat?.stderr ?? ''}`
-    if (ran.deny !== undefined || (ran.isError === true && !sortie.trim() && !resultat?.backgroundTaskId)) {
-      // refusé, ou jamais lancé : on revient au build d'avant
-      await majBuild($, b => (ceBuild(b) ? precedent : b))
+    // sur une erreur, le moteur ne donne que le texte : un build qui a tourné et échoué s'y lit (code de sortie, tâches gradle)
+    const aTourne = sortie.trim() !== '' || /^Exit code \d+/m.test(ran.text ?? '') || /BUILD (FAILED|SUCCESSFUL)|> Task /.test(ran.text ?? '')
+    // son verdict, sauf si un autre build a pris la pastille entre-temps : retenu, pour ne jamais remettre son instantané « en cours »
+    const pose = async (f: (b: AtelierBuild) => AtelierBuild) =>
+      majBuild($, b => {
+        if (ceBuild(b)) return f(b as AtelierBuild)
+        if (b && b.debut !== debutBuild) retiens(f({ quoi: quoiBuild(verdict.command), debut: debutBuild, etat: 'encours' }))
+        return b
+      })
+    if (ran.deny !== undefined || (ran.isError === true && !aTourne && !resultat?.backgroundTaskId)) {
+      // refusé, ou jamais lancé : on revient au build d'avant (fini entre-temps : avec son verdict)
+      await majBuild($, b => (ceBuild(b) ? ((precedent && verdictsRetenus.get(precedent.debut)) ?? precedent) : b))
     } else if (resultat?.backgroundTaskId) {
       // en tâche de fond : on le suit jusqu'à sa fin (classic.Stop)
       const fond = { id: resultat.backgroundTaskId, sortie: sortieFond(ran.text), commande: verdict.command.slice(0, 300) }
       await majBuild($, b => (ceBuild(b) ? { ...(b as AtelierBuild), fond } : b))
     } else if (resultat?.interrupted || (ran.isError === true && /interrupt|aborted/i.test(ran.text ?? ''))) {
       // (sur une erreur, le moteur ne donne que le texte, jamais l'enregistrement de l'outil : l'Échap se lit dans le texte)
-      await majBuild($, b => (ceBuild(b) ? { ...(b as AtelierBuild), etat: 'fini', detail: 'interrompu', fin } : b))
+      await pose(b => ({ ...b, etat: 'fini', detail: 'interrompu', fin }))
     } else {
       const v = analyse(`${sortie}\n${ran.text ?? ''}`, ran.isError === true)
-      await majBuild($, b => (ceBuild(b) ? { ...(b as AtelierBuild), ...v, fin } : b))
+      await pose(b => ({ ...b, ...v, fin }))
     }
   }
   if (TOUCHE_ETAT.test(verdict.command)) {
@@ -853,9 +937,6 @@ function isEnglish(answer: string) {
   return en >= 8 && en > fr * 2
 }
 
-let rappelFrancais = false
-let dernieresAlertes = ''
-const seuilsVus = new Set<string>()
 
 // ------------------------------------------------------------------ hooks
 
@@ -864,13 +945,19 @@ export const register: Register = on => {
     await $.command.register({ name: 'tel', description: 'Installe le dernier APK du projet sur le téléphone branché' })
     await $.command.register({ name: 'atelier', description: 'Affiche/masque le bandeau atelier et le rafraîchit' })
     const ran = await next(e)
+    // un environnement neuf (session, module rechargé, worker remplacé) n'a plus rien en vol : une installation ou
+    // un build au premier plan laissés en plan par l'ancien ne tourneront plus jamais (sinon « ⏳ » et l'orbe restent pour de bon)
+    const t0 = await maintenantOuRien($)
+    await update($, busy, () => null).catch(() => {})
+    await majBuild($, b => (b?.etat === 'encours' && !b.fond ? { ...b, etat: 'fini', detail: 'interrompu', fin: t0 ?? b.debut } : b)).catch(() => {})
     // la bande partagée tout de suite (vide au départ) : Clawd sait qu'atelier est là et ne pose pas son numéro en double
     void publieScene($)
     void refresh($)
     // une session neuve ou un module rechargé, sans fin de tour connue : le
     // délai du rangement part d'ici (sinon une vieille croix rouge attendrait
-    // la fin du prochain tour)
-    if ((await read($, finDuTour).catch(() => null)) === null) await noteFinDuTour($, await maintenantOuRien($))
+    // la fin du prochain tour) ; pas en plein tour (rechargé pendant que Claude
+    // travaille) : le rangement viderait la bande sous ses yeux
+    if ((await read($, finDuTour).catch(() => null)) === null && !(await read($, conso).catch(() => null))?.tour?.enCours) await noteFinDuTour($, t0)
     // chaque minute : quotas relus, pastilles finies rangées, et le bandeau
     // redessiné (une fenêtre qui vient de se réinitialiser repasse à 0 %, le
     // trait du temps avance)
@@ -903,7 +990,8 @@ export const register: Register = on => {
   })
 
   on('prompt.submit', async ($, e, next) => {
-    lastPrompt = e.text
+    // une notification de tâche de fond ou le message d'une autre session ne remplacent pas ta demande
+    if (demandeDeToi(e.origin)) lastPrompt = e.text
     // un plan entièrement fait laisse la place au suivant (pas sur un message
     // que le moteur glisse lui-même : tu n'as pas encore vu le plan fini)
     if (!e.isMeta) {
@@ -913,8 +1001,8 @@ export const register: Register = on => {
       // pas pour une routine, une autre session ou un plugin, ni bandeau masqué : du quota pour rien
       if (!e.command && deToi(e.origin) && aJuger(e.text) && !(await read($, isHidden))) void conseille($, e.text)
     }
-    if (!rappelFrancais) return next(e)
-    rappelFrancais = false
+    if (!(await read($, memoire).catch(() => null))?.rappelFrancais) return next(e)
+    await update($, memoire, m => ({ ...m, rappelFrancais: false })).catch(() => {})
     return next({
       ...e,
       context: [
@@ -1101,15 +1189,15 @@ export const register: Register = on => {
       // tour interrompu : l'étape en cours n'avance plus
       if (e.isAborted) await majTaches($, interrompue)
       if (!e.isAborted && isEnglish(e.answer)) {
-        rappelFrancais = true
+        await update($, memoire, m => ({ ...m, rappelFrancais: true })).catch(() => {})
         $.ui.toast('atelier : réponse en anglais détectée, rappel envoyé au prochain message')
       }
       void refresh($)
         .then(async () => {
           // un toast seulement quand l'alerte change, pas à chaque tour
           const now = ((await read($, git))?.warnings ?? []).join('|')
-          if (now !== dernieresAlertes) {
-            dernieresAlertes = now
+          if (now !== (await read($, memoire)).alertes) {
+            await update($, memoire, m => ({ ...m, alertes: now }))
             for (const w of now ? now.split('|') : []) $.ui.toast(`⚠️ ${w}`, { timeoutMs: 8000 })
           }
         })
@@ -1121,6 +1209,8 @@ export const register: Register = on => {
   // /clear ou une reprise : le processus continue sur une autre conversation, qui a sa propre liste
   on('session.end', async ($, e, next) => {
     finisAvantNaissance.clear()
+    // le rappel « réponds en français » visait une réponse de l'autre conversation
+    await update($, memoire, m => ({ ...m, rappelFrancais: false })).catch(() => {})
     // un conseil encore en route parlait de l'autre conversation
     dernierConseil++
     await Promise.all([majTaches($, () => []), majAgents($, () => []), majConso($, () => null), update($, conseil, () => null).catch(() => {})])
@@ -1147,17 +1237,24 @@ export const register: Register = on => {
     const cout = e.cost?.usd
     if (typeof cout === 'number' && Number.isFinite(cout)) await majConso($, c => mesureCout(c, cout))
 
+    const m = await read($, memoire).catch(() => null)
+    let vus = m?.seuilsVus ?? []
+    const t = await maintenantOuRien($)
+    const quand = t !== null ? quandDe(t) : hhmm
     for (const [label, w] of [['5 h', u.fiveHour], ['7 j', u.sevenDay]] as const) {
       if (!w) continue
       for (const seuil of [80, 95]) {
         const id = `${label}:${seuil}:${w.resetsAt ?? ''}`
-        if (w.percent >= seuil && !seuilsVus.has(id)) {
-          seuilsVus.add(id)
-          const reset = w.resetsAt ? ` (reset ${hhmm(Date.parse(w.resetsAt))})` : ''
+        if (w.percent >= seuil && !vus.includes(id)) {
+          vus = [...vus, id]
+          // le jour avec l'heure quand le reset est loin (« mar. 09:00 »), comme la jauge
+          const reset = w.resetsAt ? ` (reset ${quand(Date.parse(w.resetsAt))})` : ''
           $.ui.toast(`⏳ Quota ${label} à ${Math.round(w.percent)} %${reset}`, { timeoutMs: 10_000 })
         }
       }
     }
+    // (les 20 derniers suffisent : un seuil vu porte l'heure de son reset)
+    if (m && vus.length !== m.seuilsVus.length) await update($, memoire, x => ({ ...x, seuilsVus: vus.slice(-20) })).catch(() => {})
     return next(e)
   })
 
@@ -1234,16 +1331,20 @@ export const register: Register = on => {
     let largeurJaugesPx = 0
     let largeurPastillesPx = 0
     if (e.surface === 'desktop') {
-      const px = Math.round(e.props.bodyColumns * CELLULE)
+      const px = noteLargeur(Math.round(e.props.bodyColumns * CELLULE), maintenant)
       // une nouvelle largeur (la première, ou la fenêtre redimensionnée) : la bande partagée suit, sans attendre un autre changement
       if (px !== bandePx) {
         bandePx = px
-        void publieScene($)
+        // (pas d'ici : le moteur refuse d'écrire un état pendant un rendu ; juste après)
+        $.clock.after(0, () => void publieScene($))
       }
     }
+    // ce que la largeur décide (la même règle que la bande partagée) : sur le bureau seulement, le terminal se mesure en cases
+    const largeurIci = e.surface === 'desktop' ? bandePx : null
+    const aPart = commandesAPart(plan, quand, largeurIci)
     if ((lj.length > 0 || pastilleC || plan.conseil) && e.surface === 'desktop') {
       const { Svg } = $.ui.resolve(e)
-      const coupe = quotasCoupes(plan, quand, bandePx)
+      const coupe = quotasCoupes(plan, quand, largeurIci)
       const contexte = u ? { tokens: u.contextTokens, window: u.contextWindow } : undefined
       const dessin = svgJauges(lj, quand, { maintenant, contexte, caches, ...(coupe ? {} : { conso: pastilleC, conseil: plan.conseil }) })
       const altConso = [pastilleC ? `Conso : ${pastilleC.texte}` : '', plan.conseil ? `Conseil : ${plan.conseil.texte}` : '']
@@ -1336,46 +1437,65 @@ export const register: Register = on => {
         label={LIBELLE_NOUVELLE}
         dimColor
         onPress={async () => {
-          // un deuxième clic juste après : la demande est déjà en route (elle attend la fin du tour en cours)
-          const maintenant = await $.clock.now()
-          if (maintenant - suiteDemandee < 60_000) {
-            $.ui.toast('Nouvelle conversation déjà demandée : elle part dès que Claude a fini son tour.', { timeoutMs: 6000 })
-            return
+          // un deuxième clic pendant que le premier se décide (la liste des commandes, ta réponse pour /clear) : rien de plus
+          if (suiteSeDecide) return
+          suiteSeDecide = true
+          let commande = ''
+          let maintenant = 0
+          try {
+            // un deuxième clic : la demande est déjà en route (en file jusqu'à la fin du tour en cours, puis 60 s de grâce)
+            maintenant = await $.clock.now()
+            if ((suiteEnFile !== null && maintenant - suiteEnFile < 30 * 60_000) || maintenant - suiteDemandee < 60_000) {
+              $.ui.toast('Nouvelle conversation déjà demandée : elle part dès que Claude a fini son tour.', { timeoutMs: 6000 })
+              return
+            }
+            // sans la liste des commandes, on ne sait pas si /suite existe : rien ne part (surtout pas un /clear)
+            const liste = await $.command.list().catch(() => null)
+            if (!liste) {
+              $.ui.toast('Nouvelle conversation impossible pour l’instant : réessaie dans un instant.', { timeoutMs: 6000 })
+              return
+            }
+            commande = commandeSuite(liste.map(c => c.name))
+            // sans /suite, c'est /clear : la conversation repart de zéro, on te demande d'abord
+            if (commande === 'clear' && (await confirm($, 'Ouvrir une nouvelle conversation (/clear) ? Celle-ci reste dans l’historique.')) !== true) return
+            suiteEnFile = maintenant
+          } finally {
+            suiteSeDecide = false
           }
-          // sans la liste des commandes, on ne sait pas si /suite existe : rien ne part (surtout pas un /clear)
-          const liste = await $.command.list().catch(() => null)
-          if (!liste) {
-            $.ui.toast('Nouvelle conversation impossible pour l’instant : réessaie dans un instant.', { timeoutMs: 6000 })
-            return
-          }
-          const commande = commandeSuite(liste.map(c => c.name))
-          // sans /suite, c'est /clear : la conversation repart de zéro, on te demande d'abord
-          if (commande === 'clear' && !(await confirm($, 'Ouvrir une nouvelle conversation (/clear) ? Celle-ci reste dans l’historique.'))) return
-          suiteDemandee = maintenant
           $.ui.toast(
             commande === 'suite' ? 'Je prépare la note de passation (/suite), puis la nouvelle conversation…' : 'Nouvelle conversation…',
             { timeoutMs: 6000 },
           )
-          await $.command.run({ command: commande }).catch(err => {
-            suiteDemandee = 0
-            $.ui.toast(`Nouvelle conversation impossible pour l’instant : ${String(err).slice(0, 120)}`, { timeoutMs: 8000 })
-          })
+          const partie = await $.command.run({ command: commande }).then(
+            () => true,
+            err => {
+              $.ui.toast(`Nouvelle conversation impossible pour l’instant : ${String(err).slice(0, 120)}`, { timeoutMs: 8000 })
+              return false
+            },
+          )
+          // partie : encore 60 s de grâce ; échouée : on peut recliquer tout de suite
+          suiteEnFile = null
+          suiteDemandee = partie ? await $.clock.now().catch(() => maintenant) : 0
         }}
       />
     )
     // Commit + push : sur la ligne git, quand il y a de quoi (pas pendant un tour)
-    const commit = g && (g.changed > 0 || g.ahead > 0) && !e.props.isWorking && (
+    // (sans raccourci clavier : le focus resté dans la bande après un clic, une demande tapée qui commence par « c »
+    // lançait le commit + push sans le vouloir ; sans remote, un commit seul, jamais un push impossible)
+    const libCommit = g ? libelleCommit(g) : null
+    const commit = g && libCommit && !e.props.isWorking && (
       <Button
         key="commit"
-        label={g.changed > 0 ? 'Commit + push' : 'Push'}
-        hotkey="c"
+        label={libCommit}
         dimColor
         onPress={() =>
           $.prompt.submit({
             text:
-              g.changed > 0
+              libCommit === 'Commit + push'
                 ? 'Commit (message conventionnel en français) et pousse les changements en cours, puis vérifie que le push est bien passé.'
-                : 'Pousse les commits en attente et vérifie que le push est bien passé.',
+                : libCommit === 'Commit'
+                  ? 'Commit (message conventionnel en français) les changements en cours. Ce dépôt n’a pas de remote : pas de push.'
+                  : 'Pousse les commits en attente et vérifie que le push est bien passé.',
             asUser: true,
           })
         }
@@ -1385,12 +1505,15 @@ export const register: Register = on => {
     // Commit + push après lui, sinon il le décalerait à chaque fin de tour, sous les yeux de Clawd qui le montre
     // chacun posé à part sur la rangée (pas dans une boîte) : quand elle est pleine, ce qui suit 🆕 passe à la ligne,
     // pas 🆕 avec (il resterait sinon là où Clawd ne le montre pas)
+    const espace = (k: string) => e.surface !== 'desktop' && <Text key={k}> </Text>
     const commandes = [
       <Text key="avant-nouvelle"> </Text>,
       nouvelle,
       <Text key="apres-nouvelle"> </Text>,
       commit,
+      commit && espace('apres-commit'),
       <Button key="refresh" label="↻" plain dimColor onPress={() => refresh($)} />,
+      espace('apres-refresh'),
       <Button
         key="hide"
         label="Masquer"
@@ -1404,6 +1527,12 @@ export const register: Register = on => {
         }}
       />,
     ]
+    // sur leur propre rangée quand elles ne tiendraient pas au bout de la leur (commandesAPart, comme la bande partagée)
+    const rangeeCommandes = (
+      <Box key="ligne-commandes" flexDirection="row" flexWrap="wrap" alignItems="center">
+        {commandes}
+      </Box>
+    )
 
     return (
       <Box flexDirection="row" alignItems="flex-end">
@@ -1415,13 +1544,13 @@ export const register: Register = on => {
               <Text bold>{`📱 ${a.versionName ?? '?'}${a.versionCode !== null ? ` (${a.versionCode})` : ''}`}</Text>
               <Text dimColor>
                 {a.apk
-                  ? `  · APK ${a.apk.version ?? a.apk.name} ${hhmm(a.apk.mtimeMs)}`
+                  ? `  · APK ${a.apk.version ?? a.apk.name} ${quandPasse(maintenant)(a.apk.mtimeMs)}`
                   : '  · pas d’APK construit'}
               </Text>
               {a.device ? (
                 a.installed ? (
                   <Text color={a.isPhoneStale ? 'yellow' : 'green'}>
-                    {`  · tel ${a.installed.versionName}${a.installed.updatedMs ? ` ${hhmm(a.installed.updatedMs)}` : ''} `}
+                    {`  · tel ${a.installed.versionName}${a.installed.updatedMs ? ` ${quandPasse(maintenant)(a.installed.updatedMs)}` : ''} `}
                     {a.isPhoneStale ? '⚠ pas à jour ' : '✓ '}
                   </Text>
                 ) : (
@@ -1435,14 +1564,13 @@ export const register: Register = on => {
                 <Button
                   key="install"
                   label="Installer sur le tel"
-                  hotkey="i"
                   variant={a.isPhoneStale ? 'primary' : 'secondary'}
                   dimColor={!a.isPhoneStale}
                   onPress={async () => $.ui.toast(await installApk($), { timeoutMs: 8000 })}
                 />
               )}
               {a.device && a.installed && !enCours && (
-                <Button key="launch" label="Lancer" hotkey="l" dimColor onPress={() => launchApp($)} />
+                <Button key="launch" label="Lancer" dimColor onPress={() => launchApp($)} />
               )}
             </Box>
           )}
@@ -1452,28 +1580,30 @@ export const register: Register = on => {
               <Text>{tg.branche}</Text>
               <Text dimColor={g.changed === 0}>{tg.modifs}</Text>
               {tg.distant !== null && (
-                <Text color={g.ahead > 0 || !g.hasUpstream ? 'yellow' : undefined} dimColor={g.ahead === 0 && g.hasUpstream}>
+                <Text color={tg.alerte ? 'yellow' : undefined} dimColor={!tg.alerte}>
                   {tg.distant}
                 </Text>
               )}
               {tg.alertes.map(w => (
                 <Text color="yellow">{w}</Text>
               ))}
-              {commandes}
+              {!aPart && commandes}
             </Box>
           )}
+          {aPart && g && rangeeCommandes}
           {quotas && (
             <Box key="ligne-quotas" flexDirection="row" flexWrap="wrap" alignItems="center">
               {quotas}
-              {!g && !suite && commandes}
+              {!g && !suite && !aPart && commandes}
             </Box>
           )}
           {suite && (
             <Box key="ligne-suite" flexDirection="row" flexWrap="wrap" alignItems="center">
               {suite}
-              {!g && commandes}
+              {!g && !aPart && commandes}
             </Box>
           )}
+          {aPart && !g && rangeeCommandes}
           {ronds && (
             <Box flexDirection="row" alignItems="center">
               {ronds}

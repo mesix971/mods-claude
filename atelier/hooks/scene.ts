@@ -16,7 +16,7 @@ import { estLourde, texteConso, titreConso } from './conso'
 import { idJauge, jauges, svgJauges } from './jauges'
 import type { Jauge } from './jauges'
 import { svgPastilles } from './pastilles'
-import { COIN_CLAWD, cases, largeurBouton, texteNouvelle, tient } from './suite'
+import { COIN_CLAWD, LIBELLE_NOUVELLE, cases, largeurBouton, texteNouvelle, tient } from './suite'
 import type { Pastille } from './pastilles'
 import { pastillesTaches } from './taches'
 import { heure } from './temps'
@@ -53,20 +53,46 @@ export type Plan = {
   git: AtelierGit | null
 }
 
-/** Les textes de la ligne git, dans l'ordre, tels que le bandeau les écrit (distant : null sans remote) */
-export function textesGit(g: AtelierGit): { branche: string; modifs: string; distant: string | null; alertes: string[] } {
+const pluriel = (n: number, mot: string) => `${n} ${mot}${n > 1 ? 's' : ''}`
+
+/**
+ * Les textes de la ligne git, dans l'ordre, tels que le bandeau les écrit
+ * (distant : null sans remote ; alerte : le distant est à regarder, en jaune)
+ */
+export function textesGit(g: AtelierGit): { branche: string; modifs: string; distant: string | null; alerte: boolean; alertes: string[] } {
+  const retard = g.behind ?? 0
+  const distant = !g.hasRemote
+    ? null
+    : g.detached
+      ? '  · HEAD détachée '
+      : g.gone
+        ? '  · branche supprimée sur GitHub '
+        : !g.hasUpstream
+          ? '  · branche jamais poussée '
+          : g.ahead > 0 && retard > 0
+            ? `  · ${pluriel(g.ahead, 'commit')} non poussé${g.ahead > 1 ? 's' : ''}, ${retard} en retard `
+            : g.ahead > 0
+              ? `  · ${pluriel(g.ahead, 'commit')} non poussé${g.ahead > 1 ? 's' : ''} `
+              : retard > 0
+                ? `  · ${pluriel(retard, 'commit')} en retard sur GitHub `
+                : '  · à jour avec GitHub '
   return {
-    branche: `🌿 ${g.branch}`,
-    modifs: `  · ${g.changed} modif${g.changed > 1 ? 's' : ''}`,
-    distant: !g.hasRemote
-      ? null
-      : !g.hasUpstream
-        ? '  · branche jamais poussée '
-        : g.ahead > 0
-          ? `  · ${g.ahead} commit${g.ahead > 1 ? 's' : ''} non poussé${g.ahead > 1 ? 's' : ''} `
-          : '  · à jour avec GitHub ',
+    branche: `🌿 ${g.detached ? 'HEAD' : g.branch}`,
+    modifs: `  · ${pluriel(g.changed, 'modif')}`,
+    distant,
+    alerte: distant !== null && distant !== '  · à jour avec GitHub ',
     alertes: g.warnings.map(w => `  · ⚠ ${w}`),
   }
+}
+
+/**
+ * Le bouton de la ligne git, s'il y a de quoi : « Commit + push » (des
+ * modifs), « Commit » (des modifs, sans remote : pas de push impossible),
+ * « Push » (des commits à pousser, vers une branche qui existe encore) ; sinon null
+ */
+export function libelleCommit(g: AtelierGit): 'Commit + push' | 'Commit' | 'Push' | null {
+  if (g.changed > 0) return g.hasRemote ? 'Commit + push' : 'Commit'
+  return g.ahead > 0 && g.hasRemote && !g.gone && !g.detached ? 'Push' : null
 }
 
 /** Ce qu'occupent les textes de la ligne git, en cases */
@@ -86,6 +112,10 @@ export const CELLULE = 7.9
 
 /** L'heure d'un reset, avec le jour quand il est loin (fenêtre de 7 j) */
 export const quandDe = (maintenant: number) => (ms: number) => (ms - maintenant > 20 * 3600_000 ? `${JOURS[new Date(ms).getDay()]} ` : '') + heure(ms)
+
+/** L'heure d'un moment passé (un APK, une installation), avec le jour quand ce n'était pas aujourd'hui */
+export const quandPasse = (maintenant: number) => (ms: number) =>
+  (new Date(ms).toDateString() !== new Date(maintenant).toDateString() ? `${JOURS[new Date(ms).getDay()]} ` : '') + heure(ms)
 
 export function planBandeau(x: EtatBandeau, maintenant: number): Plan {
   const lj = x.usage ? jauges(x.usage, maintenant) : []
@@ -124,9 +154,19 @@ const aLEchelle = (v: number) => +(v * ECHELLE).toFixed(1)
 /** Un dessin d'élément sans son infobulle : Clawd le promène dans une image, où elle ne servirait pas */
 const sansTitre = (svg: string) => svg.replace(/<title>[\s\S]*?<\/title>/g, '')
 
-/** `bandePx` : la largeur de la bande en px, quand on la connaît (pour savoir si le bouton 🆕 tient sur sa rangée) */
 /** Le jeu laissé au moins entre le dessin des jauges et le coin de Clawd (px) : une estimation des largeurs de texte n'y pousse pas Clawd */
 const MARGE_QUOTAS = 16
+/**
+ * La conso comptée à cette longueur au moins (« tour 999 k · 12,34 € ») pour
+ * choisir les rangées : le choix ne dépend pas de ses chiffres, remis à zéro
+ * à chaque tour (sinon la bande changerait de forme deux fois par tour)
+ */
+const CONSO_RESERVEE = 20
+const consoReservee = (c: Plan['conso']) => (c ? { ...c, texte: c.texte.padEnd(CONSO_RESERVEE) } : null)
+
+/** La largeur (px) d'un dessin des quotas pour choisir les rangées : la conso à sa longueur réservée */
+const largeurQuotas = (j: readonly Jauge[], quand: (ms: number) => string, p: Plan) =>
+  aLEchelle(svgJauges(j, quand, { conso: consoReservee(p.conso), conseil: p.conseil }).largeur)
 
 /**
  * La conso et le conseil passent-ils sur la rangée du dessous (`suite`) ?
@@ -135,16 +175,54 @@ const MARGE_QUOTAS = 16
  */
 export function quotasCoupes(p: Plan, quand: (ms: number) => string, bandePx: number | null): boolean {
   if (!bandePx || !p.lignes.includes('quotas') || p.jauges.length === 0 || !(p.conso || p.conseil)) return false
-  return aLEchelle(svgJauges(p.jauges, quand, { conso: p.conso, conseil: p.conseil }).largeur) > bandePx - COIN_CLAWD - MARGE_QUOTAS
+  return largeurQuotas(p.jauges, quand, p) > bandePx - COIN_CLAWD - MARGE_QUOTAS
 }
 
-/** Les lignes telles qu'elles sont dessinées : coupées, la conso et le conseil ont la leur (`suite`), sous les jauges */
-export const lignesDessinees = (p: Plan, coupe: boolean): AtelierScene['lignes'] =>
-  coupe ? p.lignes.flatMap(l => (l === 'quotas' ? (['quotas', 'suite'] as const) : [l])) : p.lignes
+/**
+ * Ce que prennent les commandes derrière leur case vide (px) : 🆕, Commit et
+ * ↻. Commit est compté dès qu'il peut s'afficher, même pendant un tour (où il
+ * se cache) : la rangée ne change pas à chaque tour. Masquer, sur le bureau,
+ * est dessiné au bord de la bande (`role="dismiss"`), hors de la rangée.
+ */
+export function largeurCommandes(git: AtelierGit | null): number {
+  const commit = git ? libelleCommit(git) : null
+  return CELLULE + largeurBouton(LIBELLE_NOUVELLE, CELLULE) + CELLULE + (commit ? largeurBouton(commit, CELLULE) : 0) + largeurBouton('↻', CELLULE)
+}
 
+/**
+ * Les commandes (🆕, Commit, ↻, Masquer) ont-elles leur propre rangée ? Oui
+ * quand elles ne tiendraient pas au bout de la leur (la ligne git, sinon le
+ * dernier dessin des quotas) : elles y passeraient à la ligne, et la bande
+ * partagée annoncerait 🆕 sur la mauvaise rangée (Clawd montrerait un endroit
+ * vide). Oui aussi sans ligne git ni quotas : elles ne seraient nulle part.
+ * Largeur de la bande inconnue : non.
+ */
+export function commandesAPart(p: Plan, quand: (ms: number) => string, bandePx: number | null): boolean {
+  const surGit = p.git !== null && p.lignes.includes('git')
+  if (!surGit && !p.lignes.includes('quotas')) return true
+  if (!bandePx) return false
+  const debut = surGit && p.git ? casesGit(p.git) * CELLULE : quotasCoupes(p, quand, bandePx) ? largeurQuotas([], quand, p) : largeurQuotas(p.jauges, quand, p)
+  return debut + largeurCommandes(p.git) > bandePx - COIN_CLAWD
+}
+
+/**
+ * Les lignes telles qu'elles sont dessinées : coupées, la conso et le conseil
+ * ont la leur (`suite`), sous les jauges ; à part, les commandes aussi
+ * (`commandes`), sous la ligne git, sinon sous les quotas
+ */
+export function lignesDessinees(p: Plan, coupe: boolean, aPart = false): AtelierScene['lignes'] {
+  const l: AtelierScene['lignes'] = coupe ? p.lignes.flatMap(x => (x === 'quotas' ? (['quotas', 'suite'] as const) : [x])) : [...p.lignes]
+  if (!aPart) return l
+  const i = l.includes('git') ? l.indexOf('git') + 1 : l.findIndex(x => x === 'pastilles' || x === 'occupe')
+  const ou = i < 0 ? l.length : i
+  return [...l.slice(0, ou), 'commandes', ...l.slice(ou)]
+}
+
+/** `bandePx` : la largeur de la bande en px, quand on la connaît (les rangées en dépendent, et ce qui est publié doit être visible) */
 export function sceneDuBandeau(p: Plan, quand: (ms: number) => string, bandePx: number | null = null): AtelierScene {
   const coupe = quotasCoupes(p, quand, bandePx)
-  const lignes = lignesDessinees(p, coupe)
+  const aPart = commandesAPart(p, quand, bandePx)
+  const lignes = lignesDessinees(p, coupe, aPart)
   const ligne = (nom: AtelierScene['lignes'][number]) => lignes.length - 1 - lignes.indexOf(nom)
   const elements: AtelierElement[] = []
   // les dessins des quotas, chacun sur sa rangée : les jauges, la conso et le conseil ensemble, ou coupés en deux
@@ -157,14 +235,13 @@ export function sceneDuBandeau(p: Plan, quand: (ms: number) => string, bandePx: 
         ]
       : [{ d: svgJauges(p.jauges, quand, { conso: p.conso, conseil: p.conseil }), rangee: 'quotas' }]
   const dernier = quotas.at(-1)
-  // le bouton 🆕 quand il est temps (Clawd vient le montrer) : là où il est toujours, en tête de ↻ et Masquer, derrière
-  // une case vide ; au bout de la ligne git (ses textes en cases), sinon au bout du dernier dessin des quotas. Publié
-  // seulement s'il tient sur sa rangée : sinon il passe à la ligne, et Clawd montrerait un endroit vide
+  // le bouton 🆕 quand il est temps (Clawd vient le montrer) : là où il est toujours, en tête des commandes, derrière
+  // une case vide ; sur leur rangée à elles, au bout de la ligne git, sinon au bout du dernier dessin des quotas
   if (p.nouvelle) {
     const surGit = p.git !== null && p.lignes.includes('git')
-    const x = surGit && p.git ? casesGit(p.git) * CELLULE : dernier ? aLEchelle(dernier.d.largeur) : null
+    const x = aPart ? 0 : surGit && p.git ? casesGit(p.git) * CELLULE : dernier ? aLEchelle(dernier.d.largeur) : null
     if (x !== null && tient(x + CELLULE, p.nouvelle, CELLULE, bandePx)) {
-      const rangee = surGit ? 'git' : (dernier?.rangee ?? 'quotas')
+      const rangee = aPart ? 'commandes' : surGit ? 'git' : (dernier?.rangee ?? 'quotas')
       elements.push({ id: 'nouvelle', genre: 'bouton', etat: 'a-montrer', x: +(x + CELLULE).toFixed(1), largeur: largeurBouton(p.nouvelle, CELLULE), hauteur: HAUTEUR_DESSIN, ligne: ligne(rangee) })
     }
   }
@@ -200,7 +277,9 @@ export function sceneDuBandeau(p: Plan, quand: (ms: number) => string, bandePx: 
       })
     }
   }
-  return { lignes, elements }
+  // un dessin trop large pour la bande est coupé au bord du coin de Clawd : ce qui ne se voit pas n'est pas publié
+  // (Clawd ne joue pas avec un élément invisible)
+  return { lignes, elements: bandePx ? elements.filter(e => e.x + e.largeur <= bandePx - COIN_CLAWD + 0.5) : elements }
 }
 
 type Emprunt = { id: string; jusqua: number }
