@@ -179,14 +179,18 @@ export function quotasCoupes(p: Plan, quand: (ms: number) => string, bandePx: nu
 }
 
 /**
- * Ce que prennent les commandes derrière leur case vide (px) : 🆕, Commit et
- * ↻. Commit est compté dès qu'il peut s'afficher, même pendant un tour (où il
- * se cache) : la rangée ne change pas à chaque tour. Masquer, sur le bureau,
- * est dessiné au bord de la bande (`role="dismiss"`), hors de la rangée.
+ * Ce que prennent les commandes derrière leur case vide (px) : 🆕, Commit, ↻
+ * et Masquer. Commit est compté dès qu'il peut s'afficher, même pendant un
+ * tour (où il se cache) : la rangée ne change pas à chaque tour. Masquer est
+ * dans la rangée sur le bureau (vu sur une capture du 2026-10-22, malgré
+ * `role="dismiss"`) : s'il passait seul à la ligne, la rangée de 🆕 en
+ * ferait deux, et sa ligne publiée serait fausse.
  */
 export function largeurCommandes(git: AtelierGit | null): number {
   const commit = git ? libelleCommit(git) : null
-  return CELLULE + largeurBouton(LIBELLE_NOUVELLE, CELLULE) + CELLULE + (commit ? largeurBouton(commit, CELLULE) : 0) + largeurBouton('↻', CELLULE)
+  return (
+    CELLULE + largeurBouton(LIBELLE_NOUVELLE, CELLULE) + CELLULE + (commit ? largeurBouton(commit, CELLULE) : 0) + largeurBouton('↻', CELLULE) + largeurBouton('Masquer', CELLULE)
+  )
 }
 
 /**

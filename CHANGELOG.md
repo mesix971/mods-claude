@@ -100,6 +100,11 @@
 
 ## atelier
 
+- **0.10.7** — 2026-10-24 — Ton « Autoriser » pour des secrets passe au garde-fou
+  global (`GARDE_FOU_OK=1` ajouté à la commande) : plus de deuxième refus suivi
+  d’une deuxième question. Masquer compte dans la place des commandes (il est
+  dans la rangée sur le bureau) : 🆕 n’est plus annoncé une rangée trop bas
+
 - **0.10.6** — 2026-10-24 — Chasse aux bugs (audit de 181 agents, constats
   revérifiés). Garde-fous : la commande est lue comme le shell la lit (module
   `commande.ts`), une règle ne vise que son outil — plus de question pour un

@@ -419,6 +419,15 @@ test('garde-fous : les secrets sont cherchés dans le dépôt du cd, et GARDE_FO
   expect(ran).toEqual(['GARDE_FOU_OK=1 git commit -m "x"'])
 })
 
+test('garde-fous : ton « Autoriser » pour des secrets passe au garde-fou global (pas une deuxième question)', async ($, on) => {
+  const { ran, asked } = shellStubs(on as never, { answer: 'Autoriser', staged: 'local.properties\n' })
+  await $.prompt.submit({ text: 'commit' })
+  await $.tool.call({ tool: 'Bash', command: 'git commit -m "x"' })
+  await $.tool.call({ tool: 'PowerShell', command: 'git commit -m "x"' })
+  expect(asked.length).toBe(2)
+  expect(ran).toEqual(['export GARDE_FOU_OK=1; git commit -m "x"', '$env:GARDE_FOU_OK=1; git commit -m "x"'])
+})
+
 test('ligne git : en retard, branche supprimée, HEAD détachée, sans remote', () => {
   const base = { branch: 'main', changed: 0, ahead: 0, hasUpstream: true, hasRemote: true, warnings: [] }
   expect(textesGit({ ...base, behind: 2 }).distant).toBe('  · 2 commits en retard sur GitHub ')
@@ -1703,7 +1712,8 @@ test('nouvelle conversation : sur la bande partagée, le bouton est là où il e
   expect(textesGit(git)).toEqual({ branche: '🌿 main', modifs: '  · 3 modifs', distant: '  · 1 commit non poussé ', alerte: true, alertes: [] })
   expect(casesGit(git)).toBe(7 + 12 + 24)
   // avec git : au bout de ses textes, derrière une case vide, sur sa ligne (la troisième depuis le bas)
-  const s = sceneDuBandeau(etat(git), quandDe(2 * M), 751)
+  // (une bande assez large pour que 🆕, Commit + push, ↻ et Masquer tiennent au bout de la ligne git)
+  const s = sceneDuBandeau(etat(git), quandDe(2 * M), 900)
   expect(s.lignes).toEqual(['git', 'quotas', 'pastilles'])
   const b = s.elements.find(e => e.id === 'nouvelle')
   expect(b?.ligne).toBe(2)

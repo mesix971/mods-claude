@@ -829,6 +829,9 @@ async function guard(
           deny: `Secrets détectés (${leaks.join(', ')}), pas d’accord (${ok}) : ajoute-les au .gitignore et retire-les de l’index (git rm --cached) avant de committer/pousser.`,
         }
       }
+      // tu viens d'autoriser : le garde-fou global (garde-fou.ps1) ne te redemande pas la même chose
+      // (GARDE_FOU_OK=1 ne lève que son contrôle des secrets)
+      cmd = tool === 'Bash' ? `export GARDE_FOU_OK=1; ${cmd}` : `$env:GARDE_FOU_OK=1; ${cmd}`
     }
     // (accepter des secrets n'est pas accepter un push que tu n'as pas demandé : deux questions distinctes)
     if (envois.some(e => e.sous === 'push') && !DEMANDE_GIT.test(lastPrompt)) {
