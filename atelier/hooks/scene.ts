@@ -226,6 +226,40 @@ export function lignesDessinees(p: Plan, coupe: boolean, aPart = false): Atelier
   return [...l.slice(0, ou), 'commandes', ...l.slice(ou)]
 }
 
+/**
+ * La hauteur des rangées (px CSS), relevée sur une capture desktop à 250 % :
+ * une rangée de dessins (jauges, conso, pastilles) fait ~16,5 px, celle qui
+ * porte les boutons natifs (🆕, ↻, Masquer) ~20 px ; une rangée de texte seul,
+ * la hauteur d'une ligne de Segoe UI 13 px (×1,33, non relevée)
+ */
+export const RANGEE_DESSINS = 16.5
+export const RANGEE_BOUTONS = 20
+export const RANGEE_TEXTE = 17.3
+/** Le jeu sous la dernière rangée, jusqu'au bas du bandeau (même relevé) */
+export const MARGE_BAS = 1.2
+
+/** La rangée qui porte les commandes : la leur, sinon la ligne git, sinon le dernier dessin des quotas */
+function rangeeDesCommandes(p: Plan, lignes: AtelierScene['lignes']): AtelierScene['lignes'][number] | null {
+  if (lignes.includes('commandes')) return 'commandes'
+  if (p.git !== null && lignes.includes('git')) return 'git'
+  return lignes.includes('suite') ? 'suite' : lignes.includes('quotas') ? 'quotas' : null
+}
+
+/** Où est chaque rangée, depuis le bas du bandeau : `bas` et `rangee` (px CSS), de haut en bas comme `lignes` */
+export function rangeesDe(p: Plan, lignes: AtelierScene['lignes']): { bas: number; rangee: number }[] {
+  const boutons = rangeeDesCommandes(p, lignes)
+  const hauteurs = lignes.map(l =>
+    l === boutons ? RANGEE_BOUTONS : l === 'quotas' || l === 'suite' || l === 'pastilles' ? RANGEE_DESSINS : RANGEE_TEXTE,
+  )
+  let bas = MARGE_BAS
+  const r: { bas: number; rangee: number }[] = []
+  for (let i = hauteurs.length - 1; i >= 0; i--) {
+    r[i] = { bas: +bas.toFixed(1), rangee: hauteurs[i]! }
+    bas += hauteurs[i]!
+  }
+  return r
+}
+
 /** `bandePx` : la largeur de la bande en px, quand on la connaît (les rangées en dépendent, et ce qui est publié doit être visible) */
 export function sceneDuBandeau(p: Plan, quand: (ms: number) => string, bandePx: number | null = null): AtelierScene {
   const coupe = quotasCoupes(p, quand, bandePx)
@@ -287,6 +321,9 @@ export function sceneDuBandeau(p: Plan, quand: (ms: number) => string, bandePx: 
   }
   // un dessin trop large pour la bande est coupé au bord du coin de Clawd : ce qui ne se voit pas n'est pas publié
   // (Clawd ne joue pas avec un élément invisible)
+  // chacun avec sa rangée en px : Clawd y pose ses copies au juste (à pas fixe, elles glissaient d'une rangée à l'autre)
+  const rangees = rangeesDe(p, lignes)
+  for (const e of elements) Object.assign(e, rangees[lignes.length - 1 - e.ligne])
   return { lignes, elements: bandePx ? elements.filter(e => e.x + e.largeur <= bandePx - COIN_CLAWD + 0.5) : elements }
 }
 

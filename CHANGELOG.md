@@ -100,6 +100,12 @@
 
 ## atelier
 
+- **0.10.9** — 2026-10-25 — La bande partagée publie la hauteur réelle de
+  chaque rangée (`bas`, `rangee`, en px) : celle des boutons natifs est plus
+  haute que celle des dessins (relevé sur une capture). Un mod qui pose une
+  copie d'élément la met pile sur l'original au lieu de quelques px au-dessus,
+  ce qui donnait un texte doublé, flou.
+
 - **0.10.8** — 2026-10-24 — Les largeurs de la bande calées sur une vraie capture :
   le texte est en Segoe UI 13 px (pas en chasse fixe), mesuré caractère par
   caractère. La place de 🆕 annoncée à Clawd tombe à moins d’un pixel (elle était

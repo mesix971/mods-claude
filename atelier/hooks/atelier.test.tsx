@@ -12,7 +12,7 @@ import { svgPastilles } from './pastilles'
 import { coutReponse, euros, tokensCourts } from './prix'
 import { aRanger } from './rangement'
 import { aChanger, commandeSuite, contexteCourt, contexteLourd, gachisTour, largeurBouton, tient } from './suite'
-import { ECHELLE, HAUTEUR_DESSIN, largeurCommandes, largeurGit, empruntsDe, grandeSceneDe, libelleCommit, planBandeau, quandDe, sceneDuBandeau, textesGit } from './scene'
+import { ECHELLE, HAUTEUR_DESSIN, largeurCommandes, largeurGit, empruntsDe, grandeSceneDe, libelleCommit, planBandeau, quandDe, rangeesDe, sceneDuBandeau, textesGit } from './scene'
 import { attenteBloquante, consentiGardeFou, destructif, envoisGit } from './commande'
 import { MAX_TACHES, ajouteTache, depuisTodos, horodate, interrompue, majTache, pastillesTaches, planFini, suitPlan, svgTaches, toutFait } from './taches'
 import { dureePause } from './temps'
@@ -1254,6 +1254,28 @@ test('bandeau : une vieille croix rouge, d’avant le rechargement du mod, s’e
   await horloge.advance(2 * 60_000)
   expect(await build()).toBeUndefined()
   await ui.unmount()
+})
+
+test('bande partagée : chaque rangée à sa hauteur (celle des boutons plus haute), comptée du bas, pour que Clawd y pose ses copies au juste', () => {
+  const git = { git: {} } as never
+  // les commandes au bout de la ligne git : c'est elle la plus haute
+  expect(rangeesDe(git, ['git', 'quotas', 'suite', 'pastilles'])).toEqual([
+    { bas: 50.7, rangee: 20 },
+    { bas: 34.2, rangee: 16.5 },
+    { bas: 17.7, rangee: 16.5 },
+    { bas: 1.2, rangee: 16.5 },
+  ])
+  // sur leur propre rangée : la ligne git redevient du texte
+  expect(rangeesDe(git, ['git', 'commandes', 'quotas'])).toEqual([
+    { bas: 37.7, rangee: 17.3 },
+    { bas: 17.7, rangee: 20 },
+    { bas: 1.2, rangee: 16.5 },
+  ])
+  // sans git : au bout du dernier dessin des quotas
+  expect(rangeesDe({ git: null } as never, ['quotas', 'suite'])).toEqual([
+    { bas: 21.2, rangee: 16.5 },
+    { bas: 1.2, rangee: 20 },
+  ])
 })
 
 test('bande partagée : chaque élément du bandeau à la place où il est dessiné', async () => {

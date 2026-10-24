@@ -142,6 +142,14 @@ export type AtelierElement = {
   largeur: number
   /** Sa ligne, comptée depuis le bas du bandeau (0 : la dernière) */
   ligne: number
+  /**
+   * Où est sa rangée, en px CSS : `bas` du bas du bandeau au bas de la
+   * rangée, `rangee` sa hauteur. Les rangées n'ont pas toutes la même : celle
+   * des boutons natifs est plus haute que celle des dessins (relevé sur des
+   * captures, à quelques dixièmes près)
+   */
+  bas?: number
+  rangee?: number
   /** La couleur d'un sous-agent (son modèle) */
   teinte?: string
   /** La hauteur (px CSS) où son dessin est posé : `x` et `largeur` sont à la même échelle */
