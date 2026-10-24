@@ -16,7 +16,7 @@ import { estLourde, texteConso, titreConso } from './conso'
 import { idJauge, jauges, svgJauges } from './jauges'
 import type { Jauge } from './jauges'
 import { svgPastilles } from './pastilles'
-import { COIN_CLAWD, LIBELLE_NOUVELLE, cases, largeurBouton, texteNouvelle, tient } from './suite'
+import { COIN_CLAWD, LIBELLE_NOUVELLE, largeurBouton, largeurTexte, texteNouvelle, tient } from './suite'
 import type { Pastille } from './pastilles'
 import { pastillesTaches } from './taches'
 import { heure } from './temps'
@@ -95,10 +95,13 @@ export function libelleCommit(g: AtelierGit): 'Commit + push' | 'Commit' | 'Push
   return g.ahead > 0 && g.hasRemote && !g.gone && !g.detached ? 'Push' : null
 }
 
-/** Ce qu'occupent les textes de la ligne git, en cases */
-export function casesGit(g: AtelierGit): number {
+/** La case vide posée devant 🆕 (`<Text> </Text>`) : une espace de la bande */
+const ESPACE = largeurTexte(' ')
+
+/** Ce qu'occupent les textes de la ligne git (px) */
+export function largeurGit(g: AtelierGit): number {
   const t = textesGit(g)
-  return [t.branche, t.modifs, t.distant ?? '', ...t.alertes].reduce((n, s) => n + cases(s), 0)
+  return +[t.branche, t.modifs, t.distant ?? '', ...t.alertes].reduce((n, s) => n + largeurTexte(s), 0).toFixed(1)
 }
 
 const JOURS = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.']
@@ -189,7 +192,8 @@ export function quotasCoupes(p: Plan, quand: (ms: number) => string, bandePx: nu
 export function largeurCommandes(git: AtelierGit | null): number {
   const commit = git ? libelleCommit(git) : null
   return (
-    CELLULE + largeurBouton(LIBELLE_NOUVELLE, CELLULE) + CELLULE + (commit ? largeurBouton(commit, CELLULE) : 0) + largeurBouton('↻', CELLULE) + largeurBouton('Masquer', CELLULE)
+    // (les boutons sont séparés par un petit écart, ~6 px sur la capture)
+    ESPACE + largeurBouton(LIBELLE_NOUVELLE) + ESPACE + (commit ? largeurBouton(commit) + 6 : 0) + largeurBouton('↻') + 6 + largeurBouton('Masquer')
   )
 }
 
@@ -205,7 +209,7 @@ export function commandesAPart(p: Plan, quand: (ms: number) => string, bandePx: 
   const surGit = p.git !== null && p.lignes.includes('git')
   if (!surGit && !p.lignes.includes('quotas')) return true
   if (!bandePx) return false
-  const debut = surGit && p.git ? casesGit(p.git) * CELLULE : quotasCoupes(p, quand, bandePx) ? largeurQuotas([], quand, p) : largeurQuotas(p.jauges, quand, p)
+  const debut = surGit && p.git ? largeurGit(p.git) : quotasCoupes(p, quand, bandePx) ? largeurQuotas([], quand, p) : largeurQuotas(p.jauges, quand, p)
   return debut + largeurCommandes(p.git) > bandePx - COIN_CLAWD
 }
 
@@ -243,10 +247,10 @@ export function sceneDuBandeau(p: Plan, quand: (ms: number) => string, bandePx: 
   // une case vide ; sur leur rangée à elles, au bout de la ligne git, sinon au bout du dernier dessin des quotas
   if (p.nouvelle) {
     const surGit = p.git !== null && p.lignes.includes('git')
-    const x = aPart ? 0 : surGit && p.git ? casesGit(p.git) * CELLULE : dernier ? aLEchelle(dernier.d.largeur) : null
-    if (x !== null && tient(x + CELLULE, p.nouvelle, CELLULE, bandePx)) {
+    const x = aPart ? 0 : surGit && p.git ? largeurGit(p.git) : dernier ? aLEchelle(dernier.d.largeur) : null
+    if (x !== null && tient(x + ESPACE, p.nouvelle, bandePx)) {
       const rangee = aPart ? 'commandes' : surGit ? 'git' : (dernier?.rangee ?? 'quotas')
-      elements.push({ id: 'nouvelle', genre: 'bouton', etat: 'a-montrer', x: +(x + CELLULE).toFixed(1), largeur: largeurBouton(p.nouvelle, CELLULE), hauteur: HAUTEUR_DESSIN, ligne: ligne(rangee) })
+      elements.push({ id: 'nouvelle', genre: 'bouton', etat: 'a-montrer', x: +(x + ESPACE).toFixed(1), largeur: largeurBouton(p.nouvelle), hauteur: HAUTEUR_DESSIN, ligne: ligne(rangee) })
     }
   }
   for (const { d, rangee } of quotas) {

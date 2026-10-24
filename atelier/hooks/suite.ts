@@ -80,9 +80,25 @@ export function texteNouvelle(u: AtelierUsage | null, c: AtelierConso | null): s
   return aChanger(u, c) ? LIBELLE_NOUVELLE : null
 }
 
-/** Combien de cases de texte occupe un libellé (un emoji en prend deux) */
-export function cases(texte: string): number {
-  return [...texte].reduce((n, ch) => n + (/\p{Extended_Pictographic}/u.test(ch) ? 2 : 1), 0)
+/**
+ * La police du texte de la bande sur le bureau : Segoe UI 13 px, espaces
+ * conservées (pas une chasse fixe). Relevé le 2026-10-24 sur une capture de
+ * la ligne git, à 2 px près par morceau. Largeurs en dixièmes de px, de
+ * l'espace (32) à ÿ (255), mesurées dans Chromium.
+ */
+const LARGEURS = '36,37,51,77,70,106,104,30,39,39,54,89,28,52,28,51,70,70,70,70,70,70,70,70,70,70,28,28,89,89,89,58,124,84,75,81,91,66,64,89,92,35,46,75,61,117,97,98,73,98,78,69,68,89,81,121,77,72,74,39,49,39,89,54,35,66,76,60,77,68,41,77,74,32,32,65,32,112,74,76,76,77,45,55,44,74,62,94,60,63,59,39,31,39,89,70,84,84,84,84,84,84,84,84,84,84,84,84,84,84,84,84,84,84,84,84,84,84,84,84,84,84,84,84,84,84,84,84,36,37,70,70,72,70,31,58,54,116,51,66,89,0,116,54,49,89,48,48,37,75,60,28,27,46,56,66,118,121,124,58,84,84,84,84,84,84,112,81,66,66,66,66,35,35,35,35,91,97,98,98,98,98,98,89,98,89,89,89,89,72,73,71,66,66,66,66,66,66,108,60,68,68,68,68,32,32,32,32,73,74,76,76,76,76,76,89,76,74,74,74,74,63,76,63'
+  .split(',')
+  .map(n => Number(n) / 10)
+const AUTRES: Record<string, number> = { '·': 2.8, '→': 11.2, '⚠': 11.2, '…': 9.5, '↻': 10, '€': 7, '’': 3, '«': 6.6, '»': 6.6 }
+
+/** La largeur (px) d'un texte de la bande sur le bureau (un emoji : 17,9 px ; un caractère inconnu : 8 px, plutôt trop que pas assez) */
+export function largeurTexte(texte: string): number {
+  let l = 0
+  for (const ch of texte) {
+    const c = ch.codePointAt(0) ?? 0
+    l += c >= 32 && c <= 255 ? LARGEURS[c - 32]! : (AUTRES[ch] ?? (/\p{Extended_Pictographic}/u.test(ch) ? 17.9 : 8))
+  }
+  return +l.toFixed(1)
 }
 
 /** Le coin de Clawd, au bout à droite de la bande (px) : rien ne doit s'y poser */
@@ -92,12 +108,12 @@ export const COIN_CLAWD = 116
  * Le bouton, posé à `xPx` sur sa rangée, y tient-il sans passer à la ligne ni
  * mordre sur le coin de Clawd ? (en px ; la bande inconnue : on suppose que oui)
  */
-export function tient(xPx: number, texte: string, cellule: number, bandePx: number | null): boolean {
+export function tient(xPx: number, texte: string, bandePx: number | null): boolean {
   if (!bandePx) return true
-  return xPx + largeurBouton(texte, cellule) <= bandePx - COIN_CLAWD
+  return xPx + largeurBouton(texte) <= bandePx - COIN_CLAWD
 }
 
-/** La largeur (px) d'un bouton natif de l'app : son libellé, plus ses bords (environ trois cases) */
-export function largeurBouton(texte: string, cellule: number): number {
-  return +((cases(texte) + 3) * cellule).toFixed(1)
+/** La largeur (px) d'un bouton natif de l'app : son libellé, plus ses bords (8 à 12 px sur la capture : 12, plutôt trop que pas assez) */
+export function largeurBouton(texte: string): number {
+  return +(largeurTexte(texte) + 12).toFixed(1)
 }

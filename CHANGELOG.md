@@ -100,6 +100,11 @@
 
 ## atelier
 
+- **0.10.8** — 2026-10-24 — Les largeurs de la bande calées sur une vraie capture :
+  le texte est en Segoe UI 13 px (pas en chasse fixe), mesuré caractère par
+  caractère. La place de 🆕 annoncée à Clawd tombe à moins d’un pixel (elle était
+  près de 100 px trop à droite), les boutons font leur texte plus 12 px.
+
 - **0.10.7** — 2026-10-24 — Ton « Autoriser » pour des secrets passe au garde-fou
   global (`GARDE_FOU_OK=1` ajouté à la commande) : plus de deuxième refus suivi
   d’une deuxième question. Masquer compte dans la place des commandes (il est
