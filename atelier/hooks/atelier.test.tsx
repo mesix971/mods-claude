@@ -1357,6 +1357,14 @@ test('bande partagée : chaque élément du bandeau à la place où il est dessi
   expect(grandeSceneDe({ svg: '<div/>', hauteur: 64, fin: 10 }, 5)).toBeNull()
   expect(grandeSceneDe({ svg, hauteur: 900, fin: 10 }, 5)).toBeNull()
   expect(grandeSceneDe({ svg: `<svg>${'x'.repeat(131_072)}</svg>`, hauteur: 64, fin: 10 }, 5)).toBeNull()
+  // avec son début, son dessin est recalé sur le temps déjà joué (au dixième) : l'app recrée l'image quand la bande
+  // change, et une image neuve repartait du début
+  const recalable = '<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="64" style="--t0:0s"/>'
+  expect(grandeSceneDe({ svg: recalable, hauteur: 64, debut: 1000, fin: 20_000 }, 3460)!.svg).toBe(recalable.replace('--t0:0s', '--t0:-2.5s'))
+  expect(grandeSceneDe({ svg: recalable, hauteur: 64, debut: 1000, fin: 20_000 }, 1000)!.svg).toBe(recalable)
+  // un début dans le futur (horloge qui recule) ou absent (un Clawd d'avant) : tel quel
+  expect(grandeSceneDe({ svg: recalable, hauteur: 64, debut: 9000, fin: 20_000 }, 3460)!.svg).toBe(recalable)
+  expect(grandeSceneDe({ svg: recalable, hauteur: 64, fin: 20_000 }, 3460)!.svg).toBe(recalable)
 })
 
 test('bandeau : la bande partagée est publiée, ce que Clawd tient n’est plus dessiné, et son numéro couvre la bande', async ($, on) => {

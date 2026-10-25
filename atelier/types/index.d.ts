@@ -199,8 +199,13 @@ declare module 'claude-code' {
     clawd: {
       /** Ce qu'il tient en ce moment, chacun jusqu'à une échéance (ms) : atelier ne le dessine plus jusque-là */
       emprunts: { id: string; jusqua: number }[]
-      /** Le numéro qu'il joue sur toute la bande : son dessin (SVG), sa hauteur (px) et sa fin (ms) */
-      grandeScene: { svg: string; hauteur: number; fin: number } | null
+      /**
+       * Le numéro qu'il joue sur toute la bande : son dessin (SVG), sa hauteur
+       * (px), son début et sa fin (ms). Avec son début, atelier recale le
+       * dessin à chaque fois qu'il le pose : la racine du SVG porte
+       * `--t0:0s`, remplacé par le temps déjà joué
+       */
+      grandeScene: { svg: string; hauteur: number; debut?: number; fin: number } | null
     }
   }
 }

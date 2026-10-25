@@ -100,6 +100,12 @@
 
 ## atelier
 
+- **0.10.10** — 2026-10-25 — Le numéro de Clawd ne recommence plus en route :
+  l'app recrée son image quand la bande change, et elle repartait du début
+  (il retraversait la bande, puis sautait à son coin une fois le temps
+  écoulé). Avec son début (`grandeScene.debut`), atelier recale le dessin à
+  chaque fois qu'il le pose (`--t0` à sa racine, au dixième de seconde).
+
 - **0.10.9** — 2026-10-25 — La bande partagée publie la hauteur réelle de
   chaque rangée (`bas`, `rangee`, en px) : celle des boutons natifs est plus
   haute que celle des dessins (relevé sur une capture). Un mod qui pose une

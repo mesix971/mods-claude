@@ -335,11 +335,19 @@ const estEmprunt = (x: unknown): x is Emprunt =>
 export const empruntsDe = (v: unknown, maintenant: number): ReadonlySet<string> =>
   new Set(Array.isArray(v) ? v.filter(estEmprunt).filter(x => x.jusqua > maintenant).map(x => x.id) : [])
 
-/** Le numéro que Clawd joue sur toute la bande, d'après son état, s'il n'est pas fini : son dessin et sa hauteur */
+/**
+ * Le numéro que Clawd joue sur toute la bande, d'après son état, s'il n'est
+ * pas fini : son dessin et sa hauteur. Son dessin est recalé sur son début
+ * (au dixième de seconde) : l'app recrée l'image quand la bande change, et une
+ * image neuve repartait du début (il recommençait sa traversée, puis sautait
+ * à son coin quand le temps du numéro était écoulé). Sa racine porte
+ * `--t0:0s`, que tout le dessin suit.
+ */
 export function grandeSceneDe(v: unknown, maintenant: number): { svg: string; hauteur: number } | null {
   if (typeof v !== 'object' || v === null) return null
-  const { svg, hauteur, fin } = v as Record<string, unknown>
+  const { svg, hauteur, fin, debut } = v as Record<string, unknown>
   if (typeof svg !== 'string' || !svg.startsWith('<svg') || svg.length > 131_072) return null
   if (typeof hauteur !== 'number' || !(hauteur >= 1 && hauteur <= 200) || typeof fin !== 'number' || !(fin > maintenant)) return null
-  return { svg, hauteur: Math.round(hauteur) }
+  const deja = typeof debut === 'number' && debut <= maintenant ? Math.round((maintenant - debut) / 100) / 10 : 0
+  return { svg: deja > 0 ? svg.replace('style="--t0:0s"', `style="--t0:-${deja}s"`) : svg, hauteur: Math.round(hauteur) }
 }
