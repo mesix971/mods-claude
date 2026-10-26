@@ -100,6 +100,13 @@
 
 ## atelier
 
+- **0.10.11** — 2026-10-26 — Recalé sur la mise à jour de l'app qui a grossi
+  la bande : le texte passe de 13 à 14 px (Segoe UI), et les boutons natifs
+  ont 10 px de bord de chaque côté (New conv : 104 px de large au lieu de 87).
+  Largeurs remesurées dans Chromium et vérifiées sur une capture, à 0,5 px
+  près : la place du bouton 🆕 publiée pour Clawd reste juste, et les
+  commandes passent à la ligne au bon moment.
+
 - **0.10.10** — 2026-10-25 — Le numéro de Clawd ne recommence plus en route :
   l'app recrée son image quand la bande change, et elle repartait du début
   (il retraversait la bande, puis sautait à son coin une fois le temps

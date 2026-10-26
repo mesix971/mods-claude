@@ -81,22 +81,23 @@ export function texteNouvelle(u: AtelierUsage | null, c: AtelierConso | null): s
 }
 
 /**
- * La police du texte de la bande sur le bureau : Segoe UI 13 px, espaces
- * conservées (pas une chasse fixe). Relevé le 2026-10-24 sur une capture de
- * la ligne git, à 2 px près par morceau. Largeurs en dixièmes de px, de
- * l'espace (32) à ÿ (255), mesurées dans Chromium.
+ * La police du texte de la bande sur le bureau : Segoe UI 14 px, espaces
+ * conservées (pas une chasse fixe). 13 px avant une mise à jour de l'app, fin
+ * octobre 2026 : relevé le 2026-10-26 sur une capture de la ligne git (à 1 px
+ * près sur 250). Largeurs en centièmes de px, de l'espace (32) à ÿ (255),
+ * mesurées dans Chromium (Edge sans fenêtre, à l'échelle 250 % de l'écran).
  */
-const LARGEURS = '36,37,51,77,70,106,104,30,39,39,54,89,28,52,28,51,70,70,70,70,70,70,70,70,70,70,28,28,89,89,89,58,124,84,75,81,91,66,64,89,92,35,46,75,61,117,97,98,73,98,78,69,68,89,81,121,77,72,74,39,49,39,89,54,35,66,76,60,77,68,41,77,74,32,32,65,32,112,74,76,76,77,45,55,44,74,62,94,60,63,59,39,31,39,89,70,84,84,84,84,84,84,84,84,84,84,84,84,84,84,84,84,84,84,84,84,84,84,84,84,84,84,84,84,84,84,84,84,36,37,70,70,72,70,31,58,54,116,51,66,89,0,116,54,49,89,48,48,37,75,60,28,27,46,56,66,118,121,124,58,84,84,84,84,84,84,112,81,66,66,66,66,35,35,35,35,91,97,98,98,98,98,98,89,98,89,89,89,89,72,73,71,66,66,66,66,66,66,108,60,68,68,68,68,32,32,32,32,73,74,76,76,76,76,76,89,76,74,74,74,74,63,76,63'
+const LARGEURS = '384,398,549,827,755,1146,1120,322,422,422,584,958,304,560,304,546,755,755,755,755,755,755,755,755,755,755,304,304,958,958,958,628,1337,903,803,830,982,708,684,960,994,373,446,812,659,1257,1047,1055,784,1055,837,744,761,962,870,1308,826,774,798,422,530,422,958,581,375,712,823,647,824,732,438,824,792,339,339,696,339,1206,792,820,823,824,487,594,474,792,671,1012,643,677,633,422,335,422,958,700,904,904,904,904,904,904,904,904,904,904,904,904,904,904,904,904,904,904,904,904,904,904,904,904,904,904,904,904,904,904,904,904,384,398,755,755,778,755,335,628,580,1246,549,708,958,0,1246,581,528,958,513,513,395,808,641,304,287,492,603,708,1269,1303,1333,628,903,903,903,903,903,903,1204,830,708,708,708,708,373,373,373,373,982,1047,1055,1055,1055,1055,1055,958,1055,962,962,962,962,774,784,762,712,712,712,712,712,712,1165,647,732,732,732,732,339,339,339,339,783,792,820,820,820,820,820,958,820,792,792,792,792,677,823,677'
   .split(',')
-  .map(n => Number(n) / 10)
-const AUTRES: Record<string, number> = { '·': 2.8, '→': 11.2, '⚠': 11.2, '…': 9.5, '↻': 10, '€': 7, '’': 3, '«': 6.6, '»': 6.6 }
+  .map(n => Number(n) / 100)
+const AUTRES: Record<string, number> = { '·': 3.04, '→': 12.09, '⚠': 12.06, '…': 10.27, '↻': 10.95, '€': 7.55, '’': 3.22, '«': 7.08, '»': 7.08 }
 
-/** La largeur (px) d'un texte de la bande sur le bureau (un emoji : 17,9 px ; un caractère inconnu : 8 px, plutôt trop que pas assez) */
+/** La largeur (px) d'un texte de la bande sur le bureau (un emoji : 19,2 px ; un caractère inconnu : 8,6 px, plutôt trop que pas assez) */
 export function largeurTexte(texte: string): number {
   let l = 0
   for (const ch of texte) {
     const c = ch.codePointAt(0) ?? 0
-    l += c >= 32 && c <= 255 ? LARGEURS[c - 32]! : (AUTRES[ch] ?? (/\p{Extended_Pictographic}/u.test(ch) ? 17.9 : 8))
+    l += c >= 32 && c <= 255 ? LARGEURS[c - 32]! : (AUTRES[ch] ?? (/\p{Extended_Pictographic}/u.test(ch) ? 19.2 : 8.6))
   }
   return +l.toFixed(1)
 }
@@ -113,7 +114,12 @@ export function tient(xPx: number, texte: string, bandePx: number | null): boole
   return xPx + largeurBouton(texte) <= bandePx - COIN_CLAWD
 }
 
-/** La largeur (px) d'un bouton natif de l'app : son libellé, plus ses bords (8 à 12 px sur la capture : 12, plutôt trop que pas assez) */
+/**
+ * La largeur (px) d'un bouton natif de l'app : son libellé, dans la police de
+ * la bande, plus ses bords (10 px de chaque côté). Relevé sur la capture du
+ * 2026-10-26, après la mise à jour de l'app qui les a agrandis : New conv y
+ * fait 104 px de large (87 avant), Masquer 74.
+ */
 export function largeurBouton(texte: string): number {
-  return +(largeurTexte(texte) + 12).toFixed(1)
+  return +(largeurTexte(texte) + 20).toFixed(1)
 }

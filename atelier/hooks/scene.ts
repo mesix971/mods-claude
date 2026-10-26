@@ -192,8 +192,8 @@ export function quotasCoupes(p: Plan, quand: (ms: number) => string, bandePx: nu
 export function largeurCommandes(git: AtelierGit | null): number {
   const commit = git ? libelleCommit(git) : null
   return (
-    // (les boutons sont séparés par un petit écart, ~6 px sur la capture)
-    ESPACE + largeurBouton(LIBELLE_NOUVELLE) + ESPACE + (commit ? largeurBouton(commit) + 6 : 0) + largeurBouton('↻') + 6 + largeurBouton('Masquer')
+    // (sa case vide, 🆕 et la case vide qui le suit, puis les autres boutons, collés : relevé entre ↻ et Masquer sur la capture du 2026-10-26)
+    ESPACE + largeurBouton(LIBELLE_NOUVELLE) + ESPACE + (commit ? largeurBouton(commit) : 0) + largeurBouton('↻') + largeurBouton('Masquer')
   )
 }
 
@@ -229,12 +229,14 @@ export function lignesDessinees(p: Plan, coupe: boolean, aPart = false): Atelier
 /**
  * La hauteur des rangées (px CSS), relevée sur une capture desktop à 250 % :
  * une rangée de dessins (jauges, conso, pastilles) fait ~16,5 px, celle qui
- * porte les boutons natifs (🆕, ↻, Masquer) ~20 px ; une rangée de texte seul,
- * la hauteur d'une ligne de Segoe UI 13 px (×1,33, non relevée)
+ * porte les boutons natifs (🆕, ↻, Masquer) ~20 px (inchangée par la mise à
+ * jour de l'app qui les a agrandis, revu le 2026-10-26) ; une rangée de
+ * texte seul, la hauteur d'une ligne de Segoe UI 14 px (18,8 px à 250 %,
+ * mesurée dans Chromium, pas sur une capture)
  */
 export const RANGEE_DESSINS = 16.5
 export const RANGEE_BOUTONS = 20
-export const RANGEE_TEXTE = 17.3
+export const RANGEE_TEXTE = 18.8
 /** Le jeu sous la dernière rangée, jusqu'au bas du bandeau (même relevé) */
 export const MARGE_BAS = 1.2
 
