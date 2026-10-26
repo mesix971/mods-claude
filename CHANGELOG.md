@@ -100,6 +100,11 @@
 
 ## atelier
 
+- **0.10.13** — 2026-10-27 — La bande retrouve son allure d'avant la mise à
+  jour de l'app : son texte en 13 px (la taille « footnote » ; l'app écrit
+  maintenant en 14 px dans la zone du prompt), et Masquer sans cadre, comme ↻.
+  Les boutons gardent leur nouvelle taille, c'est l'app qui la décide.
+
 - **0.10.12** — 2026-10-26 — La vraie largeur de la bande : l'app la compte
   en largeurs de « 0 » de sa police (7,55 px depuis sa mise à jour, 7,9
   avant), arrondi vers le bas (lu dans son code, confirmé par le cadre de

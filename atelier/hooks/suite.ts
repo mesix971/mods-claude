@@ -81,25 +81,39 @@ export function texteNouvelle(u: AtelierUsage | null, c: AtelierConso | null): s
 }
 
 /**
- * La police du texte de la bande sur le bureau : Segoe UI 14 px, espaces
- * conservées (pas une chasse fixe). 13 px avant une mise à jour de l'app, fin
- * octobre 2026 : relevé le 2026-10-26 sur une capture de la ligne git (à 1 px
- * près sur 250). Largeurs en centièmes de px, de l'espace (32) à ÿ (255),
- * mesurées dans Chromium (Edge sans fenêtre, à l'échelle 250 % de l'écran).
+ * La taille du texte de la bande (`size` de `Text`) : « footnote », 13 px.
+ * Depuis une mise à jour de l'app (fin octobre 2026), la zone du prompt est en
+ * densité « confortable » : sans taille, un texte y fait 14 px ; « footnote »
+ * le ramène aux 13 px d'avant, sur 17 px de haut (lu dans son code le
+ * 2026-10-27). Le terminal n'a qu'une taille et l'ignore.
  */
-const LARGEURS = '384,398,549,827,755,1146,1120,322,422,422,584,958,304,560,304,546,755,755,755,755,755,755,755,755,755,755,304,304,958,958,958,628,1337,903,803,830,982,708,684,960,994,373,446,812,659,1257,1047,1055,784,1055,837,744,761,962,870,1308,826,774,798,422,530,422,958,581,375,712,823,647,824,732,438,824,792,339,339,696,339,1206,792,820,823,824,487,594,474,792,671,1012,643,677,633,422,335,422,958,700,904,904,904,904,904,904,904,904,904,904,904,904,904,904,904,904,904,904,904,904,904,904,904,904,904,904,904,904,904,904,904,904,384,398,755,755,778,755,335,628,580,1246,549,708,958,0,1246,581,528,958,513,513,395,808,641,304,287,492,603,708,1269,1303,1333,628,903,903,903,903,903,903,1204,830,708,708,708,708,373,373,373,373,982,1047,1055,1055,1055,1055,1055,958,1055,962,962,962,962,774,784,762,712,712,712,712,712,712,1165,647,732,732,732,732,339,339,339,339,783,792,820,820,820,820,820,958,820,792,792,792,792,677,823,677'
+export const TAILLE_TEXTE = 'footnote'
+
+/**
+ * La police du texte de la bande sur le bureau : Segoe UI 13 px (`TAILLE_TEXTE`),
+ * espaces conservées (pas une chasse fixe). Largeurs en centièmes de px, de
+ * l'espace (32) à ÿ (255), mesurées dans Chromium (Edge sans fenêtre, à
+ * l'échelle 250 % de l'écran) ; en 14 px, tout est 14/13 plus large (à 0,01 px
+ * près). Vérifié sur une capture du 2026-10-26, en 14 px : à 1 px près sur 250.
+ */
+const LARGEURS = '356,369,510,768,701,1064,1040,299,392,392,542,889,282,520,282,507,701,701,701,701,701,701,701,701,701,701,282,282,889,889,889,583,1242,839,745,770,912,658,635,892,923,346,414,754,612,1167,972,980,728,980,778,691,706,893,807,1214,767,719,741,392,493,392,889,540,348,661,764,600,766,680,407,766,736,315,315,646,315,1120,736,762,764,766,452,552,441,736,623,939,597,629,588,392,311,392,889,650,839,839,839,839,839,839,839,839,839,839,839,839,839,839,839,839,839,839,839,839,839,839,839,839,839,839,839,839,839,839,839,839,356,369,701,701,722,701,311,583,538,1157,510,658,889,0,1157,540,490,889,476,476,367,750,595,282,267,456,560,658,1178,1210,1238,583,839,839,839,839,839,839,1118,770,658,658,658,658,346,346,346,346,912,972,980,980,980,980,980,889,980,893,893,893,893,719,728,707,661,661,661,661,661,661,1082,600,680,680,680,680,315,315,315,315,727,736,762,762,762,762,762,889,762,736,736,736,736,629,764,629'
   .split(',')
   .map(n => Number(n) / 100)
-const AUTRES: Record<string, number> = { '·': 3.04, '→': 12.09, '⚠': 12.06, '…': 10.27, '↻': 10.95, '€': 7.55, '’': 3.22, '«': 7.08, '»': 7.08 }
+const AUTRES: Record<string, number> = { '·': 2.82, '→': 11.22, '⚠': 11.2, '…': 9.53, '↻': 10.17, '€': 7.01, '’': 2.98, '«': 6.58, '»': 6.58 }
 
-/** La largeur (px) d'un texte de la bande sur le bureau (un emoji : 19,2 px ; un caractère inconnu : 8,6 px, plutôt trop que pas assez) */
-export function largeurTexte(texte: string): number {
+/** Ce que fait un texte en 13 px, sans arrondi (un emoji : 17,9 px ; un caractère inconnu : 8 px, plutôt trop que pas assez) */
+function largeur13(texte: string): number {
   let l = 0
   for (const ch of texte) {
     const c = ch.codePointAt(0) ?? 0
-    l += c >= 32 && c <= 255 ? LARGEURS[c - 32]! : (AUTRES[ch] ?? (/\p{Extended_Pictographic}/u.test(ch) ? 19.2 : 8.6))
+    l += c >= 32 && c <= 255 ? LARGEURS[c - 32]! : (AUTRES[ch] ?? (/\p{Extended_Pictographic}/u.test(ch) ? 17.9 : 8))
   }
-  return +l.toFixed(1)
+  return l
+}
+
+/** La largeur (px) d'un texte de la bande sur le bureau */
+export function largeurTexte(texte: string): number {
+  return +largeur13(texte).toFixed(1)
 }
 
 /** Le coin de Clawd, au bout à droite de la bande (px) : rien ne doit s'y poser */
@@ -115,11 +129,12 @@ export function tient(xPx: number, texte: string, bandePx: number | null): boole
 }
 
 /**
- * La largeur (px) d'un bouton natif de l'app : son libellé, dans la police de
- * la bande, plus ses bords (10 px de chaque côté). Relevé sur la capture du
- * 2026-10-26, après la mise à jour de l'app qui les a agrandis : New conv y
- * fait 104 px de large (87 avant), Masquer 74.
+ * La largeur (px) d'un bouton natif de l'app : son libellé en Segoe UI 14 px
+ * (la taille des boutons de la bande, qui ne suit pas `TAILLE_TEXTE`), plus
+ * ses bords (10 px de chaque côté), avec ou sans cadre (`plain`). Relevé sur
+ * la capture du 2026-10-26, après la mise à jour de l'app qui les a agrandis :
+ * New conv y fait 104 px de large (87 avant), Masquer 74.
  */
 export function largeurBouton(texte: string): number {
-  return +(largeurTexte(texte) + 20).toFixed(1)
+  return +((largeur13(texte) * 14) / 13 + 20).toFixed(1)
 }

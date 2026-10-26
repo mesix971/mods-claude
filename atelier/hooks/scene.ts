@@ -234,12 +234,12 @@ export function lignesDessinees(p: Plan, coupe: boolean, aPart = false): Atelier
  * une rangée de dessins (jauges, conso, pastilles) fait ~16,5 px, celle qui
  * porte les boutons natifs (🆕, ↻, Masquer) ~20 px (inchangée par la mise à
  * jour de l'app qui les a agrandis, revu le 2026-10-26) ; une rangée de
- * texte seul, la hauteur d'une ligne de Segoe UI 14 px (18,8 px à 250 %,
- * mesurée dans Chromium, pas sur une capture)
+ * texte seul, la hauteur de ligne de `TAILLE_TEXTE` (17 px, lue dans le code
+ * de l'app, pas encore sur une capture)
  */
 export const RANGEE_DESSINS = 16.5
 export const RANGEE_BOUTONS = 20
-export const RANGEE_TEXTE = 18.8
+export const RANGEE_TEXTE = 17
 /** Le jeu sous la dernière rangée, jusqu'au bas du bandeau (même relevé) */
 export const MARGE_BAS = 1.2
 

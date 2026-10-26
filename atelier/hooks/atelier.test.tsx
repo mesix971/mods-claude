@@ -151,6 +151,10 @@ test('bandeau : APK plus récent que le tel, git en avance, quota 5 h', async ($
       const jaugesSvg = await ui.find({ type: 'Svg' })
       expect(jaugesSvg?.props?.isInteractive).toBe(true)
       expect(String(jaugesSvg?.props?.source)).toContain('À ce rythme : 100 % vers')
+      // le texte de la bande en « footnote » (13 px, comme avant que l'app passe la zone du prompt en 14 px), et Masquer sans cadre, comme ↻
+      expect((await ui.find({ type: 'Text', text: /📱 5\.7\.0 \(30\)/ }))?.props?.size).toBe('footnote')
+      expect((await ui.find({ type: 'Text', text: /2 commits non poussés/ }))?.props?.size).toBe('footnote')
+      expect((await ui.find({ key: 'hide' }))?.props?.plain).toBe(true)
     } else {
       expect(await ui.find({ type: 'Text', text: /5 h ▰{7}▱ 82 % → 23:10/ })).toBeDefined()
     }
@@ -1265,9 +1269,9 @@ test('bande partagée : chaque rangée à sa hauteur (celle des boutons plus hau
     { bas: 17.7, rangee: 16.5 },
     { bas: 1.2, rangee: 16.5 },
   ])
-  // sur leur propre rangée : la ligne git redevient du texte (une ligne de Segoe UI 14 px)
+  // sur leur propre rangée : la ligne git redevient du texte (une ligne de la taille « footnote », 17 px)
   expect(rangeesDe(git, ['git', 'commandes', 'quotas'])).toEqual([
-    { bas: 37.7, rangee: 18.8 },
+    { bas: 37.7, rangee: 17 },
     { bas: 17.7, rangee: 20 },
     { bas: 1.2, rangee: 16.5 },
   ])
@@ -1668,7 +1672,7 @@ test('bouton « Nouvelle conversation » : toujours le même, à la même place,
   const el = publiee?.elements?.find(x => x.id === 'nouvelle')
   expect(el?.genre).toBe('bouton')
   expect(el?.etat).toBe('a-montrer')
-  expect(Math.abs((el?.x ?? -99) - (jauges.width + 3.8))).toBeLessThan(1)
+  expect(Math.abs((el?.x ?? -99) - (jauges.width + 3.6))).toBeLessThan(1)
   expect(el?.largeur).toBeGreaterThan(80)
   // un clic : ta /suite
   await ui.press({ key: 'nouvelle' })
@@ -1742,27 +1746,28 @@ test('nouvelle conversation : sur la bande partagée, le bouton est là où il e
     planBandeau({ android: null, git: g, usage, taches: [{ id: 'plan-1', nom: 'Lire', etat: 'attente' }], conso: null, build: null, agents: [], busy: null }, 2 * M)
   // les textes de la ligne git, tels que le bandeau les écrit : 🌿 compte deux cases
   expect(textesGit(git)).toEqual({ branche: '🌿 main', modifs: '  · 3 modifs', distant: '  · 1 commit non poussé ', alerte: true, alertes: [] })
-  // (Segoe UI 14 px, relevée sur la capture du 2026-10-26 : 🌿 main · 0 modif · à jour avec GitHub y faisait 249 px, 230 en 13 px avant)
-  expect(Math.abs(largeurGit({ branch: 'main', changed: 0, ahead: 0, hasUpstream: true, hasRemote: true, warnings: [] }) - 249)).toBeLessThan(1)
+  // (Segoe UI 13 px, la taille « footnote » : 🌿 main · 0 modif · à jour avec GitHub fait 231 px dans Chromium ; 230 sur une
+  // capture en 13 px du 2026-10-24, 249 sur celle du 2026-10-26, quand la bande écrivait en 14 px)
+  expect(Math.abs(largeurGit({ branch: 'main', changed: 0, ahead: 0, hasUpstream: true, hasRemote: true, warnings: [] }) - 231)).toBeLessThan(1)
   // avec git : au bout de ses textes, derrière une case vide, sur sa ligne (la troisième depuis le bas)
   // (une bande assez large pour que 🆕, Commit + push, ↻ et Masquer tiennent au bout de la ligne git)
   const s = sceneDuBandeau(etat(git), quandDe(2 * M), 900)
   expect(s.lignes).toEqual(['git', 'quotas', 'pastilles'])
   const b = s.elements.find(e => e.id === 'nouvelle')
   expect(b?.ligne).toBe(2)
-  expect(Math.abs((b?.x ?? -99) - (largeurGit(git) + 3.8))).toBeLessThan(0.1)
+  expect(Math.abs((b?.x ?? -99) - (largeurGit(git) + 3.6))).toBeLessThan(0.1)
   // sans git : au bout du dessin des jauges, derrière une case vide
   const sansGit = etat(null)
   const q = sceneDuBandeau(sansGit, quandDe(2 * M), 751).elements.find(e => e.id === 'nouvelle')
   expect(q?.ligne).toBe(1)
   const jaugesPx = svgJauges(sansGit.jauges, quandDe(2 * M), { conso: sansGit.conso, conseil: sansGit.conseil }).largeur * ECHELLE
-  expect(Math.abs((q?.x ?? -99) - (jaugesPx + 3.8))).toBeLessThan(0.2)
+  expect(Math.abs((q?.x ?? -99) - (jaugesPx + 3.6))).toBeLessThan(0.2)
   // pas encore temps : rien de publié (le bouton est là quand même, Clawd ne vient pas)
   expect(sceneDuBandeau(etat(git, leger), quandDe(2 * M), 751).elements.find(e => e.id === 'nouvelle')).toBeUndefined()
   // une bande étroite : les commandes ne tiennent plus au bout de la ligne git, elles ont leur rangée (sous la ligne git)
   const etroite = sceneDuBandeau(etat(git), quandDe(2 * M), 300)
   expect(etroite.lignes).toEqual(['git', 'commandes', 'quotas', 'pastilles'])
-  expect(etroite.elements.find(e => e.id === 'nouvelle')).toMatchObject({ x: 3.8, ligne: 2 })
+  expect(etroite.elements.find(e => e.id === 'nouvelle')).toMatchObject({ x: 3.6, ligne: 2 })
   // trop étroite même pour lui seul : pas publié
   expect(sceneDuBandeau(etat(git), quandDe(2 * M), 200).elements.find(e => e.id === 'nouvelle')).toBeUndefined()
 })
@@ -1806,7 +1811,7 @@ test('bande étroite : la conso et le conseil passent sous les jauges plutôt qu
   const b = sceneDuBandeau(lourd, quand, Math.floor(tout + 116 + 10)).elements.find(e => e.id === 'nouvelle')
   const bas = svgJauges([], quand, { conso: lourd.conso, conseil: lourd.conseil }).largeur * ECHELLE
   expect(b?.ligne).toBe(0)
-  expect(Math.abs((b?.x ?? -99) - (bas + 3.8))).toBeLessThan(0.2)
+  expect(Math.abs((b?.x ?? -99) - (bas + 3.6))).toBeLessThan(0.2)
 })
 
 test('bande partagée : rien de coupé au bord n’est publié, et la conso ne fait pas changer les rangées d’un tour à l’autre', () => {

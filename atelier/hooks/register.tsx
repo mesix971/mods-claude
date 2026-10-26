@@ -28,7 +28,7 @@ import { decrit, estDiscret } from './outils'
 import { svgPastilles } from './pastilles'
 import { aRanger } from './rangement'
 import { CELLULE, ECHELLE, HAUTEUR_DESSIN, empruntsDe, grandeSceneDe, commandesAPart, libelleCommit, planBandeau, quandDe, quandPasse, quotasCoupes, sceneDuBandeau, textesGit } from './scene'
-import { LIBELLE_NOUVELLE, commandeSuite } from './suite'
+import { LIBELLE_NOUVELLE, TAILLE_TEXTE, commandeSuite } from './suite'
 import { ajouteTache, depuisTaskList, depuisTodos, horodate, interrompue, majTache, planFini, resumeTaches, suitPlan, texteTaches, toutFait } from './taches'
 
 type $ = EngineInterface
@@ -1511,17 +1511,19 @@ export const register: Register = on => {
     // pas 🆕 avec (il resterait sinon là où Clawd ne le montre pas)
     const espace = (k: string) => e.surface !== 'desktop' && <Text key={k}> </Text>
     const commandes = [
-      <Text key="avant-nouvelle"> </Text>,
+      <Text key="avant-nouvelle" size={TAILLE_TEXTE}> </Text>,
       nouvelle,
-      <Text key="apres-nouvelle"> </Text>,
+      <Text key="apres-nouvelle" size={TAILLE_TEXTE}> </Text>,
       commit,
       commit && espace('apres-commit'),
       <Button key="refresh" label="↻" plain dimColor onPress={() => refresh($)} />,
       espace('apres-refresh'),
+      // sans cadre, comme ↻ : plus discret, à la même place (son libellé et ses bords restent)
       <Button
         key="hide"
         label="Masquer"
         role="dismiss"
+        plain
         dimColor
         onPress={async () => {
           await update($, isHidden, () => true)
@@ -1545,23 +1547,23 @@ export const register: Register = on => {
         <Box flexDirection="column" flexGrow={1} minWidth={0} overflow="hidden">
           {a && (
             <Box flexDirection="row" flexWrap="wrap">
-              <Text bold>{`📱 ${a.versionName ?? '?'}${a.versionCode !== null ? ` (${a.versionCode})` : ''}`}</Text>
-              <Text dimColor>
+              <Text bold size={TAILLE_TEXTE}>{`📱 ${a.versionName ?? '?'}${a.versionCode !== null ? ` (${a.versionCode})` : ''}`}</Text>
+              <Text dimColor size={TAILLE_TEXTE}>
                 {a.apk
                   ? `  · APK ${a.apk.version ?? a.apk.name} ${quandPasse(maintenant)(a.apk.mtimeMs)}`
                   : '  · pas d’APK construit'}
               </Text>
               {a.device ? (
                 a.installed ? (
-                  <Text color={a.isPhoneStale ? 'yellow' : 'green'}>
+                  <Text color={a.isPhoneStale ? 'yellow' : 'green'} size={TAILLE_TEXTE}>
                     {`  · tel ${a.installed.versionName}${a.installed.updatedMs ? ` ${quandPasse(maintenant)(a.installed.updatedMs)}` : ''} `}
                     {a.isPhoneStale ? '⚠ pas à jour ' : '✓ '}
                   </Text>
                 ) : (
-                  <Text color="yellow">{`  · pas installée sur ${a.device.model} `}</Text>
+                  <Text color="yellow" size={TAILLE_TEXTE}>{`  · pas installée sur ${a.device.model} `}</Text>
                 )
               ) : (
-                <Text dimColor>  · tel non branché </Text>
+                <Text dimColor size={TAILLE_TEXTE}>  · tel non branché </Text>
               )}
               {pastilleB}
               {a.device && a.apk && !enCours && (
@@ -1581,15 +1583,15 @@ export const register: Register = on => {
           {g && tg && (
             <Box key="ligne-git" flexDirection="row" flexWrap="wrap">
               {/* les textes de textesGit, tels quels : la place du bouton 🆕 publiée pour Clawd en dépend */}
-              <Text>{tg.branche}</Text>
-              <Text dimColor={g.changed === 0}>{tg.modifs}</Text>
+              <Text size={TAILLE_TEXTE}>{tg.branche}</Text>
+              <Text dimColor={g.changed === 0} size={TAILLE_TEXTE}>{tg.modifs}</Text>
               {tg.distant !== null && (
-                <Text color={tg.alerte ? 'yellow' : undefined} dimColor={!tg.alerte}>
+                <Text color={tg.alerte ? 'yellow' : undefined} dimColor={!tg.alerte} size={TAILLE_TEXTE}>
                   {tg.distant}
                 </Text>
               )}
               {tg.alertes.map(w => (
-                <Text color="yellow">{w}</Text>
+                <Text color="yellow" size={TAILLE_TEXTE}>{w}</Text>
               ))}
               {!aPart && commandes}
             </Box>
@@ -1613,7 +1615,7 @@ export const register: Register = on => {
               {ronds}
             </Box>
           )}
-          {enCours && <Text color="cyan">⏳ {enCours}</Text>}
+          {enCours && <Text color="cyan" size={TAILLE_TEXTE}>⏳ {enCours}</Text>}
         </Box>
         {dessous}
         {grandeScene}
