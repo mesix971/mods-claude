@@ -541,7 +541,7 @@ test('bande vide : atelier publie une bande sans élément et pose lui-même le 
   const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
   const grande = (await ui.find({ key: 'grande-scene' })) as { props?: Record<string, unknown>; children?: { props?: Record<string, unknown> }[] } | undefined
   expect(grande?.props).toMatchObject({ position: 'absolute', left: 0, right: 0, bottom: 0 })
-  expect(grande?.children?.[0]?.props).toMatchObject({ source: numero.svg, height: 64, width: 948 })
+  expect(grande?.children?.[0]?.props).toMatchObject({ source: numero.svg, height: 64, width: 914 })
   await ui.unmount()
 })
 
@@ -1411,8 +1411,8 @@ test('bandeau : la bande partagée est publiée, ce que Clawd tient n’est plus
   expect(String((await ui2.find({ type: 'Svg' }))?.props?.alt)).toContain('Clawd joue avec : tache-plan-2')
   const grande = (await ui2.find({ key: 'grande-scene' })) as { props?: Record<string, unknown>; children?: { props?: Record<string, unknown> }[] } | undefined
   expect(grande?.props).toMatchObject({ position: 'absolute', left: 0, right: 0, bottom: 0 })
-  // à la largeur de la bande en px (120 cases), pour que le dessin la couvre à l'échelle 1
-  expect(grande?.children?.[0]?.props).toMatchObject({ source: numero.svg, height: 64, width: 948 })
+  // à la largeur de la bande en px (120 cases, une de plus : l'app compte les cases entières), pour que le dessin la couvre à l'échelle 1
+  expect(grande?.children?.[0]?.props).toMatchObject({ source: numero.svg, height: 64, width: 914 })
   await ui2.unmount()
   // passé l'échéance (un Clawd planté), tout revient : l'étape redessinée, plus de numéro
   await horloge.advance(11_000)

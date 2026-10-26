@@ -108,10 +108,13 @@ const JOURS = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.']
 /**
  * La largeur d'une case de la bande en px CSS, sur desktop : la bande ne se
  * mesure qu'en cases (`bodyColumns`), un dessin qui doit la couvrir se règle
- * en px. Relevée le 2026-10-18 sur une capture du cadre : 95 colonnes, une
- * rangée de 751 px.
+ * en px. L'app compte en largeurs de « 0 » de la police de la bande (`1ch`),
+ * arrondi vers le bas (lu dans son code le 2026-10-26) : 7,55 px en Segoe UI
+ * 14 px, 7,9 avant sa mise à jour. La bande fait donc au moins `cases ×
+ * CELLULE`, et moins d'une case de plus (le cadre du 2026-10-26 : 99 cases,
+ * 752 px).
  */
-export const CELLULE = 7.9
+export const CELLULE = 7.55
 
 /** L'heure d'un reset, avec le jour quand il est loin (fenêtre de 7 j) */
 export const quandDe = (maintenant: number) => (ms: number) => (ms - maintenant > 20 * 3600_000 ? `${JOURS[new Date(ms).getDay()]} ` : '') + heure(ms)

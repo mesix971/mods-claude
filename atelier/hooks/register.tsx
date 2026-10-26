@@ -1274,10 +1274,11 @@ export const register: Register = on => {
       const gs = e.surface === 'desktop' ? grandeSceneDe(await read($, grandeSceneClawd), maintenant) : null
       if (!gs) return null
       const { Box, Svg } = $.ui.resolve(e)
-      // la bande ne se mesure qu'en cases : sa largeur en px, pour que le dessin la couvre à l'échelle 1
+      // la bande ne se mesure qu'en cases : sa largeur en px, pour que le dessin la couvre à l'échelle 1 (une case de
+      // plus, l'app compte les cases entières : plus large que la bande, l'image y est ramenée, sans être étirée)
       return (
         <Box key="grande-scene" position="absolute" left={0} right={0} bottom={0}>
-          <Svg source={gs.svg} alt="Clawd joue sur la bande" width={Math.round(e.props.bodyColumns * CELLULE)} height={gs.hauteur} />
+          <Svg source={gs.svg} alt="Clawd joue sur la bande" width={Math.round((e.props.bodyColumns + 1) * CELLULE)} height={gs.hauteur} />
         </Box>
       )
     }
