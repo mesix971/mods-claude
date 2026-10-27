@@ -100,6 +100,11 @@
 
 ## atelier
 
+- **0.10.15** — 2026-10-27 — Le bouton devient « 🆕 New » et retrouve un
+  cadre, le nôtre : une bordure fine aux couleurs du thème, sans marge en plus,
+  à la place du cadre de l'app, plus large et plus foncé. Il fait 73 px de
+  large au lieu de 104 ; sa rangée gagne 2 px. La bande partagée le compte.
+
 - **0.10.14** — 2026-10-27 — 🆕 New conv sans cadre lui aussi, comme ↻ et
   Masquer, à la même place. Son libellé garde la taille que l'app donne à
   tous ses boutons (14 px, 10 px de bord) : un mod ne peut pas la changer.

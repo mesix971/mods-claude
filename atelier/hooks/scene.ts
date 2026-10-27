@@ -16,7 +16,7 @@ import { estLourde, texteConso, titreConso } from './conso'
 import { idJauge, jauges, svgJauges } from './jauges'
 import type { Jauge } from './jauges'
 import { svgPastilles } from './pastilles'
-import { COIN_CLAWD, LIBELLE_NOUVELLE, largeurBouton, largeurTexte, texteNouvelle, tient } from './suite'
+import { BORD_NOUVELLE, COIN_CLAWD, largeurBouton, largeurNouvelle, largeurTexte, texteNouvelle, tient } from './suite'
 import type { Pastille } from './pastilles'
 import { pastillesTaches } from './taches'
 import { heure } from './temps'
@@ -195,8 +195,9 @@ export function quotasCoupes(p: Plan, quand: (ms: number) => string, bandePx: nu
 export function largeurCommandes(git: AtelierGit | null): number {
   const commit = git ? libelleCommit(git) : null
   return (
-    // (sa case vide, 🆕 et la case vide qui le suit, puis les autres boutons, collés : relevé entre ↻ et Masquer sur la capture du 2026-10-26)
-    ESPACE + largeurBouton(LIBELLE_NOUVELLE) + ESPACE + (commit ? largeurBouton(commit) : 0) + largeurBouton('↻') + largeurBouton('Masquer')
+    // (sa case vide, 🆕 dans son cadre et la case vide qui le suit, puis les autres boutons, collés : relevé entre ↻ et Masquer
+    // sur la capture du 2026-10-26)
+    ESPACE + largeurNouvelle() + ESPACE + (commit ? largeurBouton(commit) : 0) + largeurBouton('↻') + largeurBouton('Masquer')
   )
 }
 
@@ -233,12 +234,13 @@ export function lignesDessinees(p: Plan, coupe: boolean, aPart = false): Atelier
  * La hauteur des rangées (px CSS), relevée sur une capture desktop à 250 % :
  * une rangée de dessins (jauges, conso, pastilles) fait ~16,5 px, celle qui
  * porte les boutons natifs (🆕, ↻, Masquer) ~20 px (inchangée par la mise à
- * jour de l'app qui les a agrandis, revu le 2026-10-26) ; une rangée de
- * texte seul, la hauteur de ligne de `TAILLE_TEXTE` (17 px, lue dans le code
- * de l'app, pas encore sur une capture)
+ * jour de l'app qui les a agrandis, revu le 2026-10-26), plus le cadre de 🆕
+ * (`BORD_NOUVELLE` en haut et en bas, pas encore vu sur une capture) ; une
+ * rangée de texte seul, la hauteur de ligne de `TAILLE_TEXTE` (17 px, lue dans
+ * le code de l'app, pas encore sur une capture)
  */
 export const RANGEE_DESSINS = 16.5
-export const RANGEE_BOUTONS = 20
+export const RANGEE_BOUTONS = 20 + 2 * BORD_NOUVELLE
 export const RANGEE_TEXTE = 17
 /** Le jeu sous la dernière rangée, jusqu'au bas du bandeau (même relevé) */
 export const MARGE_BAS = 1.2
@@ -289,7 +291,7 @@ export function sceneDuBandeau(p: Plan, quand: (ms: number) => string, bandePx: 
     const x = aPart ? 0 : surGit && p.git ? largeurGit(p.git) : dernier ? aLEchelle(dernier.d.largeur) : null
     if (x !== null && tient(x + ESPACE, p.nouvelle, bandePx)) {
       const rangee = aPart ? 'commandes' : surGit ? 'git' : (dernier?.rangee ?? 'quotas')
-      elements.push({ id: 'nouvelle', genre: 'bouton', etat: 'a-montrer', x: +(x + ESPACE).toFixed(1), largeur: largeurBouton(p.nouvelle), hauteur: HAUTEUR_DESSIN, ligne: ligne(rangee) })
+      elements.push({ id: 'nouvelle', genre: 'bouton', etat: 'a-montrer', x: +(x + ESPACE).toFixed(1), largeur: largeurNouvelle(p.nouvelle), hauteur: HAUTEUR_DESSIN, ligne: ligne(rangee) })
     }
   }
   for (const { d, rangee } of quotas) {

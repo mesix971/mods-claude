@@ -9,8 +9,8 @@
 import type { AtelierConso, AtelierUsage } from '../types'
 import { tokensCourts } from './prix'
 
-/** Le libellé du bouton, toujours le même */
-export const LIBELLE_NOUVELLE = '🆕 New conv'
+/** Le libellé du bouton, toujours le même (court : l'app dessine ses boutons en 14 px, avec 10 px de bord de chaque côté) */
+export const LIBELLE_NOUVELLE = '🆕 New'
 
 /** Au-delà de ce contexte (en tokens), une conversation devient lourde : il est temps d'en ouvrir une neuve */
 export const SEUIL_TOKENS = 250_000
@@ -125,7 +125,19 @@ export const COIN_CLAWD = 116
  */
 export function tient(xPx: number, texte: string, bandePx: number | null): boolean {
   if (!bandePx) return true
-  return xPx + largeurBouton(texte) <= bandePx - COIN_CLAWD
+  return xPx + largeurNouvelle(texte) <= bandePx - COIN_CLAWD
+}
+
+/**
+ * Le cadre du bouton 🆕 sur le bureau (px de bordure, de chaque côté) : une
+ * boîte à bordure fine, aux couleurs du thème, autour du bouton sans cadre
+ * natif (`plain`), celui de l'app étant plus large et plus foncé
+ */
+export const BORD_NOUVELLE = 1
+
+/** La largeur (px) du bouton 🆕 sur le bureau, son cadre compris */
+export function largeurNouvelle(texte: string = LIBELLE_NOUVELLE): number {
+  return +(largeurBouton(texte) + 2 * BORD_NOUVELLE).toFixed(1)
 }
 
 /**
@@ -133,7 +145,7 @@ export function tient(xPx: number, texte: string, bandePx: number | null): boole
  * (la taille des boutons de la bande, qui ne suit pas `TAILLE_TEXTE`), plus
  * ses bords (10 px de chaque côté), avec ou sans cadre (`plain`). Relevé sur
  * la capture du 2026-10-26, après la mise à jour de l'app qui les a agrandis :
- * New conv y fait 104 px de large (87 avant), Masquer 74.
+ * « 🆕 New conv » y faisait 104 px de large (87 avant), Masquer 74.
  */
 export function largeurBouton(texte: string): number {
   return +((largeur13(texte) * 14) / 13 + 20).toFixed(1)

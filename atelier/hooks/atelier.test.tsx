@@ -11,7 +11,7 @@ import { decrit, estDiscret } from './outils'
 import { svgPastilles } from './pastilles'
 import { coutReponse, euros, tokensCourts } from './prix'
 import { aRanger } from './rangement'
-import { aChanger, commandeSuite, contexteCourt, contexteLourd, gachisTour, largeurBouton, tient } from './suite'
+import { LIBELLE_NOUVELLE, aChanger, commandeSuite, contexteCourt, contexteLourd, gachisTour, largeurBouton, largeurNouvelle, tient } from './suite'
 import { ECHELLE, HAUTEUR_DESSIN, largeurCommandes, largeurGit, empruntsDe, grandeSceneDe, libelleCommit, planBandeau, quandDe, rangeesDe, sceneDuBandeau, textesGit } from './scene'
 import { attenteBloquante, consentiGardeFou, destructif, envoisGit } from './commande'
 import { MAX_TACHES, ajouteTache, depuisTodos, horodate, interrompue, majTache, pastillesTaches, planFini, suitPlan, svgTaches, toutFait } from './taches'
@@ -156,6 +156,9 @@ test('bandeau : APK plus récent que le tel, git en avance, quota 5 h', async ($
       expect((await ui.find({ type: 'Text', text: /2 commits non poussés/ }))?.props?.size).toBe('footnote')
       expect((await ui.find({ key: 'nouvelle' }))?.props?.plain).toBe(true)
       expect((await ui.find({ key: 'hide' }))?.props?.plain).toBe(true)
+      // 🆕 dans son cadre fin à nous (une bordure, sans marge), à la place de celui de l'app
+      expect((await ui.find({ key: 'cadre-nouvelle' }))?.props).toMatchObject({ borderStyle: 'single', padding: 0 })
+      expect(JSON.stringify(await ui.find({ key: 'cadre-nouvelle' }))).toContain('🆕 New')
     } else {
       expect(await ui.find({ type: 'Text', text: /5 h ▰{7}▱ 82 % → 23:10/ })).toBeDefined()
     }
@@ -1263,23 +1266,23 @@ test('bandeau : une vieille croix rouge, d’avant le rechargement du mod, s’e
 
 test('bande partagée : chaque rangée à sa hauteur (celle des boutons plus haute), comptée du bas, pour que Clawd y pose ses copies au juste', () => {
   const git = { git: {} } as never
-  // les commandes au bout de la ligne git : c'est elle la plus haute
+  // les commandes au bout de la ligne git : c'est elle la plus haute (ses boutons, et le cadre de 🆕)
   expect(rangeesDe(git, ['git', 'quotas', 'suite', 'pastilles'])).toEqual([
-    { bas: 50.7, rangee: 20 },
+    { bas: 50.7, rangee: 22 },
     { bas: 34.2, rangee: 16.5 },
     { bas: 17.7, rangee: 16.5 },
     { bas: 1.2, rangee: 16.5 },
   ])
   // sur leur propre rangée : la ligne git redevient du texte (une ligne de la taille « footnote », 17 px)
   expect(rangeesDe(git, ['git', 'commandes', 'quotas'])).toEqual([
-    { bas: 37.7, rangee: 17 },
-    { bas: 17.7, rangee: 20 },
+    { bas: 39.7, rangee: 17 },
+    { bas: 17.7, rangee: 22 },
     { bas: 1.2, rangee: 16.5 },
   ])
   // sans git : au bout du dernier dessin des quotas
   expect(rangeesDe({ git: null } as never, ['quotas', 'suite'])).toEqual([
-    { bas: 21.2, rangee: 16.5 },
-    { bas: 1.2, rangee: 20 },
+    { bas: 23.2, rangee: 16.5 },
+    { bas: 1.2, rangee: 22 },
   ])
 })
 
@@ -1653,10 +1656,10 @@ test('bouton « Nouvelle conversation » : toujours le même, à la même place,
   // 100 k : pas encore temps ; rien de publié pour Clawd
   await horloge.settle()
   const avant = { bouton: await bouton(), rangee: await rangee() }
-  expect(avant.bouton).toContain('🆕 New conv')
+  expect(avant.bouton).toContain('🆕 New')
   expect(avant.bouton).toContain('"dimColor":true')
   expect(avant.rangee.premier).toBe('Svg')
-  expect(avant.rangee.second).toContain('🆕 New conv')
+  expect(avant.rangee.second).toContain('🆕 New')
   expect(publiee?.elements?.find(x => x.id === 'nouvelle')).toBeUndefined()
   // 400 k : il est temps ; le bouton ne change en rien (ni place, ni allure, même au fil des secondes)…
   tokens = 400_000
@@ -1674,7 +1677,8 @@ test('bouton « Nouvelle conversation » : toujours le même, à la même place,
   expect(el?.genre).toBe('bouton')
   expect(el?.etat).toBe('a-montrer')
   expect(Math.abs((el?.x ?? -99) - (jauges.width + 3.6))).toBeLessThan(1)
-  expect(el?.largeur).toBeGreaterThan(80)
+  // (« 🆕 New » et son cadre fin)
+  expect(el?.largeur).toBe(73)
   // un clic : ta /suite
   await ui.press({ key: 'nouvelle' })
   await horloge.settle()
@@ -1726,16 +1730,17 @@ test('nouvelle conversation : allumé par un tour trop cher, il reste allumé ta
 })
 
 test('nouvelle conversation : le bouton n’est publié pour Clawd que s’il tient sur sa rangée (sinon il passerait à la ligne)', () => {
-  // une bande de 95 colonnes (751 px), le coin de Clawd (116 px) : 635 px pour la rangée
-  const bande = Math.round(95 * 7.9)
-  const bouton = largeurBouton('🆕 New conv')
-  // (104 px sur la capture du 2026-10-26, depuis que l'app a agrandi ses boutons : un peu plus, jamais moins)
-  expect(bouton).toBeGreaterThanOrEqual(104)
-  expect(bouton).toBeLessThan(106)
-  expect(tient(400, '🆕 New conv', bande)).toBe(true)
-  expect(tient(560, '🆕 New conv', bande)).toBe(false)
+  // une bande de 751 px, le coin de Clawd (116 px) : 635 px pour la rangée
+  const bande = 751
+  // un bouton natif : « 🆕 New conv » faisait 104 px sur la capture du 2026-10-26 (un peu plus, jamais moins)
+  expect(largeurBouton('🆕 New conv')).toBeGreaterThanOrEqual(104)
+  expect(largeurBouton('🆕 New conv')).toBeLessThan(106)
+  // « 🆕 New », sans le cadre de l'app, dans le nôtre (1 px de chaque côté)
+  expect(largeurNouvelle()).toBe(73)
+  expect(tient(560, LIBELLE_NOUVELLE, bande)).toBe(true)
+  expect(tient(570, LIBELLE_NOUVELLE, bande)).toBe(false)
   // largeur de la bande inconnue : on suppose que oui
-  expect(tient(600, '🆕 New conv', null)).toBe(true)
+  expect(tient(600, LIBELLE_NOUVELLE, null)).toBe(true)
 })
 
 test('nouvelle conversation : sur la bande partagée, le bouton est là où il est toujours (au bout de la ligne git, sinon des jauges), seulement quand il est temps', () => {
@@ -1769,8 +1774,8 @@ test('nouvelle conversation : sur la bande partagée, le bouton est là où il e
   const etroite = sceneDuBandeau(etat(git), quandDe(2 * M), 300)
   expect(etroite.lignes).toEqual(['git', 'commandes', 'quotas', 'pastilles'])
   expect(etroite.elements.find(e => e.id === 'nouvelle')).toMatchObject({ x: 3.6, ligne: 2 })
-  // trop étroite même pour lui seul : pas publié
-  expect(sceneDuBandeau(etat(git), quandDe(2 * M), 200).elements.find(e => e.id === 'nouvelle')).toBeUndefined()
+  // trop étroite même pour lui seul (le coin de Clawd ne laisse que 64 px) : pas publié
+  expect(sceneDuBandeau(etat(git), quandDe(2 * M), 180).elements.find(e => e.id === 'nouvelle')).toBeUndefined()
 })
 
 test('bande étroite : la conso et le conseil passent sous les jauges plutôt que de pousser Clawd hors de la bande', () => {

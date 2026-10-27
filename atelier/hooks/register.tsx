@@ -1434,12 +1434,12 @@ export const register: Register = on => {
     // passer à la ligne quand elle était longue, et la bande changeait de forme
     // une conversation neuve : toujours le même, à la même place, discret ; quand il est temps d'en changer,
     // c'est Clawd qui vient le montrer (la bande partagée dit où il est), le bouton lui-même ne change pas
-    const nouvelle = (
+    const boutonNouvelle = (
       <Button
         key="nouvelle"
         // l'app de bureau dessine un bouton natif avec ce libellé seul : tout ce qu'il dit est là
         label={LIBELLE_NOUVELLE}
-        // sans cadre, comme ↻ et Masquer : à la même place (son libellé et ses bords restent)
+        // sans le cadre de l'app (plus large et plus foncé) : sur le bureau, le nôtre l'entoure
         plain
         dimColor
         onPress={async () => {
@@ -1485,6 +1485,16 @@ export const register: Register = on => {
         }}
       />
     )
+    // son cadre sur le bureau : une bordure fine aux couleurs du thème, sans marge (BORD_NOUVELLE, que la bande partagée
+    // compte) ; le terminal dessinerait une bordure de trois lignes : le bouton seul
+    const nouvelle =
+      e.surface === 'desktop' ? (
+        <Box key="cadre-nouvelle" borderStyle="single" padding={0}>
+          {boutonNouvelle}
+        </Box>
+      ) : (
+        boutonNouvelle
+      )
     // Commit + push : sur la ligne git, quand il y a de quoi (pas pendant un tour)
     // (sans raccourci clavier : le focus resté dans la bande après un clic, une demande tapée qui commence par « c »
     // lançait le commit + push sans le vouloir ; sans remote, un commit seul, jamais un push impossible)
