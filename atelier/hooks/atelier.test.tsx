@@ -151,9 +151,10 @@ test('bandeau : APK plus récent que le tel, git en avance, quota 5 h', async ($
       const jaugesSvg = await ui.find({ type: 'Svg' })
       expect(jaugesSvg?.props?.isInteractive).toBe(true)
       expect(String(jaugesSvg?.props?.source)).toContain('À ce rythme : 100 % vers')
-      // le texte de la bande en « footnote » (13 px, comme avant que l'app passe la zone du prompt en 14 px), et Masquer sans cadre, comme ↻
+      // le texte de la bande en « footnote » (13 px, comme avant que l'app passe la zone du prompt en 14 px), et 🆕 et Masquer sans cadre, comme ↻
       expect((await ui.find({ type: 'Text', text: /📱 5\.7\.0 \(30\)/ }))?.props?.size).toBe('footnote')
       expect((await ui.find({ type: 'Text', text: /2 commits non poussés/ }))?.props?.size).toBe('footnote')
+      expect((await ui.find({ key: 'nouvelle' }))?.props?.plain).toBe(true)
       expect((await ui.find({ key: 'hide' }))?.props?.plain).toBe(true)
     } else {
       expect(await ui.find({ type: 'Text', text: /5 h ▰{7}▱ 82 % → 23:10/ })).toBeDefined()

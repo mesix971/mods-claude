@@ -100,6 +100,10 @@
 
 ## atelier
 
+- **0.10.14** — 2026-10-27 — 🆕 New conv sans cadre lui aussi, comme ↻ et
+  Masquer, à la même place. Son libellé garde la taille que l'app donne à
+  tous ses boutons (14 px, 10 px de bord) : un mod ne peut pas la changer.
+
 - **0.10.13** — 2026-10-27 — La bande retrouve son allure d'avant la mise à
   jour de l'app : son texte en 13 px (la taille « footnote » ; l'app écrit
   maintenant en 14 px dans la zone du prompt), et Masquer sans cadre, comme ↻.

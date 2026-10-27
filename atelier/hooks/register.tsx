@@ -1439,6 +1439,8 @@ export const register: Register = on => {
         key="nouvelle"
         // l'app de bureau dessine un bouton natif avec ce libellé seul : tout ce qu'il dit est là
         label={LIBELLE_NOUVELLE}
+        // sans cadre, comme ↻ et Masquer : à la même place (son libellé et ses bords restent)
+        plain
         dimColor
         onPress={async () => {
           // un deuxième clic pendant que le premier se décide (la liste des commandes, ta réponse pour /clear) : rien de plus
