@@ -159,7 +159,17 @@ test('bandeau : APK plus récent que le tel, git en avance, quota 5 h', async ($
       // 🆕 dans son cadre fin à nous (une bordure, sans marge), à la place de celui de l'app
       expect((await ui.find({ key: 'cadre-nouvelle' }))?.props).toMatchObject({ borderStyle: 'single', padding: 0 })
       expect(JSON.stringify(await ui.find({ key: 'cadre-nouvelle' }))).toContain('🆕 New')
+      // Installer et Lancer aussi ; celui d'Installer en jaune : le tel n'est pas à jour
+      expect((await ui.find({ key: 'install' }))?.props?.plain).toBe(true)
+      expect((await ui.find({ key: 'cadre-install' }))?.props).toMatchObject({ borderStyle: 'single', padding: 0, borderColor: 'yellow' })
+      expect((await ui.find({ key: 'launch' }))?.props?.plain).toBe(true)
+      expect((await ui.find({ key: 'cadre-launch' }))?.props).toMatchObject({ borderStyle: 'single', padding: 0 })
+      expect((await ui.find({ key: 'cadre-launch' }))?.props?.borderColor).toBeUndefined()
     } else {
+      // le terminal : pas de cadre (une bordure y prendrait trois lignes), Installer garde son allure de bouton principal
+      expect(await ui.find({ key: 'cadre-install' })).toBeUndefined()
+      expect((await ui.find({ key: 'install' }))?.props?.plain).toBeUndefined()
+      expect((await ui.find({ key: 'install' }))?.props?.variant).toBe('primary')
       expect(await ui.find({ type: 'Text', text: /5 h ▰{7}▱ 82 % → 23:10/ })).toBeDefined()
     }
     // ce que les autres mods (clawd) dessinent sous le bandeau reste visible

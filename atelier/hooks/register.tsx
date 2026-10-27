@@ -1485,16 +1485,18 @@ export const register: Register = on => {
         }}
       />
     )
-    // son cadre sur le bureau : une bordure fine aux couleurs du thème, sans marge (BORD_NOUVELLE, que la bande partagée
-    // compte) ; le terminal dessinerait une bordure de trois lignes : le bouton seul
-    const nouvelle =
+    // un cadre à nous autour d'un bouton dessiné sans le sien (`plain`), celui de l'app étant plus large et plus foncé :
+    // une bordure fine aux couleurs du thème, sans marge (BORD_NOUVELLE, que la bande partagée compte pour 🆕) ; sur le
+    // bureau seulement, le terminal dessinerait une bordure de trois lignes : le bouton seul
+    const encadre = (cle: string, bouton: JSX.Element, couleur?: string) =>
       e.surface === 'desktop' ? (
-        <Box key="cadre-nouvelle" borderStyle="single" padding={0}>
-          {boutonNouvelle}
+        <Box key={cle} borderStyle="single" borderColor={couleur} padding={0}>
+          {bouton}
         </Box>
       ) : (
-        boutonNouvelle
+        bouton
       )
+    const nouvelle = encadre('cadre-nouvelle', boutonNouvelle)
     // Commit + push : sur la ligne git, quand il y a de quoi (pas pendant un tour)
     // (sans raccourci clavier : le focus resté dans la bande après un clic, une demande tapée qui commence par « c »
     // lançait le commit + push sans le vouloir ; sans remote, un commit seul, jamais un push impossible)
@@ -1578,18 +1580,27 @@ export const register: Register = on => {
                 <Text dimColor size={TAILLE_TEXTE}>  · tel non branché </Text>
               )}
               {pastilleB}
-              {a.device && a.apk && !enCours && (
-                <Button
-                  key="install"
-                  label="Installer sur le tel"
-                  variant={a.isPhoneStale ? 'primary' : 'secondary'}
-                  dimColor={!a.isPhoneStale}
-                  onPress={async () => $.ui.toast(await installApk($), { timeoutMs: 8000 })}
-                />
-              )}
-              {a.device && a.installed && !enCours && (
-                <Button key="launch" label="Lancer" dimColor onPress={() => launchApp($)} />
-              )}
+              {/* dans leur cadre fin sur le bureau, comme 🆕 ; celui d'Installer en jaune quand le tel n'est pas à jour (le
+                  terminal, sans cadre, garde le bouton principal) */}
+              {a.device &&
+                a.apk &&
+                !enCours &&
+                encadre(
+                  'cadre-install',
+                  <Button
+                    key="install"
+                    label="Installer sur le tel"
+                    plain={e.surface === 'desktop' || undefined}
+                    variant={a.isPhoneStale ? 'primary' : 'secondary'}
+                    dimColor={!a.isPhoneStale}
+                    onPress={async () => $.ui.toast(await installApk($), { timeoutMs: 8000 })}
+                  />,
+                  a.isPhoneStale ? 'yellow' : undefined,
+                )}
+              {a.device &&
+                a.installed &&
+                !enCours &&
+                encadre('cadre-launch', <Button key="launch" label="Lancer" plain={e.surface === 'desktop' || undefined} dimColor onPress={() => launchApp($)} />)}
             </Box>
           )}
           {g && tg && (

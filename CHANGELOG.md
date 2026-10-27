@@ -100,6 +100,11 @@
 
 ## atelier
 
+- **0.10.16** — 2026-10-27 — « Installer sur le tel » et « Lancer » ont le
+  même cadre fin que « 🆕 New » sur le bureau. Celui d'Installer passe en
+  jaune quand le tel n'est pas à jour (il remplace le bouton principal de
+  l'app) ; le terminal garde ses boutons tels quels.
+
 - **0.10.15** — 2026-10-27 — Le bouton devient « 🆕 New » et retrouve un
   cadre, le nôtre : une bordure fine aux couleurs du thème, sans marge en plus,
   à la place du cadre de l'app, plus large et plus foncé. Il fait 73 px de
