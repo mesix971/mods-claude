@@ -127,7 +127,7 @@ export type AtelierAgent = {
 
 /** Un élément du bandeau qu'un autre mod du dépôt (Clawd) peut viser */
 export type AtelierElement = {
-  /** `jauge-5h`, `jauge-7j`, `jauge-contexte`, `conso`, `conseil` (la puce 💡 du conseil de modèle), `tache-<id>`, `agent-<id>`, `build`, `nouvelle` (le bouton 🆕 de nouvelle conversation, toujours là) */
+  /** `jauge-5h`, `jauge-7j`, `jauge-contexte`, `conso`, `conseil` (la puce 💡 du conseil de modèle), `tache-<id>`, `agent-<id>`, `build`, `nouvelle` (le bouton 🆕 de nouvelle conversation, toujours là), `installer` (le bouton Installer de la ligne 📱, quand il est là) */
   id: string
   genre: 'jauge' | 'conso' | 'conseil' | 'tache' | 'agent' | 'build' | 'bouton'
   /**
@@ -135,7 +135,9 @@ export type AtelierElement = {
    * `faite` (la coche), `echec` (la croix) ; pour une jauge son niveau (`ok`,
    * `attention`, `critique`) ; pour la conso `ok` ou `lourde` ; pour le bouton
    * 🆕 `a-montrer` quand il est temps de changer de conversation, `repos`
-   * sinon (toujours publié depuis la 0.10.17, pour vérifier sa place)
+   * sinon (toujours publié depuis la 0.10.17, pour vérifier sa place) ; pour
+   * le bouton Installer `a-montrer` quand il est jaune (un nouvel APK attend),
+   * `repos` quand il est discret
    */
   etat: string
   /** Sa place dans le dessin desktop : en px CSS depuis le bord gauche du bandeau */

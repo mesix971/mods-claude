@@ -1,9 +1,10 @@
 // Tests du mod atelier : adb, git et le disque sont simulés avec de vraies
 // sorties réelles d'adb et de git, anonymisées (app, appareil, utilisateur).
 import { expect, mock, test } from 'claude-code/testing'
+import type { AtelierAndroid, AtelierBuild } from '../types'
 
 import { ajouteAgent, causeDe, finAgent, nettoieAgents, pastillesAgents, pingAgent } from './agents'
-import { analyse, estBuild, quoiBuild, sortieFond } from './build'
+import { analyse, estBuild, pastilleBuild, quoiBuild, sortieFond } from './build'
 import { aJuger, conseilAffiche, coupe, deToi, familleDe, lisConseil, nomEffort, promptConseil } from './conseil'
 import { ajouteReponse, debutTour, estLourde, finTour, mesureCout, texteConso, titreConso } from './conso'
 import { jauges, svgJauges, titreJauge } from './jauges'
@@ -11,8 +12,24 @@ import { decrit, estDiscret } from './outils'
 import { svgPastilles } from './pastilles'
 import { coutReponse, euros, tokensCourts } from './prix'
 import { aRanger } from './rangement'
-import { LIBELLE_NOUVELLE, aChanger, commandeSuite, contexteCourt, contexteLourd, gachisTour, largeurBouton, largeurEncadre, largeurNouvelle, tient } from './suite'
-import { DEMANDES_GIT, ECHELLE, HAUTEUR_DESSIN, largeurCommandes, largeurGit, empruntsDe, grandeSceneDe, libelleCommit, planBandeau, quandDe, rangeesDe, sceneDuBandeau, textesGit } from './scene'
+import { LIBELLE_NOUVELLE, aChanger, commandeSuite, contexteCourt, contexteLourd, gachisTour, largeurBouton, largeurEncadre, largeurNouvelle, largeurTexte, tient } from './suite'
+import {
+  DEMANDES_GIT,
+  ECHELLE,
+  HAUTEUR_DESSIN,
+  LIBELLE_INSTALLER,
+  largeurCommandes,
+  largeurGit,
+  empruntsDe,
+  grandeSceneDe,
+  libelleCommit,
+  ligneAndroid,
+  planBandeau,
+  quandDe,
+  rangeesDe,
+  sceneDuBandeau,
+  textesGit,
+} from './scene'
 import { DEMANDE_GIT, attenteBloquante, consentiGardeFou, destructif, envoisGit } from './commande'
 import { MAX_TACHES, ajouteTache, depuisTodos, horodate, interrompue, majTache, pastillesTaches, planFini, suitPlan, svgTaches, toutFait } from './taches'
 import { dureePause } from './temps'
@@ -489,6 +506,66 @@ test('ligne git : en retard, branche supprimée, HEAD détachée, sans remote', 
   expect(libelleCommit({ ...base, changed: 1, behind: 2 })).toBe('Commit + push')
   expect(libelleCommit({ ...base, behind: 2, gone: true })).toBeNull()
   expect(libelleCommit({ ...base, behind: 2, detached: true })).toBeNull()
+})
+
+test('ligne 📱 : ses textes tels que le bandeau les écrit, Installer seulement quand il sert, et sa place publiée pour Clawd', () => {
+  // le 03/10/2026, 22:10 à Paris ; l'APK du jeudi 01:52, installé le mardi précédent : le tel n'est pas à jour
+  const maintenant = Date.UTC(2026, 9, 3, 20, 10)
+  const a: AtelierAndroid = {
+    appId: 'com.exemple.monapp',
+    versionName: '5.7.0',
+    versionCode: 30,
+    apk: { path: 'C:/proj/app/build/outputs/apk/debug/MonApp-5.7.0-debug.apk', name: 'MonApp-5.7.0-debug.apk', version: '5.7.0-debug', mtimeMs: APK_MTIME },
+    device: { serial: '0A1B2C3D4E5F', model: 'Pixel 8' },
+    installed: { pkg: 'com.exemple.monapp', versionName: '5.6.0', versionCode: 29, updatedMs: APK_MTIME - 3 * 86_400_000 },
+    isPhoneStale: true,
+  }
+  const perime = ligneAndroid(a, maintenant, false)
+  expect(perime).toEqual({
+    version: '📱 5.7.0 (30)',
+    apk: '  · APK 5.7.0-debug jeu. 01:52',
+    tel: '  · tel 5.6.0 lun. 01:52 ⚠ pas à jour ',
+    couleurTel: 'yellow',
+    installer: 'jaune',
+    lancer: true,
+  })
+  // à jour : plus d'Installer ; pas installée : Installer en jaune, rien à lancer ; pas de tel, ou une installation en cours : aucun bouton
+  const aJour = { ...a, installed: { ...a.installed!, versionName: '5.7.0-debug', updatedMs: APK_MTIME + 60_000 }, isPhoneStale: false }
+  expect(ligneAndroid(aJour, maintenant, false)).toMatchObject({ tel: '  · tel 5.7.0-debug jeu. 01:53 ✓ ', couleurTel: 'green', installer: null, lancer: true })
+  // à peine plus ancien que l'APK (sous la marge de 2 min) : on ne peut pas l'affirmer, Installer discret
+  expect(ligneAndroid({ ...aJour, installed: { ...aJour.installed, updatedMs: APK_MTIME - 60_000 } }, maintenant, false).installer).toBe('discret')
+  expect(ligneAndroid({ ...a, installed: null }, maintenant, false)).toMatchObject({ tel: '  · pas installée sur Pixel 8 ', couleurTel: 'yellow', installer: 'jaune', lancer: false })
+  expect(ligneAndroid({ ...a, device: null, installed: null }, maintenant, false)).toMatchObject({ tel: '  · tel non branché ', couleurTel: null, installer: null, lancer: false })
+  expect(ligneAndroid(a, maintenant, true)).toMatchObject({ installer: null, lancer: false })
+  // la version est en gras (Segoe UI Semibold, ses chiffres n'ont pas tous la même chasse) : 75,7 px mesurés dans Chromium
+  expect(Math.abs(largeurTexte('📱 5.7.0 (30)', true) - 75.7)).toBeLessThan(0.2)
+  expect(Math.abs(largeurTexte('📱 5.7.0 (30)') - 73.5)).toBeLessThan(0.2)
+
+  // la bande partagée : Installer au bout de ses textes, `a-montrer` quand il est jaune ; la ligne 📱 a la hauteur d'une rangée de boutons
+  const etat = (x: AtelierAndroid, build: AtelierBuild | null = null) =>
+    planBandeau({ android: x, git: null, usage: null, taches: [{ id: 'plan-1', nom: 'Lire', etat: 'attente' }], conso: null, build, agents: [], busy: null }, maintenant)
+  const p = etat(a)
+  const s = sceneDuBandeau(p, quandDe(maintenant), 900)
+  const i = s.elements.find(e => e.id === 'installer')
+  const x = largeurTexte(perime.version, true) + largeurTexte(perime.apk) + largeurTexte(perime.tel)
+  expect(i).toMatchObject({ genre: 'bouton', etat: 'a-montrer', largeur: largeurEncadre(LIBELLE_INSTALLER), ligne: s.lignes.length - 1 - s.lignes.indexOf('android') })
+  expect(Math.abs(i!.x - x)).toBeLessThan(0.1)
+  expect(rangeesDe(p, s.lignes)[s.lignes.indexOf('android')]!.rangee).toBe(22)
+  // discret : publié au repos (Clawd ne vient pas le montrer)
+  expect(sceneDuBandeau(etat({ ...aJour, installed: { ...aJour.installed, updatedMs: APK_MTIME - 60_000 } }), quandDe(maintenant), 900).elements.find(e => e.id === 'installer')?.etat).toBe('repos')
+  // pas de bouton : rien de publié, et la ligne 📱 redevient du texte
+  const pAJour = etat({ ...a, device: null, installed: null })
+  const sAJour = sceneDuBandeau(pAJour, quandDe(maintenant), 900)
+  expect(sAJour.elements.find(e => e.id === 'installer')).toBeUndefined()
+  expect(rangeesDe(pAJour, sAJour.lignes)[sAJour.lignes.indexOf('android')]!.rangee).toBe(17)
+  // un build sur la ligne 📱 : sa pastille passe avant (la même largeur, qu'elle tourne ou non)
+  const b: AtelierBuild = { quoi: 'assembleDebug', debut: maintenant - 60_000, fin: maintenant - 30_000, etat: 'ok' }
+  const avecBuild = sceneDuBandeau(etat(a, b), quandDe(maintenant), 900).elements.find(e => e.id === 'installer')
+  const pastille = svgPastilles([[pastilleBuild(b, 0)]]).largeur
+  expect(svgPastilles([[pastilleBuild(b, 0)]], false).largeur).toBe(pastille)
+  expect(Math.abs(avecBuild!.x - (x + pastille * ECHELLE))).toBeLessThan(0.2)
+  // une bande trop étroite : il passerait à la ligne, pas publié
+  expect(sceneDuBandeau(p, quandDe(maintenant), 400).elements.find(e => e.id === 'installer')).toBeUndefined()
 })
 
 test('PowerShell : pas de bash WSL ni d’attente bloquante', async ($, on) => {

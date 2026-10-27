@@ -27,7 +27,7 @@ import { COULEURS, jauges, resumeJauges, svgJauges, texteJauges } from './jauges
 import { decrit, estDiscret } from './outils'
 import { svgPastilles } from './pastilles'
 import { aRanger } from './rangement'
-import { CELLULE, DEMANDES_GIT, ECHELLE, HAUTEUR_DESSIN, empruntsDe, grandeSceneDe, commandesAPart, libelleCommit, planBandeau, quandDe, quandPasse, quotasCoupes, sceneDuBandeau, textesGit } from './scene'
+import { CELLULE, DEMANDES_GIT, ECHELLE, HAUTEUR_DESSIN, LIBELLE_INSTALLER, empruntsDe, grandeSceneDe, commandesAPart, libelleCommit, planBandeau, quandDe, quotasCoupes, sceneDuBandeau, textesGit } from './scene'
 import { LIBELLE_NOUVELLE, TAILLE_TEXTE, commandeSuite } from './suite'
 import { ajouteTache, depuisTaskList, depuisTodos, horodate, interrompue, majTache, planFini, resumeTaches, suitPlan, texteTaches, toutFait } from './taches'
 
@@ -1309,6 +1309,7 @@ export const register: Register = on => {
     // le même plan que la bande partagée (scene.ts) : ce que Clawd y lit est ce qui est dessiné
     const ca = conseilAffiche(await read($, conseil), (await read($, reglage)) ?? SANS_REGLAGE)
     const plan = planBandeau({ android: a, git: g, usage: u, taches: lt, conso: c, build: b, agents: la, busy: enCours, conseil: ca }, maintenant)
+    const ligneTel = plan.android ?? null
     // rien à montrer : le moteur dessine (et la bande partagée est vide)
     if (plan.lignes.length === 0) return enveloppe()
     // on compose au lieu de remplacer : ce que dessinent les autres mods
@@ -1553,50 +1554,31 @@ export const register: Register = on => {
         {/* nos lignes rétrécissent (et coupent ce qui dépasse) plutôt que de pousser ce que dessinent les autres
             mods à droite (le coin de Clawd) hors de la bande : un dessin trop large ne passe pas à la ligne */}
         <Box flexDirection="column" flexGrow={1} minWidth={0} overflow="hidden">
-          {a && (
+          {ligneTel && (
             <Box flexDirection="row" flexWrap="wrap">
-              <Text bold size={TAILLE_TEXTE}>{`📱 ${a.versionName ?? '?'}${a.versionCode !== null ? ` (${a.versionCode})` : ''}`}</Text>
-              <Text dimColor size={TAILLE_TEXTE}>
-                {a.apk
-                  ? `  · APK ${a.apk.version ?? a.apk.name} ${quandPasse(maintenant)(a.apk.mtimeMs)}`
-                  : '  · pas d’APK construit'}
+              {/* les textes de ligneAndroid, tels quels : la place du bouton Installer publiée pour Clawd en dépend */}
+              <Text bold size={TAILLE_TEXTE}>{ligneTel.version}</Text>
+              <Text dimColor size={TAILLE_TEXTE}>{ligneTel.apk}</Text>
+              <Text color={ligneTel.couleurTel ?? undefined} dimColor={ligneTel.couleurTel === null} size={TAILLE_TEXTE}>
+                {ligneTel.tel}
               </Text>
-              {a.device ? (
-                a.installed ? (
-                  <Text color={a.isPhoneStale ? 'yellow' : 'green'} size={TAILLE_TEXTE}>
-                    {`  · tel ${a.installed.versionName}${a.installed.updatedMs ? ` ${quandPasse(maintenant)(a.installed.updatedMs)}` : ''} `}
-                    {a.isPhoneStale ? '⚠ pas à jour ' : '✓ '}
-                  </Text>
-                ) : (
-                  <Text color="yellow" size={TAILLE_TEXTE}>{`  · pas installée sur ${a.device.model} `}</Text>
-                )
-              ) : (
-                <Text dimColor size={TAILLE_TEXTE}>  · tel non branché </Text>
-              )}
               {pastilleB}
-              {/* dans leur cadre fin sur le bureau, comme 🆕. Installer : quand le tel n'est pas à jour ou que l'appli n'y
-                  est pas (cadre jaune) ; discret quand on ne peut pas l'affirmer (un APK plus récent que l'install, mais sous
-                  la marge de 2 min, ou une date d'install inconnue) ; absent quand il ne servirait à rien (le terminal, sans
-                  cadre, garde le bouton principal) */}
-              {a.device &&
-                a.apk &&
-                (a.isPhoneStale || !a.installed || a.installed.updatedMs === null || a.apk.mtimeMs > a.installed.updatedMs) &&
-                !enCours &&
+              {/* dans leur cadre fin sur le bureau, comme 🆕 ; Installer seulement quand il sert, jaune quand le tel n'est pas
+                  à jour (le terminal, sans cadre, garde le bouton principal) */}
+              {ligneTel.installer &&
                 encadre(
                   'cadre-install',
                   <Button
                     key="install"
-                    label="Installer"
+                    label={LIBELLE_INSTALLER}
                     plain={e.surface === 'desktop' || undefined}
-                    variant={a.isPhoneStale ? 'primary' : 'secondary'}
-                    dimColor={!a.isPhoneStale}
+                    variant={ligneTel.installer === 'jaune' ? 'primary' : 'secondary'}
+                    dimColor={ligneTel.installer !== 'jaune'}
                     onPress={async () => $.ui.toast(await installApk($), { timeoutMs: 8000 })}
                   />,
-                  a.isPhoneStale ? 'yellow' : undefined,
+                  ligneTel.installer === 'jaune' ? 'yellow' : undefined,
                 )}
-              {a.device &&
-                a.installed &&
-                !enCours &&
+              {ligneTel.lancer &&
                 encadre('cadre-launch', <Button key="launch" label="Lancer" plain={e.surface === 'desktop' || undefined} dimColor onPress={() => launchApp($)} />)}
             </Box>
           )}

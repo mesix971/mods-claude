@@ -100,6 +100,13 @@
 
 ## atelier
 
+- **0.10.18** — 2026-10-27 — La place du bouton Installer est dans la bande
+  partagée (`installer`, `a-montrer` quand il est jaune), pour que Clawd
+  vienne le montrer quand un nouvel APK attend. La ligne 📱 est décrite comme
+  la ligne git (`ligneAndroid` : ses textes, la version en gras mesurée en
+  Segoe UI Semibold, ses boutons), et elle compte comme une rangée de boutons
+  quand elle en porte.
+
 - **0.10.17** — 2026-10-27 — Une bande plus légère et plus utile :
   - « Installer » (ex « Installer sur le tel ») n'apparaît plus que quand il
     sert : en jaune quand le tel n'est pas à jour ou que l'appli n'y est pas,

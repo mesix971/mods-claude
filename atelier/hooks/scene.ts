@@ -51,6 +51,8 @@ export type Plan = {
   nouvelle: string | null
   /** La ligne git (le bouton 🆕 est au bout : sa place en dépend) */
   git: AtelierGit | null
+  /** La ligne 📱, ses textes et ses boutons (la place d'Installer en dépend) */
+  android?: LigneAndroid | null
 }
 
 const pluriel = (n: number, mot: string) => `${n} ${mot}${n > 1 ? 's' : ''}`
@@ -139,6 +141,42 @@ export const quandDe = (maintenant: number) => (ms: number) => (ms - maintenant 
 export const quandPasse = (maintenant: number) => (ms: number) =>
   (new Date(ms).toDateString() !== new Date(maintenant).toDateString() ? `${JOURS[new Date(ms).getDay()]} ` : '') + heure(ms)
 
+/** Le libellé du bouton d'installation de la ligne 📱 */
+export const LIBELLE_INSTALLER = 'Installer'
+
+/**
+ * La ligne 📱 telle que le bandeau l'écrit (la place du bouton Installer
+ * publiée pour Clawd en dépend) : la version (en gras), l'APK, le tel, et ses
+ * boutons. Installer : `jaune` quand le tel n'est pas à jour ou que l'appli
+ * n'y est pas, `discret` quand on ne peut pas l'affirmer (un APK plus récent
+ * que l'install mais sous la marge de 2 min, ou une date d'install inconnue),
+ * sinon rien ; pendant une installation (`occupe`), ni lui ni Lancer.
+ */
+export type LigneAndroid = {
+  version: string
+  apk: string
+  tel: string
+  /** La couleur du texte du tel (null : grisé, tel non branché) */
+  couleurTel: 'yellow' | 'green' | null
+  installer: 'jaune' | 'discret' | null
+  lancer: boolean
+}
+
+export function ligneAndroid(a: AtelierAndroid, maintenant: number, occupe: boolean): LigneAndroid {
+  const passe = quandPasse(maintenant)
+  const version = `📱 ${a.versionName ?? '?'}${a.versionCode !== null ? ` (${a.versionCode})` : ''}`
+  const apk = a.apk ? `  · APK ${a.apk.version ?? a.apk.name} ${passe(a.apk.mtimeMs)}` : '  · pas d’APK construit'
+  const tel = !a.device
+    ? '  · tel non branché '
+    : a.installed
+      ? `  · tel ${a.installed.versionName}${a.installed.updatedMs ? ` ${passe(a.installed.updatedMs)}` : ''} ${a.isPhoneStale ? '⚠ pas à jour ' : '✓ '}`
+      : `  · pas installée sur ${a.device.model} `
+  const couleurTel = !a.device ? null : a.installed && !a.isPhoneStale ? 'green' : 'yellow'
+  const utile = a.isPhoneStale || !a.installed || a.installed.updatedMs === null || (a.apk !== null && a.apk.mtimeMs > a.installed.updatedMs)
+  const installer = !occupe && a.device && a.apk && utile ? (a.isPhoneStale ? 'jaune' : 'discret') : null
+  return { version, apk, tel, couleurTel, installer, lancer: !occupe && a.device !== null && a.installed !== null }
+}
+
 export function planBandeau(x: EtatBandeau, maintenant: number): Plan {
   const lj = x.usage ? jauges(x.usage, maintenant) : []
   const texte = texteConso(x.conso)
@@ -154,7 +192,17 @@ export function planBandeau(x: EtatBandeau, maintenant: number): Plan {
     ...(groupes.length > 0 ? (['pastilles'] as const) : []),
     ...(x.busy ? (['occupe'] as const) : []),
   ]
-  return { lignes, jauges: lj, conso, conseil: x.conseil ?? null, build: bv, groupes, nouvelle: texteNouvelle(x.usage, x.conso), git: x.git }
+  return {
+    lignes,
+    jauges: lj,
+    conso,
+    conseil: x.conseil ?? null,
+    build: bv,
+    groupes,
+    nouvelle: texteNouvelle(x.usage, x.conso),
+    git: x.git,
+    android: x.android ? ligneAndroid(x.android, maintenant, x.busy !== null) : null,
+  }
 }
 
 const genreDe = (id: string): AtelierElement['genre'] => (id.startsWith('agent-') ? 'agent' : id === 'build' ? 'build' : 'tache')
@@ -273,7 +321,12 @@ function rangeeDesCommandes(p: Plan, lignes: AtelierScene['lignes']): AtelierSce
 export function rangeesDe(p: Plan, lignes: AtelierScene['lignes']): { bas: number; rangee: number }[] {
   const boutons = rangeeDesCommandes(p, lignes)
   const hauteurs = lignes.map(l =>
-    l === boutons ? RANGEE_BOUTONS : l === 'quotas' || l === 'suite' || l === 'pastilles' ? RANGEE_DESSINS : RANGEE_TEXTE,
+    // (la ligne 📱 est aussi une rangée de boutons quand elle en porte : Installer, Lancer)
+    l === boutons || (l === 'android' && (p.android?.installer || p.android?.lancer))
+      ? RANGEE_BOUTONS
+      : l === 'quotas' || l === 'suite' || l === 'pastilles'
+        ? RANGEE_DESSINS
+        : RANGEE_TEXTE,
   )
   let bas = MARGE_BAS
   const r: { bas: number; rangee: number }[] = []
@@ -317,6 +370,25 @@ export function sceneDuBandeau(p: Plan, quand: (ms: number) => string, bandePx: 
       hauteur: HAUTEUR_DESSIN,
       ligne: ligne(rangee),
     })
+  }
+  // le bouton Installer de la ligne 📱, quand il est là : au bout de ses textes (la version en gras) et de la pastille du
+  // build ; `a-montrer` quand il est jaune (Clawd vient le montrer), `repos` sinon. Passé à la ligne (bande trop étroite) :
+  // pas publié, il ne serait plus là où on le dirait
+  if (p.android?.installer) {
+    const pastille = p.build ? aLEchelle(svgPastilles([[pastilleBuild(p.build, 0)]]).largeur) : 0
+    const xInstaller = largeurTexte(p.android.version, true) + largeurTexte(p.android.apk) + largeurTexte(p.android.tel) + pastille
+    const largeur = largeurEncadre(LIBELLE_INSTALLER)
+    if (!bandePx || xInstaller + largeur <= bandePx - COIN_CLAWD) {
+      elements.push({
+        id: 'installer',
+        genre: 'bouton',
+        etat: p.android.installer === 'jaune' ? 'a-montrer' : 'repos',
+        x: +xInstaller.toFixed(1),
+        largeur,
+        hauteur: HAUTEUR_DESSIN,
+        ligne: ligne('android'),
+      })
+    }
   }
   for (const { d, rangee } of quotas) {
     for (const pl of d.places) {
