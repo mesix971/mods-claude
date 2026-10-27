@@ -11,9 +11,9 @@ import { decrit, estDiscret } from './outils'
 import { svgPastilles } from './pastilles'
 import { coutReponse, euros, tokensCourts } from './prix'
 import { aRanger } from './rangement'
-import { LIBELLE_NOUVELLE, aChanger, commandeSuite, contexteCourt, contexteLourd, gachisTour, largeurBouton, largeurNouvelle, tient } from './suite'
-import { ECHELLE, HAUTEUR_DESSIN, largeurCommandes, largeurGit, empruntsDe, grandeSceneDe, libelleCommit, planBandeau, quandDe, rangeesDe, sceneDuBandeau, textesGit } from './scene'
-import { attenteBloquante, consentiGardeFou, destructif, envoisGit } from './commande'
+import { LIBELLE_NOUVELLE, aChanger, commandeSuite, contexteCourt, contexteLourd, gachisTour, largeurBouton, largeurEncadre, largeurNouvelle, tient } from './suite'
+import { DEMANDES_GIT, ECHELLE, HAUTEUR_DESSIN, largeurCommandes, largeurGit, empruntsDe, grandeSceneDe, libelleCommit, planBandeau, quandDe, rangeesDe, sceneDuBandeau, textesGit } from './scene'
+import { DEMANDE_GIT, attenteBloquante, consentiGardeFou, destructif, envoisGit } from './commande'
 import { MAX_TACHES, ajouteTache, depuisTodos, horodate, interrompue, majTache, pastillesTaches, planFini, suitPlan, svgTaches, toutFait } from './taches'
 import { dureePause } from './temps'
 
@@ -53,11 +53,11 @@ const DIRS: Record<string, { name: string; kind: 'file' | 'dir'; mtimeMs: number
 
 const ok = (stdout: string) => ({ exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false })
 
-function fakeRun(argv: readonly string[], installed: { lastUpdate: string }) {
+function fakeRun(argv: readonly string[], installed: { lastUpdate: string; absent?: boolean }) {
   const cmd = argv.join(' ')
   if (argv[0] === ADB) {
     if (cmd.includes('devices -l')) return ok('List of devices attached\n0A1B2C3D4E5F           device product:shiba model:Pixel_8 device:shiba transport_id:3\n\n')
-    if (cmd.includes('pm list packages')) return ok('package:com.exemple.monapp\n')
+    if (cmd.includes('pm list packages')) return ok(installed.absent ? '' : 'package:com.exemple.monapp\n')
     if (cmd.includes('dumpsys package')) {
       return ok(`    versionCode=30 minSdk=28 targetSdk=35\n    versionName=5.7.0-debug\n    lastUpdateTime=${installed.lastUpdate}\n`)
     }
@@ -80,7 +80,7 @@ const BAND = {
 } as const
 
 test('bandeau : APK plus récent que le tel, git en avance, quota 5 h', async ($, on) => {
-  const installed = { lastUpdate: '2026-09-30 22:11:49' }
+  const installed: { lastUpdate: string; absent?: boolean } = { lastUpdate: '2026-09-30 22:11:49' }
   const runs: string[] = []
   const toasts: string[] = []
   // 22:10 heure de Paris : 4 h écoulées sur la fenêtre de 5 h qui se termine à 23:10
@@ -159,6 +159,9 @@ test('bandeau : APK plus récent que le tel, git en avance, quota 5 h', async ($
       // 🆕 dans son cadre fin à nous (une bordure, sans marge), à la place de celui de l'app
       expect((await ui.find({ key: 'cadre-nouvelle' }))?.props).toMatchObject({ borderStyle: 'single', padding: 0 })
       expect(JSON.stringify(await ui.find({ key: 'cadre-nouvelle' }))).toContain('🆕 New')
+      // le bouton de la ligne git (ici Push) dans le même cadre fin
+      expect((await ui.find({ key: 'commit' }))?.props?.plain).toBe(true)
+      expect((await ui.find({ key: 'cadre-commit' }))?.props).toMatchObject({ borderStyle: 'single', padding: 0 })
       // Installer et Lancer aussi ; celui d'Installer en jaune : le tel n'est pas à jour
       expect((await ui.find({ key: 'install' }))?.props?.plain).toBe(true)
       expect((await ui.find({ key: 'cadre-install' }))?.props).toMatchObject({ borderStyle: 'single', padding: 0, borderColor: 'yellow' })
@@ -181,9 +184,23 @@ test('bandeau : APK plus récent que le tel, git en avance, quota 5 h', async ($
   const res = await $.command.run({ command: 'tel', args: '', origin: { kind: 'composer' } })
   expect(res.text ?? '').toContain('MonApp-5.7.0-debug.apk installé')
   expect(runs.some(r => r.endsWith('install -r C:/proj/app/build/outputs/apk/debug/MonApp-5.7.0-debug.apk'))).toBe(true)
-  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
-  expect(await ui.find({ type: 'Text', text: /✓/ })).toBeDefined()
-  await ui.unmount()
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await $.ui.mount({ ...BAND, surface })
+    expect(await ui.find({ type: 'Text', text: /✓/ })).toBeDefined()
+    // à jour : plus d'Installer (il ne servirait à rien), Lancer reste
+    expect(await ui.find({ key: 'install' })).toBeUndefined()
+    expect(await ui.find({ key: 'launch' })).toBeDefined()
+    await ui.unmount()
+  }
+
+  // l'appli désinstallée du tel : Installer revient, cadre jaune ; plus rien à lancer
+  installed.absent = true
+  const ui2 = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  await ui2.press({ key: 'refresh' })
+  expect(await ui2.find({ type: 'Text', text: /pas installée sur Pixel 8/ })).toBeDefined()
+  expect((await ui2.find({ key: 'cadre-install' }))?.props?.borderColor).toBe('yellow')
+  expect(await ui2.find({ key: 'launch' })).toBeUndefined()
+  await ui2.unmount()
 })
 
 test('jauges : le rythme de consommation alerte avant le seuil', async () => {
@@ -460,6 +477,18 @@ test('ligne git : en retard, branche supprimée, HEAD détachée, sans remote', 
   expect(libelleCommit({ ...base, ahead: 1, hasRemote: false })).toBeNull()
   expect(libelleCommit({ ...base, ahead: 1, gone: true })).toBeNull()
   expect(libelleCommit(base)).toBeNull()
+  // en retard sur GitHub : d'abord les récupérer (même avec des commits à pousser, que GitHub refuserait) ; des modifs : le commit d'abord
+  // (ce que Pull demande à Claude ne vaut pas accord pour un push : le garde-fou poserait toujours sa question)
+  expect(DEMANDE_GIT.test(DEMANDES_GIT.Pull)).toBe(false)
+  expect(DEMANDE_GIT.test(DEMANDES_GIT['Commit + push'])).toBe(true)
+  expect(DEMANDE_GIT.test(DEMANDES_GIT.Push)).toBe(true)
+  // et la place du bouton, dans son cadre fin, compte dans celle des commandes
+  expect(+(largeurCommandes({ ...base, behind: 2 }) - largeurCommandes(null)).toFixed(1)).toBe(largeurEncadre('Pull'))
+  expect(libelleCommit({ ...base, behind: 2 })).toBe('Pull')
+  expect(libelleCommit({ ...base, ahead: 1, behind: 2 })).toBe('Pull')
+  expect(libelleCommit({ ...base, changed: 1, behind: 2 })).toBe('Commit + push')
+  expect(libelleCommit({ ...base, behind: 2, gone: true })).toBeNull()
+  expect(libelleCommit({ ...base, behind: 2, detached: true })).toBeNull()
 })
 
 test('PowerShell : pas de bash WSL ni d’attente bloquante', async ($, on) => {
@@ -1413,8 +1442,16 @@ test('bandeau : la bande partagée est publiée, ce que Clawd tient n’est plus
   } as never)
   // la bande partagée dit où est chaque étape
   await horloge.settle()
-  // (sans ligne git ni quotas, les commandes ont leur propre rangée : sinon ↻ et Masquer ne seraient nulle part)
-  expect(publiee).toMatchObject({ lignes: ['commandes', 'pastilles'], elements: [{ id: 'tache-plan-1', x: 0, ligne: 0 }, { id: 'tache-plan-2', x: 16.1, etat: 'encours' }] })
+  // (sans ligne git ni quotas, les commandes ont leur propre rangée : sinon ↻ et Masquer ne seraient nulle part ; 🆕 en tête,
+  // au repos : il n'est pas temps de changer de conversation)
+  expect(publiee).toMatchObject({
+    lignes: ['commandes', 'pastilles'],
+    elements: [
+      { id: 'nouvelle', etat: 'repos', ligne: 1 },
+      { id: 'tache-plan-1', x: 0, ligne: 0 },
+      { id: 'tache-plan-2', x: 16.1, etat: 'encours' },
+    ],
+  })
   const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
   const source = async () => String((await ui.find({ type: 'Svg' }))?.props?.source)
   expect(await source()).toContain('Corriger le bug')
@@ -1663,14 +1700,14 @@ test('bouton « Nouvelle conversation » : toujours le même, à la même place,
     // sans les poignées des clics, renumérotées à chaque dessin
     return { premier: r?.children?.[0]?.type, second: JSON.stringify(r?.children?.slice(1)).replace(/"handle":\d+/g, '') }
   }
-  // 100 k : pas encore temps ; rien de publié pour Clawd
+  // 100 k : pas encore temps ; publié pour Clawd, au repos (son cadre l'encadre sans qu'il vienne le montrer)
   await horloge.settle()
   const avant = { bouton: await bouton(), rangee: await rangee() }
   expect(avant.bouton).toContain('🆕 New')
   expect(avant.bouton).toContain('"dimColor":true')
   expect(avant.rangee.premier).toBe('Svg')
   expect(avant.rangee.second).toContain('🆕 New')
-  expect(publiee?.elements?.find(x => x.id === 'nouvelle')).toBeUndefined()
+  expect(publiee?.elements?.find(x => x.id === 'nouvelle')?.etat).toBe('repos')
   // 400 k : il est temps ; le bouton ne change en rien (ni place, ni allure, même au fil des secondes)…
   tokens = 400_000
   await $.session.measure({ context: { tokens, window: 1_000_000, percent: 40 }, rateLimits: [], changed: ['context'] } as never)
@@ -1753,7 +1790,7 @@ test('nouvelle conversation : le bouton n’est publié pour Clawd que s’il ti
   expect(tient(600, LIBELLE_NOUVELLE, null)).toBe(true)
 })
 
-test('nouvelle conversation : sur la bande partagée, le bouton est là où il est toujours (au bout de la ligne git, sinon des jauges), seulement quand il est temps', () => {
+test('nouvelle conversation : sur la bande partagée, le bouton est là où il est toujours (au bout de la ligne git, sinon des jauges), à montrer seulement quand il est temps', () => {
   const M = 60_000
   const lourd = { fiveHour: null, sevenDay: null, contextPercent: 30, contextTokens: 300_000 }
   const leger = { fiveHour: null, sevenDay: null, contextPercent: 5, contextTokens: 50_000 }
@@ -1771,6 +1808,7 @@ test('nouvelle conversation : sur la bande partagée, le bouton est là où il e
   expect(s.lignes).toEqual(['git', 'quotas', 'pastilles'])
   const b = s.elements.find(e => e.id === 'nouvelle')
   expect(b?.ligne).toBe(2)
+  expect(b?.etat).toBe('a-montrer')
   expect(Math.abs((b?.x ?? -99) - (largeurGit(git) + 3.6))).toBeLessThan(0.1)
   // sans git : au bout du dessin des jauges, derrière une case vide
   const sansGit = etat(null)
@@ -1778,8 +1816,8 @@ test('nouvelle conversation : sur la bande partagée, le bouton est là où il e
   expect(q?.ligne).toBe(1)
   const jaugesPx = svgJauges(sansGit.jauges, quandDe(2 * M), { conso: sansGit.conso, conseil: sansGit.conseil }).largeur * ECHELLE
   expect(Math.abs((q?.x ?? -99) - (jaugesPx + 3.6))).toBeLessThan(0.2)
-  // pas encore temps : rien de publié (le bouton est là quand même, Clawd ne vient pas)
-  expect(sceneDuBandeau(etat(git, leger), quandDe(2 * M), 751).elements.find(e => e.id === 'nouvelle')).toBeUndefined()
+  // pas encore temps : publié au repos, à la même place (Clawd ne vient pas le montrer ; son cadre l'encadre)
+  expect(sceneDuBandeau(etat(git, leger), quandDe(2 * M), 751).elements.find(e => e.id === 'nouvelle')).toMatchObject({ etat: 'repos', ligne: 2, x: b?.x })
   // une bande étroite : les commandes ne tiennent plus au bout de la ligne git, elles ont leur rangée (sous la ligne git)
   const etroite = sceneDuBandeau(etat(git), quandDe(2 * M), 300)
   expect(etroite.lignes).toEqual(['git', 'commandes', 'quotas', 'pastilles'])

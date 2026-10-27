@@ -129,15 +129,20 @@ export function tient(xPx: number, texte: string, bandePx: number | null): boole
 }
 
 /**
- * Le cadre du bouton 🆕 sur le bureau (px de bordure, de chaque côté) : une
- * boîte à bordure fine, aux couleurs du thème, autour du bouton sans cadre
+ * Le cadre de nos boutons sur le bureau (px de bordure, de chaque côté) : une
+ * boîte à bordure fine, aux couleurs du thème, autour d'un bouton sans cadre
  * natif (`plain`), celui de l'app étant plus large et plus foncé
  */
-export const BORD_NOUVELLE = 1
+export const BORD_CADRE = 1
+
+/** La largeur (px) d'un bouton dans son cadre fin, sur le bureau */
+export function largeurEncadre(texte: string): number {
+  return +(largeurBouton(texte) + 2 * BORD_CADRE).toFixed(1)
+}
 
 /** La largeur (px) du bouton 🆕 sur le bureau, son cadre compris */
 export function largeurNouvelle(texte: string = LIBELLE_NOUVELLE): number {
-  return +(largeurBouton(texte) + 2 * BORD_NOUVELLE).toFixed(1)
+  return largeurEncadre(texte)
 }
 
 /**

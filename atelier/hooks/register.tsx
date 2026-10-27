@@ -19,7 +19,7 @@ import type { EngineInterface, Register, ToolCallResult } from 'claude-code'
 import type { AtelierAgent, AtelierAndroid, AtelierBuild, AtelierConso, AtelierGit, AtelierTache, AtelierUsage } from '../types'
 import { ajouteAgent, causeDe, couleurModele, finAgent, nettoieAgents, pingAgent, resumeAgents } from './agents'
 import { analyse, estBuild, pastilleBuild, quoiBuild, sortieFond } from './build'
-import { attenteBloquante, consentiGardeFou, destructif, envoisGit } from './commande'
+import { DEMANDE_GIT, attenteBloquante, consentiGardeFou, destructif, envoisGit } from './commande'
 import type { EnvoiGit } from './commande'
 import { aJuger, conseilAffiche, deToi, lisConseil, promptConseil } from './conseil'
 import { ajouteReponse, debutTour, finTour, mesureCout, tokensDe } from './conso'
@@ -27,7 +27,7 @@ import { COULEURS, jauges, resumeJauges, svgJauges, texteJauges } from './jauges
 import { decrit, estDiscret } from './outils'
 import { svgPastilles } from './pastilles'
 import { aRanger } from './rangement'
-import { CELLULE, ECHELLE, HAUTEUR_DESSIN, empruntsDe, grandeSceneDe, commandesAPart, libelleCommit, planBandeau, quandDe, quandPasse, quotasCoupes, sceneDuBandeau, textesGit } from './scene'
+import { CELLULE, DEMANDES_GIT, ECHELLE, HAUTEUR_DESSIN, empruntsDe, grandeSceneDe, commandesAPart, libelleCommit, planBandeau, quandDe, quandPasse, quotasCoupes, sceneDuBandeau, textesGit } from './scene'
 import { LIBELLE_NOUVELLE, TAILLE_TEXTE, commandeSuite } from './suite'
 import { ajouteTache, depuisTaskList, depuisTodos, horodate, interrompue, majTache, planFini, resumeTaches, suitPlan, texteTaches, toutFait } from './taches'
 
@@ -748,8 +748,6 @@ async function confirm($: $, question: string): Promise<true | string> {
 let lastPrompt = ''
 let jbrToastShown = false
 
-const DEMANDE_GIT = /commit|push|pouss|envoie|\b(oui|ok|go|vas[- ]y|valide)\b/i
-
 /** Ce qui vient de toi, pour le push : pas une notification de tâche de fond, ni le message d'une autre session (sans origine connue : comme avant, ta demande) */
 const demandeDeToi = (o: { kind: string; name?: string } | undefined) =>
   !o ||
@@ -917,7 +915,7 @@ async function shell(
       .then(async () => {
         const a = await read($, android)
         if (BUILD_APK.test(verdict.command) && !ran.isError && a?.device && a.isPhoneStale && a.apk) {
-          $.ui.toast(`📦 ${a.apk.name} prêt — « Installer sur le tel » dans le bandeau, ou /tel`, { timeoutMs: 8000 })
+          $.ui.toast(`📦 ${a.apk.name} prêt — « Installer » dans le bandeau, ou /tel`, { timeoutMs: 8000 })
         }
       })
       .catch(() => {})
@@ -1486,7 +1484,7 @@ export const register: Register = on => {
       />
     )
     // un cadre à nous autour d'un bouton dessiné sans le sien (`plain`), celui de l'app étant plus large et plus foncé :
-    // une bordure fine aux couleurs du thème, sans marge (BORD_NOUVELLE, que la bande partagée compte pour 🆕) ; sur le
+    // une bordure fine aux couleurs du thème, sans marge (BORD_CADRE, que la bande partagée compte) ; sur le
     // bureau seulement, le terminal dessinerait une bordure de trois lignes : le bouton seul
     const encadre = (cle: string, bouton: JSX.Element, couleur?: string) =>
       e.surface === 'desktop' ? (
@@ -1497,28 +1495,24 @@ export const register: Register = on => {
         bouton
       )
     const nouvelle = encadre('cadre-nouvelle', boutonNouvelle)
-    // Commit + push : sur la ligne git, quand il y a de quoi (pas pendant un tour)
+    // Commit + push, Pull ou Push : sur la ligne git, quand il y a de quoi (pas pendant un tour), dans son cadre fin
     // (sans raccourci clavier : le focus resté dans la bande après un clic, une demande tapée qui commence par « c »
     // lançait le commit + push sans le vouloir ; sans remote, un commit seul, jamais un push impossible)
     const libCommit = g ? libelleCommit(g) : null
-    const commit = g && libCommit && !e.props.isWorking && (
-      <Button
-        key="commit"
-        label={libCommit}
-        dimColor
-        onPress={() =>
-          $.prompt.submit({
-            text:
-              libCommit === 'Commit + push'
-                ? 'Commit (message conventionnel en français) et pousse les changements en cours, puis vérifie que le push est bien passé.'
-                : libCommit === 'Commit'
-                  ? 'Commit (message conventionnel en français) les changements en cours. Ce dépôt n’a pas de remote : pas de push.'
-                  : 'Pousse les commits en attente et vérifie que le push est bien passé.',
-            asUser: true,
-          })
-        }
-      />
-    )
+    const commit =
+      g &&
+      libCommit &&
+      !e.props.isWorking &&
+      encadre(
+        'cadre-commit',
+        <Button
+          key="commit"
+          label={libCommit}
+          plain={e.surface === 'desktop' || undefined}
+          dimColor
+          onPress={() => $.prompt.submit({ text: DEMANDES_GIT[libCommit], asUser: true })}
+        />,
+      )
     // 🆕 en tête : ce qui le précède ne dépend que des textes de la ligne (sceneDuBandeau calcule sa place de la même façon) ;
     // Commit + push après lui, sinon il le décalerait à chaque fin de tour, sous les yeux de Clawd qui le montre
     // chacun posé à part sur la rangée (pas dans une boîte) : quand elle est pleine, ce qui suit 🆕 passe à la ligne,
@@ -1580,16 +1574,19 @@ export const register: Register = on => {
                 <Text dimColor size={TAILLE_TEXTE}>  · tel non branché </Text>
               )}
               {pastilleB}
-              {/* dans leur cadre fin sur le bureau, comme 🆕 ; celui d'Installer en jaune quand le tel n'est pas à jour (le
-                  terminal, sans cadre, garde le bouton principal) */}
+              {/* dans leur cadre fin sur le bureau, comme 🆕. Installer : quand le tel n'est pas à jour ou que l'appli n'y
+                  est pas (cadre jaune) ; discret quand on ne peut pas l'affirmer (un APK plus récent que l'install, mais sous
+                  la marge de 2 min, ou une date d'install inconnue) ; absent quand il ne servirait à rien (le terminal, sans
+                  cadre, garde le bouton principal) */}
               {a.device &&
                 a.apk &&
+                (a.isPhoneStale || !a.installed || a.installed.updatedMs === null || a.apk.mtimeMs > a.installed.updatedMs) &&
                 !enCours &&
                 encadre(
                   'cadre-install',
                   <Button
                     key="install"
-                    label="Installer sur le tel"
+                    label="Installer"
                     plain={e.surface === 'desktop' || undefined}
                     variant={a.isPhoneStale ? 'primary' : 'secondary'}
                     dimColor={!a.isPhoneStale}

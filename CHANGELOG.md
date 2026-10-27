@@ -100,6 +100,20 @@
 
 ## atelier
 
+- **0.10.17** — 2026-10-27 — Une bande plus légère et plus utile :
+  - « Installer » (ex « Installer sur le tel ») n'apparaît plus que quand il
+    sert : en jaune quand le tel n'est pas à jour ou que l'appli n'y est pas,
+    discret quand on ne peut pas l'affirmer (un APK à peine plus récent que
+    l'install, une date d'install illisible) ;
+  - un bouton « Pull » quand la branche est en retard sur GitHub (d'après le
+    dernier fetch) : Claude tire les nouveautés en avance rapide, et dit ce
+    qui diverge avant de fusionner quoi que ce soit. Sa demande ne vaut pas
+    accord pour un push : le garde-fou pose toujours sa question ;
+  - Commit, Pull et Push dans le même cadre fin que les autres boutons ;
+  - le bouton 🆕 est toujours dans la bande partagée, `repos` ou `a-montrer`
+    (Clawd ne vient le montrer que dans ce cas) : le cadre de Clawd
+    l'encadre à chaque fois, une capture suffit pour vérifier sa place.
+
 - **0.10.16** — 2026-10-27 — « Installer sur le tel » et « Lancer » ont le
   même cadre fin que « 🆕 New » sur le bureau. Celui d'Installer passe en
   jaune quand le tel n'est pas à jour (il remplace le bouton principal de

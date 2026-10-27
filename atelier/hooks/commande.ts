@@ -282,6 +282,13 @@ export function destructif(cmd: string, shell: Shell = 'Bash'): { raison: string
  */
 export type EnvoiGit = { sous: 'commit' | 'push'; depot: string | null; tout: boolean; nonSuivis: boolean; ajoutes: string[] }
 
+/**
+ * Ce qui, dans ta dernière demande, vaut accord pour un push : sans ça, un
+ * `git push` de Claude pose la question. Un texte que le bandeau envoie pour
+ * toi (le bouton Pull) ne doit contenir aucun de ces mots.
+ */
+export const DEMANDE_GIT = /commit|push|pouss|envoie|\b(oui|ok|go|vas[- ]y|valide)\b/i
+
 /** Un chemin du shell en chemin Windows : `/c/Users` → `C:/Users`, guillemets et antislashs normalisés */
 export const cheminWindows = (p: string) => p.replace(/\\/g, '/').replace(/^\/([a-zA-Z])(\/|$)/, (_, l: string, s: string) => `${l.toUpperCase()}:${s || '/'}`)
 

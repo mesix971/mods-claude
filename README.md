@@ -91,14 +91,16 @@ suivent ton thème clair ou sombre. Pas un mot : tout passe par ses gestes.
 **Le bandeau au-dessus du prompt**
 
 - 📱 Version déclarée, dernier APK construit et version installée sur le
-  téléphone (date comprise). Boutons **Installer sur le tel** et
-  **Lancer**. La version est lue dans le script Gradle, `pubspec.yaml`,
-  ou `version.properties` quand le script la calcule.
+  téléphone (date comprise). Bouton **Installer** quand le téléphone n'est
+  pas à jour (ou que l'appli n'y est pas), et **Lancer**. La version est lue
+  dans le script Gradle, `pubspec.yaml`, ou `version.properties` quand le
+  script la calcule.
 - 🌿 Branche, nombre de modifs, commits non poussés ou en retard, branche
   supprimée sur GitHub, alerte si la version est bumpée sans CHANGELOG. Bouton
-  **Commit + push** (**Commit** seul dans un dépôt sans remote). Pas de
-  raccourci clavier : une lettre tapée alors que le focus était resté dans la
-  bande déclenchait le bouton.
+  **Commit + push** (**Commit** seul dans un dépôt sans remote), **Pull**
+  quand la branche est en retard sur GitHub, **Push** quand il reste des
+  commits à pousser. Pas de raccourci clavier : une lettre tapée alors que le
+  focus était resté dans la bande déclenchait le bouton.
 - Jauges des quotas 5 h et 7 j et du contexte, à lire d'un coup d'œil :
   - **couleur** : vert, ambre ou rouge selon le niveau, et la barre pulse en
     critique ;

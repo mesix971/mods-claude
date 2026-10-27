@@ -16,7 +16,7 @@ import { estLourde, texteConso, titreConso } from './conso'
 import { idJauge, jauges, svgJauges } from './jauges'
 import type { Jauge } from './jauges'
 import { svgPastilles } from './pastilles'
-import { BORD_NOUVELLE, COIN_CLAWD, largeurBouton, largeurNouvelle, largeurTexte, texteNouvelle, tient } from './suite'
+import { BORD_CADRE, COIN_CLAWD, LIBELLE_NOUVELLE, largeurBouton, largeurEncadre, largeurNouvelle, largeurTexte, texteNouvelle, tient } from './suite'
 import type { Pastille } from './pastilles'
 import { pastillesTaches } from './taches'
 import { heure } from './temps'
@@ -88,11 +88,27 @@ export function textesGit(g: AtelierGit): { branche: string; modifs: string; dis
 /**
  * Le bouton de la ligne git, s'il y a de quoi : « Commit + push » (des
  * modifs), « Commit » (des modifs, sans remote : pas de push impossible),
- * « Push » (des commits à pousser, vers une branche qui existe encore) ; sinon null
+ * « Pull » (GitHub a des commits que la branche n'a pas, d'après le dernier
+ * fetch : d'abord les récupérer, un push serait refusé), « Push » (des
+ * commits à pousser, vers une branche qui existe encore) ; sinon null
  */
-export function libelleCommit(g: AtelierGit): 'Commit + push' | 'Commit' | 'Push' | null {
+export function libelleCommit(g: AtelierGit): 'Commit + push' | 'Commit' | 'Pull' | 'Push' | null {
   if (g.changed > 0) return g.hasRemote ? 'Commit + push' : 'Commit'
-  return g.ahead > 0 && g.hasRemote && !g.gone && !g.detached ? 'Push' : null
+  if (!g.hasRemote || g.gone || g.detached) return null
+  if ((g.behind ?? 0) > 0 && g.hasUpstream) return 'Pull'
+  return g.ahead > 0 ? 'Push' : null
+}
+
+/**
+ * Ce que le bouton de la ligne git demande à Claude, selon son libellé. Celui
+ * de Pull ne dit ni commit ni push (`DEMANDE_GIT`) : un push qui suivrait
+ * poserait toujours la question.
+ */
+export const DEMANDES_GIT: Record<NonNullable<ReturnType<typeof libelleCommit>>, string> = {
+  'Commit + push': 'Commit (message conventionnel en français) et pousse les changements en cours, puis vérifie que le push est bien passé.',
+  Commit: 'Commit (message conventionnel en français) les changements en cours. Ce dépôt n’a pas de remote : pas de push.',
+  Pull: 'Tire les nouveautés de GitHub en avance rapide (git pull --ff-only) et vérifie que la branche est à jour. Si elle a divergé, dis-moi ce qui diverge avant de fusionner quoi que ce soit.',
+  Push: 'Pousse les commits en attente et vérifie que le push est bien passé.',
 }
 
 /** La case vide posée devant 🆕 (`<Text> </Text>`) : une espace de la bande */
@@ -195,9 +211,9 @@ export function quotasCoupes(p: Plan, quand: (ms: number) => string, bandePx: nu
 export function largeurCommandes(git: AtelierGit | null): number {
   const commit = git ? libelleCommit(git) : null
   return (
-    // (sa case vide, 🆕 dans son cadre et la case vide qui le suit, puis les autres boutons, collés : relevé entre ↻ et Masquer
-    // sur la capture du 2026-10-26)
-    ESPACE + largeurNouvelle() + ESPACE + (commit ? largeurBouton(commit) : 0) + largeurBouton('↻') + largeurBouton('Masquer')
+    // (sa case vide, 🆕 dans son cadre et la case vide qui le suit, Commit (Pull, Push) dans le sien, puis ↻ et Masquer, collés :
+    // relevé entre ↻ et Masquer sur la capture du 2026-10-26)
+    ESPACE + largeurNouvelle() + ESPACE + (commit ? largeurEncadre(commit) : 0) + largeurBouton('↻') + largeurBouton('Masquer')
   )
 }
 
@@ -235,12 +251,13 @@ export function lignesDessinees(p: Plan, coupe: boolean, aPart = false): Atelier
  * une rangée de dessins (jauges, conso, pastilles) fait ~16,5 px, celle qui
  * porte les boutons natifs (🆕, ↻, Masquer) ~20 px (inchangée par la mise à
  * jour de l'app qui les a agrandis, revu le 2026-10-26), plus le cadre de 🆕
- * (`BORD_NOUVELLE` en haut et en bas, pas encore vu sur une capture) ; une
+ * (`BORD_CADRE` en haut et en bas : le cadre fait 22 px sur la capture du
+ * 2026-10-27) ; une
  * rangée de texte seul, la hauteur de ligne de `TAILLE_TEXTE` (17 px, lue dans
  * le code de l'app, pas encore sur une capture)
  */
 export const RANGEE_DESSINS = 16.5
-export const RANGEE_BOUTONS = 20 + 2 * BORD_NOUVELLE
+export const RANGEE_BOUTONS = 20 + 2 * BORD_CADRE
 export const RANGEE_TEXTE = 17
 /** Le jeu sous la dernière rangée, jusqu'au bas du bandeau (même relevé) */
 export const MARGE_BAS = 1.2
@@ -284,15 +301,22 @@ export function sceneDuBandeau(p: Plan, quand: (ms: number) => string, bandePx: 
         ]
       : [{ d: svgJauges(p.jauges, quand, { conso: p.conso, conseil: p.conseil }), rangee: 'quotas' }]
   const dernier = quotas.at(-1)
-  // le bouton 🆕 quand il est temps (Clawd vient le montrer) : là où il est toujours, en tête des commandes, derrière
-  // une case vide ; sur leur rangée à elles, au bout de la ligne git, sinon au bout du dernier dessin des quotas
-  if (p.nouvelle) {
-    const surGit = p.git !== null && p.lignes.includes('git')
-    const x = aPart ? 0 : surGit && p.git ? largeurGit(p.git) : dernier ? aLEchelle(dernier.d.largeur) : null
-    if (x !== null && tient(x + ESPACE, p.nouvelle, bandePx)) {
-      const rangee = aPart ? 'commandes' : surGit ? 'git' : (dernier?.rangee ?? 'quotas')
-      elements.push({ id: 'nouvelle', genre: 'bouton', etat: 'a-montrer', x: +(x + ESPACE).toFixed(1), largeur: largeurNouvelle(p.nouvelle), hauteur: HAUTEUR_DESSIN, ligne: ligne(rangee) })
-    }
+  // le bouton 🆕, toujours publié (le cadre de Clawd l'encadre sur une capture) : `a-montrer` quand il est temps de changer
+  // de conversation (Clawd vient le montrer), `repos` sinon ; là où il est toujours, en tête des commandes, derrière une case
+  // vide ; sur leur rangée à elles, au bout de la ligne git, sinon au bout du dernier dessin des quotas
+  const surGit = p.git !== null && p.lignes.includes('git')
+  const xNouvelle = aPart ? 0 : surGit && p.git ? largeurGit(p.git) : dernier ? aLEchelle(dernier.d.largeur) : null
+  if (xNouvelle !== null && tient(xNouvelle + ESPACE, LIBELLE_NOUVELLE, bandePx)) {
+    const rangee = aPart ? 'commandes' : surGit ? 'git' : (dernier?.rangee ?? 'quotas')
+    elements.push({
+      id: 'nouvelle',
+      genre: 'bouton',
+      etat: p.nouvelle ? 'a-montrer' : 'repos',
+      x: +(xNouvelle + ESPACE).toFixed(1),
+      largeur: largeurNouvelle(),
+      hauteur: HAUTEUR_DESSIN,
+      ligne: ligne(rangee),
+    })
   }
   for (const { d, rangee } of quotas) {
     for (const pl of d.places) {
