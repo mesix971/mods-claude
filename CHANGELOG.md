@@ -34,6 +34,10 @@
 
 ## clawd
 
+- **0.7.1** — 2026-10-29 — Prêt pour l'annuaire officiel d'Anthropic : un
+  README en anglais dans son dossier (ce qu'il fait, ce qu'il lit, lance et
+  garde), la licence MIT et les liens du dépôt dans `plugin.json`, sa
+  description en anglais, et son icône (`promo/icones.mts`).
 - **0.7.0** — 2026-10-29 — Le Clawd de ce dépôt rattrape sa version de
   développement : 73 scènes au lieu de 46.
   - Son humeur (énergie, ennui, joie) choisit ses activités ; il fait la
@@ -136,6 +140,11 @@
 
 ## atelier
 
+- **0.10.19** — 2026-10-29 — Prêt pour l'annuaire officiel d'Anthropic : un
+  README en anglais dans son dossier (le bandeau, les garde-fous, et tout ce
+  qu'il lit, lance et envoie : git, adb, Haiku), la licence MIT et les liens
+  du dépôt dans `plugin.json`, sa description en anglais, et son icône. La
+  marketplace se décrit en anglais.
 - **0.10.18** — 2026-10-27 — La place du bouton Installer est dans la bande
   partagée (`installer`, `a-montrer` quand il est jaune), pour que Clawd
   vienne le montrer quand un nouvel APK attend. La ligne 📱 est décrite comme
