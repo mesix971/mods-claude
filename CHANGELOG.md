@@ -10,6 +10,15 @@
 
 ## présentation
 
+- **2026-10-29** — La vidéo de présentation (`promo/video.mts`) : douze plans
+  légendés en anglais (ses cartons, un diable à ressort, la fête et le petit
+  nuage, les minis, la sueur et la visière, une montée de niveau, un numéro
+  sur la bande d'atelier, vu de près), chaque image tirée du vrai moteur comme
+  les GIF de la vitrine et prise au milieu de son intervalle : à la bascule
+  entre deux poses, elles se chevauchent ou s'éteignent ensemble. 1280×720,
+  20 images par seconde, 50 s, sans son ; la vidéo reste dans
+  `promo/vitrine-travail/`, hors de git.
+- **2026-10-29** — La description du dépôt GitHub passe en anglais.
 - **2026-10-29** — La vitrine : le README montre 56 de ses scènes, chacune en
   SVG animé tiré du vrai moteur (`promo/vitrine.mts`), et trois numéros sur
   la bande d'atelier en GIF. Résumé en anglais en tête. Bande-annonce et film
