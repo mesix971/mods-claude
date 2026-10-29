@@ -523,8 +523,8 @@ async function refreshAndroid($: EngineInterface, cwd: string): Promise<AtelierA
   const updated = out.match(/lastUpdateTime=(\d{4}-\d\d-\d\d) (\d\d:\d\d:\d\d)/)
   let updatedMs: number | null = null
   if (updated) {
-    const h = await phoneClockOffset($, adb, serial)
-    if (h !== null) updatedMs = h.memeFuseau ? Date.parse(`${updated[1]}T${updated[2]}`) : Date.parse(`${updated[1]}T${updated[2]}Z`) - h.decalage
+    const horloge = await phoneClockOffset($, adb, serial)
+    if (horloge !== null) updatedMs = horloge.memeFuseau ? Date.parse(`${updated[1]}T${updated[2]}`) : Date.parse(`${updated[1]}T${updated[2]}Z`) - horloge.decalage
   }
   info.installed = { pkg, versionName: vName, versionCode: vCode, updatedMs }
 
@@ -979,7 +979,7 @@ export const register: Register = on => {
   })
 
   on('command.run', { command: 'atelier' }, async $ => {
-    const hidden = await update($, isHidden, h => !h)
+    const hidden = await update($, isHidden, cache => !cache)
     void publieScene($)
     void refresh($)
     const manifest = await readText($, `${$.plugin.root}/.claude-plugin/plugin.json`)

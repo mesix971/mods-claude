@@ -8,9 +8,9 @@ import { ACTIVITES, dureeScene } from './sprite'
 const MIN = 60_000
 
 test('le temps passe : éveillé il se fatigue, endormi il se repose, seul il s’ennuie', () => {
-  const h = { ...HUMEUR_DEPART }
+  const depart = { ...HUMEUR_DEPART }
   // 25 min éveillé, seul : à plat, et il s'ennuie tout à fait
-  let x = h
+  let x = depart
   for (let i = 0; i < 25; i++) x = vit(x, MIN, { dort: false, seul: true })
   expect(x.energie).toBe(0)
   expect(x.ennui).toBe(1)
@@ -22,8 +22,8 @@ test('le temps passe : éveillé il se fatigue, endormi il se repose, seul il s�
   x = vit(vit(x, MIN, { dort: false, seul: false }), MIN, { dort: false, seul: false })
   expect(x.ennui).toBe(0)
   // un pas de temps énorme (le PC sorti de veille) compte pour 10 min au plus : il ne se réveille pas épuisé
-  expect(vit(h, 5 * 3_600_000, { dort: false, seul: true }).energie).toBe(0.6)
-  expect(vit(h, -5, { dort: false, seul: true })).toEqual(vit(h, 0, { dort: false, seul: true }))
+  expect(vit(depart, 5 * 3_600_000, { dort: false, seul: true }).energie).toBe(0.6)
+  expect(vit(depart, -5, { dort: false, seul: true })).toEqual(vit(depart, 0, { dort: false, seul: true }))
 })
 
 test('ce qu’il vit : ta caresse chasse l’ennui et le rend heureux', () => {
@@ -34,12 +34,12 @@ test('ce qu’il vit : ta caresse chasse l’ennui et le rend heureux', () => {
 })
 
 test('ses activités suivent son humeur, et jamais deux fois la même d’affilée', () => {
-  const tire = (h: typeof HUMEUR_DEPART, n = 2000) => {
+  const tire = (hum: typeof HUMEUR_DEPART, n = 2000) => {
     const vus = new Map<string, number>()
     let graine = 1
     const hasard = () => ((graine = (graine * 16807) % 2147483647) - 1) / 2147483646
     for (let i = 0; i < n; i++) {
-      const a = choisit(h, ACTIVITES, null, hasard)
+      const a = choisit(hum, ACTIVITES, null, hasard)
       vus.set(a, (vus.get(a) ?? 0) + 1)
     }
     return (l: string[]) => l.reduce((s, a) => s + (vus.get(a) ?? 0), 0) / n

@@ -656,8 +656,8 @@ let derniereVisite = 0
  */
 export function visiteur(maintenant: number, derniere: number, hasard: number): ClawdAnim | null {
   if (maintenant - derniere < VISITE_ECART || hasard >= VISITE_P) return null
-  const h = new Date(maintenant).getHours()
-  return h >= 20 || h < 6 ? 'filante' : 'chat'
+  const heure = new Date(maintenant).getHours()
+  return heure >= 20 || heure < 6 ? 'filante' : 'chat'
 }
 
 /** Son activité au repos : un visiteur, rarement (il s'en souvient d'une session à l'autre), sinon son tirage */
@@ -784,11 +784,11 @@ async function relitEnchaine($: EngineInterface) {
   const sauve = await $.store.get('enchaine').catch(() => undefined)
   if (!estEnchaine(sauve)) return
   const s = { debut: sauve.debut, dernier: sauve.dernier, rappel: sauve.rappel === true }
-  const e = enchaine
-  if (!e) enchaine = s
-  else if (s.debut <= e.dernier + PAUSE_MS && e.debut <= s.dernier + PAUSE_MS) {
-    enchaine = { debut: Math.min(e.debut, s.debut), dernier: Math.max(e.dernier, s.dernier), rappel: e.rappel || s.rappel }
-  } else if (s.dernier > e.dernier) enchaine = s
+  const actuelle = enchaine
+  if (!actuelle) enchaine = s
+  else if (s.debut <= actuelle.dernier + PAUSE_MS && actuelle.debut <= s.dernier + PAUSE_MS) {
+    enchaine = { debut: Math.min(actuelle.debut, s.debut), dernier: Math.max(actuelle.dernier, s.dernier), rappel: actuelle.rappel || s.rappel }
+  } else if (s.dernier > actuelle.dernier) enchaine = s
 }
 
 /** Tu travailles : après une pause (ou un retour en arrière de l'horloge), une nouvelle séance commence. */
@@ -931,7 +931,7 @@ export async function joueNumero($: EngineInterface, nom: string): Promise<boole
     // chaque cible empruntée dès que son dessin est là (sa copie, au repos dessus, la remplace : un texte et sa copie
     // l'un sur l'autre s'épaississaient), et rendue avec la fin du dessin seulement : jamais l'original ne revient
     // sous une copie qui bouge encore
-    for (const e of prep.emprunts) $.clock.after(Math.min(MARGE, Math.max(0, e.de - MARGE)) * 1000, () => void prend($, id, e.id, fin).catch(() => {}))
+    for (const emprunt of prep.emprunts) $.clock.after(Math.min(MARGE, Math.max(0, emprunt.de - MARGE)) * 1000, () => void prend($, id, emprunt.id, fin).catch(() => {}))
     $.clock.after((prep.duree + RETENUE) * 1000, () => void finNumero($, id).catch(() => {}))
     return true
   } catch {
@@ -1248,8 +1248,8 @@ async function avantShell($: EngineInterface, cmd: string) {
 /** Les actions qui attendent ta permission, une par demande (outil + commande ou fichier) */
 const permissions: string[] = []
 const clePermission = (outil: string, entree: unknown) => {
-  const e = (entree ?? {}) as { command?: unknown; file_path?: unknown; url?: unknown }
-  return `${outil}|${String(e.command ?? e.file_path ?? e.url ?? '')}`
+  const champs = (entree ?? {}) as { command?: unknown; file_path?: unknown; url?: unknown }
+  return `${outil}|${String(champs.command ?? champs.file_path ?? champs.url ?? '')}`
 }
 
 /** Une action est finie : si c'était une de celles qui attendaient, elle ne l'attend plus ; la patte se baisse quand plus aucune n'attend */
@@ -1426,12 +1426,12 @@ export const register: Register = on => {
     if (retour) await scene($, retour, dureeScene(retour) * 1000)
 
     // son humeur, relue d'une session à l'autre
-    const h = await $.store.get('humeur')
-    if (estHumeur(h)) {
+    const gardee = await $.store.get('humeur')
+    if (estHumeur(gardee)) {
       // fermé un moment : il s'est reposé pendant ce temps (le matin, il est en forme)
       const quand = await $.store.get('humeurA')
       const absent = typeof quand === 'number' ? derniereActivite - quand : 0
-      humeur = absent > 0 ? vit(h, absent, { dort: true, seul: false }) : h
+      humeur = absent > 0 ? vit(gardee, absent, { dort: true, seul: false }) : gardee
     }
     humeurVecue = derniereActivite
     // une sieste en cours quand le mod a été rechargé : elle garde une fin (sinon il dormirait jusqu'à ton prochain message)

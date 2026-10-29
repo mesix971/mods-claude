@@ -35,7 +35,8 @@
 ## clawd
 
 - **0.7.2** — 2026-10-29 — Ce que l'annuaire d'Anthropic sait lire : `$`
-  n'est plus le nom d'un type, et le crochet des permissions rend la demande
+  n'est plus le nom d'un type, `h` (que le JSX appelle) et `e` ne nomment plus
+  de variables, et le crochet des permissions rend la demande
   telle quelle (`return next(e)`) après avoir levé sa patte. Quand une règle
   tranche la demande, sa patte retombe à la fin de l'action. Le README dit ce
   que font ses crochets. Icône réduite à 256 couleurs (152 Ko au lieu de 326).
@@ -146,7 +147,8 @@
 ## atelier
 
 - **0.10.20** — 2026-10-29 — Ce que l'annuaire d'Anthropic sait lire : `$`
-  n'est plus le nom d'un type. Le README détaille tout ce qu'il lance (les
+  n'est plus le nom d'un type, ni `h` (que le JSX appelle) celui d'une
+  variable. Le README détaille tout ce qu'il lance (les
   commandes git et adb exactes), ce qu'il envoie et où (Haiku, les demandes
   des boutons git, `/suite` ou `/clear`) et ce que changent ses crochets.
   Icône réduite à 256 couleurs (100 Ko).

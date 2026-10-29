@@ -784,8 +784,8 @@ test('le mini s\'en va chaque fois autrement, à sa couleur jusqu\'au bout, et l
     expect(d.length).toBeLessThan(40_000)
   }
   // jamais deux fois la même de suite, et chacune peut sortir
-  for (const s of SORTIES) for (const h of [0, 0.5, 0.999]) expect(autreQue(SORTIES, s, () => h)).not.toBe(s)
-  expect(new Set([0, 0.2, 0.4, 0.6, 0.8].map(h => autreQue(SORTIES, null, () => h))).size).toBe(SORTIES.length)
+  for (const s of SORTIES) for (const tirage of [0, 0.5, 0.999]) expect(autreQue(SORTIES, s, () => tirage)).not.toBe(s)
+  expect(new Set([0, 0.2, 0.4, 0.6, 0.8].map(tirage => autreQue(SORTIES, null, () => tirage))).size).toBe(SORTIES.length)
 })
 
 test('ses jeux de cartons : joués une fois, légers, sans texte, le carton tombe du ciel puis s’en va', () => {
