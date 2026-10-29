@@ -7,13 +7,19 @@
 // flux (rien ne peut se chevaucher) ; toutes les tailles suivent la largeur du
 // film, comme une vidéo ; sous 560 px il passe en portrait.
 import { mkdirSync, writeFileSync } from 'node:fs'
+import { register } from 'node:module'
 
-import { jauges, svgJauges } from '../atelier/hooks/jauges.ts'
-import { EMOJI, TEINTES, svgBulle, svgScene } from '../clawd/hooks/sprite.ts'
 import type { Bulle } from '../clawd/hooks/sprite.ts'
+
+// (les mods importent leurs fichiers sans extension, comme le moteur l'accepte ; Node la veut : extensions.mjs l'ajoute)
+register(new URL('./extensions.mjs', import.meta.url))
+const { jauges, svgJauges } = await import('../atelier/hooks/jauges.ts')
+const { EMOJI, RAPPORT_S, TEINTES, dureeScene, etatBoulot, svgBulle, svgScene } = await import('../clawd/hooks/sprite.ts')
 
 type Anim = Parameters<typeof svgScene>[0]
 type Copains = Parameters<typeof svgScene>[1]
+/** Ce qui change sa scène : le mini qui rend son travail, sa tenue (visière, sueur, insigne), sa place au milieu de ses cartons */
+type Options = { rapporteur?: Parameters<typeof svgScene>[4]; tenue?: Parameters<typeof svgScene>[6]; enPlace?: Parameters<typeof svgScene>[7] }
 
 const base64 = (svg: string) => 'data:image/svg+xml;base64,' + Buffer.from(svg).toString('base64')
 // trois sous-agents sur trois modèles : un mini en Haiku, un en Sonnet, un en Fable
@@ -25,10 +31,13 @@ const EQUIPE = [
 // une scène et sa bulle dans un seul dessin (dans l'app, deux images superposées)
 const avecBulle = (scene: string, bulle: string) =>
   scene.replace(/<\/svg>$/, bulle.replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '') + '</svg>')
-const sprite = (anim: Anim, cls = '', style = '', copains: Copains = [], bulle?: Bulle) => {
-  const dessin = bulle ? avecBulle(svgScene(anim, copains), svgBulle(anim, bulle)) : svgScene(anim, copains)
+const sprite = (anim: Anim, cls = '', style = '', copains: Copains = [], bulle?: Bulle, o: Options = {}) => {
+  const scene = svgScene(anim, copains, 0, TEINTES.opus, o.rapporteur, undefined, o.tenue, o.enPlace)
+  const dessin = bulle ? avecBulle(scene, svgBulle(anim, bulle)) : scene
   return `<img class="clawd ${cls}" style="${style}" src="${base64(dessin)}" alt="Clawd : ${anim}">`
 }
+/** Le temps d'une scène qui se joue une fois (ses jeux de cartons, sa montée de niveau), arrondi à la seconde du dessus */
+const sonTemps = (anim: Anim) => Math.ceil(dureeScene(anim))
 const tuile = (anim: Anim, nom: string, i: number) =>
   `<figure class="tuile" style="--i:${i}"><img src="${base64(svgScene(anim))}" alt="Clawd : ${nom}"><figcaption>${nom}</figcaption></figure>`
 
@@ -74,6 +83,11 @@ const scenes: Scene[] = [
       sprite('ecoute', 'gros p1', '--x:2.2s') + sprite('boulot', 'gros p2', '--x:2.2s', [], 'cherche'),
   },
   {
+    duree: sonTemps('colis'), heure: '09:48', chapitre: 'Cartons',
+    titre: 'Un carton de trop&nbsp;?', sous: 'Il l’ouvre. Parfois, quelque chose en sort.',
+    scene: sprite('colis', 'gros', '', [], undefined, { enPlace: etatBoulot(30) }),
+  },
+  {
     duree: 6, heure: '10:31', chapitre: 'Build',
     titre: 'Build qui passe&nbsp;?', sous: 'Confettis. Évidemment.',
     ui: `<div class="term"><p>$ ./gradlew assembleDebug</p><p class="ok p2" style="--x:2.4s">BUILD SUCCESSFUL in 41s</p></div>`,
@@ -104,6 +118,12 @@ const scenes: Scene[] = [
     scene: sprite('tel', 'gros p1', '--x:3.6s') + sprite('fete', 'gros p2', '--x:3.6s'),
   },
   {
+    duree: 6, heure: '15:10', chapitre: 'Pilote auto',
+    titre: 'Mode auto&nbsp;?', sous: 'Il met sa visière de pilote. Personne ne demande rien, il assume.',
+    ui: `<div class="term"><p>Maj+Tab <span class="doux">→</span> mode auto</p></div>`,
+    scene: sprite('coucou', 'gros', '', [], undefined, { tenue: { visiere: true } }),
+  },
+  {
     duree: 7, heure: '15:48', chapitre: 'Garde-fou',
     titre: 'Claude tente un <code>pm clear</code>&nbsp;?', sous: 'Il te demande avant. Toujours.',
     ui:
@@ -121,10 +141,25 @@ const scenes: Scene[] = [
     scene: sprite('alerte', 'gros p1', '--x:2.6s') + sprite('coeur', 'gros p2', '--x:2.6s'),
   },
   {
+    duree: sonTemps('niveau') + 1, heure: '17:02', chapitre: 'Niveau',
+    titre: 'Des centaines d’outils plus tard…', sous: 'Une étoile lui tombe du ciel. Niveau 10&nbsp;: médaille d’or sur le ventre.',
+    scene: sprite('niveau', 'gros', '', [], undefined, { tenue: { insigne: 'or' } }),
+  },
+  {
     duree: 6, heure: '17:30', chapitre: 'Sous-agents',
     titre: 'Trois sous-agents&nbsp;?', sous: 'Trois mini-Clawds, chacun à la couleur de son modèle. Lui passe chef de chantier.',
     ui: `<div class="term"><p>⏵ 3 agents lancés en parallèle</p></div>`,
     scene: sprite('chef', 'gros', '', EQUIPE),
+  },
+  {
+    duree: Math.ceil(RAPPORT_S), heure: '17:36', chapitre: 'Au revoir',
+    titre: 'Un sous-agent a fini&nbsp;?', sous: 'Son mini rend son travail au chef… et repart à sa façon. Jamais deux fois la même.',
+    scene: sprite('rapport', 'gros', '', [], undefined, { rapporteur: { fait: 'cherche', couleur: TEINTES.haiku, sortie: 'vide' } }),
+  },
+  {
+    duree: 5, heure: '17:41', chapitre: 'Contexte',
+    titre: 'La conversation s’allonge&nbsp;?', sous: 'Il transpire. Une goutte, puis deux, et les joues rouges.',
+    scene: sprite('ecoute', 'gros', '', [], undefined, { tenue: { sueur: 2 } }),
   },
   {
     duree: 6, heure: '17:46', chapitre: 'Compactage',
@@ -559,14 +594,18 @@ writeFileSync(new URL('../docs/index.html', import.meta.url), pageAutonome)
 // Un SVG animé sans script, que GitHub affiche tel quel. Les sprites y sont
 // intégrés directement (pas d'image dans l'image) pour que leurs animations
 // tournent partout.
-const integre = (svg: string, x: number, y: number, w: number, h: number) =>
-  svg.replace(/^<svg[^>]*?viewBox="([^"]+)"[^>]*>/, (_, vb: string) => `<svg x="${x}" y="${y}" width="${w}" height="${h}" viewBox="${vb}" shape-rendering="crispEdges">`)
+// (chaque scène garde ses propres dessins repris : dans un même SVG, deux `#profil` différents se confondraient)
+const isole = (svg: string, p: string) => svg.replace(/id="([^"]+)"/g, `id="${p}$1"`).replace(/href="#([^"]+)"/g, `href="#${p}$1"`).replace(/url\(#([^)]+)\)/g, `url(#${p}$1)`)
+const integre = (svg: string, x: number, y: number, w: number, h: number, p: string) =>
+  isole(svg, p).replace(/^<svg[^>]*?viewBox="([^"]+)"[^>]*>/, (_, vb: string) => `<svg x="${x}" y="${y}" width="${w}" height="${h}" viewBox="${vb}" shape-rendering="crispEdges">`)
 
-const BA: { anim: Anim; heure: string; texte: string; copains?: Copains }[] = [
+const BA: { anim: Anim; heure: string; texte: string; copains?: Copains; tenue?: Options['tenue'] }[] = [
   { anim: 'balade', heure: '09:02', texte: 'Il vit au-dessus de ton prompt' },
   { anim: 'boulot', heure: '09:15', texte: 'Tu bosses ? Il porte les cartons' },
   { anim: 'fete', heure: '10:31', texte: 'Build qui passe : confettis' },
   { anim: 'triste', heure: '11:07', texte: 'Build qui casse : petit nuage' },
+  { anim: 'coucou', heure: '15:10', texte: 'Mode auto ? Il met sa visière', tenue: { visiere: true } },
+  { anim: 'danse', heure: '17:02', texte: 'Il gagne des niveaux, et des médailles', tenue: { insigne: 'etoile' } },
   { anim: 'chef', heure: '17:30', texte: '3 sous-agents : 3 mini-Clawds', copains: EQUIPE },
   { anim: 'cafe', heure: '18:05', texte: 'Tu fais une pause ? Lui aussi' },
   { anim: 'nuit', heure: '01:58', texte: 'À 2 h du mat’, il te dit d’aller dormir' },
@@ -597,10 +636,11 @@ ${BA.map((_, i) => `.ba${i}{opacity:0;animation:ba${i} ${TOTAL}s infinite steps(
 <text class="t" x="40" y="80">Adopte un <tspan class="o">Clawd</tspan>.</text>
 <text class="s" x="42" y="112">Deux mods pour Claude Code : un compagnon en pixel art, un garde-fou.</text>
 ${BA.map(
-  (b, i) => `<g class="ba${i}"><text class="h" x="42" y="166">${b.heure}</text><text class="c" x="42" y="198">${b.texte}</text>${integre(svgScene(b.anim, b.copains ?? []), 452, 112, 488, 176)}</g>`,
+  (b, i) =>
+    `<g class="ba${i}"><text class="h" x="42" y="166">${b.heure}</text><text class="c" x="42" y="198">${b.texte}</text>${integre(svgScene(b.anim, b.copains ?? [], 0, TEINTES.opus, undefined, undefined, b.tenue), 452, 112, 488, 176, `s${i}-`)}</g>`,
 ).join('\n')}
 <text class="j" x="42" y="246">atelier : jauges de quotas, garde-fous, APK ↔ tel</text>
-${integre(dessinJauges.svg, 42, 254, dessinJauges.largeur, 18)}
+${integre(dessinJauges.svg, 42, 254, dessinJauges.largeur, 18, 'j-')}
 </svg>
 `
 writeFileSync(new URL('./bande-annonce.svg', import.meta.url), bandeAnnonce)

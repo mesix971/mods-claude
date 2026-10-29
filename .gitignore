@@ -15,3 +15,5 @@ key.properties
 node_modules/
 # Types que le moteur Claude Code régénère à chaque chargement
 .claude-plugin/types/
+# Les captures intermédiaires des GIF de la vitrine (promo/vitrine.mts --numeros)
+/promo/vitrine-travail/

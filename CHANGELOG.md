@@ -2,6 +2,7 @@
 
 ## publication
 
+- **2026-10-29** — Le dépôt passe sous licence MIT (`LICENSE`).
 - **2026-10-06** — Les mods s'installent depuis une marketplace
   (`.claude-plugin/marketplace.json`) : `claude plugin marketplace add
   mesix971/mods-claude`. README écrit pour le public, bande-annonce animée en
@@ -9,6 +10,12 @@
 
 ## présentation
 
+- **2026-10-29** — La vitrine : le README montre 56 de ses scènes, chacune en
+  SVG animé tiré du vrai moteur (`promo/vitrine.mts`), et trois numéros sur
+  la bande d'atelier en GIF. Résumé en anglais en tête. Bande-annonce et film
+  repris avec le nouveau moteur : la visière, les médailles, les jeux de
+  cartons, les sorties des minis, la sueur ; dans la bande-annonce, chaque
+  scène garde ses propres dessins repris.
 - **2026-10-11** — Film et bande-annonce : dans le chapitre « Sous-agents »,
   chaque mini-Clawd a la couleur de son modèle (Haiku, Sonnet, Fable).
 - **2026-10-08** — Film : nouveau chapitre « Compactage ».
@@ -27,6 +34,35 @@
 
 ## clawd
 
+- **0.7.0** — 2026-10-29 — Le Clawd de ce dépôt rattrape sa version de
+  développement : 73 scènes au lieu de 46.
+  - Son humeur (énergie, ennui, joie) choisit ses activités ; il fait la
+    sieste à plat, et la nuit il dort jusqu'à ton retour.
+  - De nouvelles scènes :
+    - au réveil, une glace, ses danses (🕺) ;
+    - une série d'échecs puis la délivrance, une pause au bout de deux heures ;
+    - un conflit git (il se cache, puis il est soulagé), tes retrouvailles ;
+    - les visites rares (un chat, une étoile filante) ;
+    - ses déguisements du jour : citrouille le 31 octobre, lunettes le
+      vendredi soir, cernes le lundi matin.
+  - Ses minis rendent leur travail au chef, puis repartent chacun à leur
+    façon (5 sorties). À partir de trois, il sort le sifflet.
+  - Ses jeux de cartons au travail : diable à ressort, gigognes, tambour,
+    podium.
+  - La grande scène : avec atelier, il joue des numéros sur toute la bande.
+    Il chipe l'orbe, fait le pop-corn, bouscule les quotas, fait sa tournée,
+    échange deux pastilles, inspecte les quotas, ou vient montrer 🆕 et
+    Installer. Il rend toujours tout.
+  - Sa tenue :
+    - sa visière de pilote automatique en mode auto ou bypass ;
+    - de la sueur quand le contexte se remplit ;
+    - son expérience (gardée d'une session à l'autre) et ses niveaux, avec
+      une médaille sur le ventre (bronze, argent, or, l'étoile).
+  - Au survol, 🕺 et ⭐ rejoignent ♥ et 🎲 ; tes gestes passent tout de suite.
+  - `/clawd` donne son niveau et son humeur ; `/clawd montre <numéro |
+    bande | scène>` ; `/clawd voit`.
+  - Jamais de saut : il marche d'une scène à l'autre, et ses animations
+    reprennent là où elles en étaient quand l'app recrée son image.
 - **0.6.0** — 2026-10-11 — Chaque mini-Clawd prend la couleur du modèle de son
   sous-agent (pistache pour Haiku, abricot pour Sonnet, terracotta pour Opus,
   corail pour Fable), même quand il n'utilise pas celui de la conversation.
