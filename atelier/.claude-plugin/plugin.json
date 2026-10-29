@@ -8,6 +8,9 @@
   "license": "MIT",
   "homepage": "https://github.com/mesix971/mods-claude#atelier",
   "repository": "https://github.com/mesix971/mods-claude",
+  "privacyPolicyUrl": "https://github.com/mesix971/mods-claude/blob/main/atelier/README.md#what-it-runs-sends-and-reads",
+  "supportUrl": "https://github.com/mesix971/mods-claude/issues",
+  "documentationUrl": "https://github.com/mesix971/mods-claude/blob/main/atelier/README.md",
   "keywords": [
     "android",
     "apk",

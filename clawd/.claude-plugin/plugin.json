@@ -8,6 +8,9 @@
   "license": "MIT",
   "homepage": "https://github.com/mesix971/mods-claude#clawd",
   "repository": "https://github.com/mesix971/mods-claude",
+  "privacyPolicyUrl": "https://github.com/mesix971/mods-claude/blob/main/clawd/README.md#what-it-reads-runs-and-stores",
+  "supportUrl": "https://github.com/mesix971/mods-claude/issues",
+  "documentationUrl": "https://github.com/mesix971/mods-claude/blob/main/clawd/README.md",
   "keywords": [
     "mascot",
     "pixel-art",

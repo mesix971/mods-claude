@@ -40,6 +40,8 @@
   telle quelle (`return next(e)`) après avoir levé sa patte. Quand une règle
   tranche la demande, sa patte retombe à la fin de l'action. Le README dit ce
   que font ses crochets. Icône réduite à 256 couleurs (152 Ko au lieu de 326).
+  `plugin.json` donne les liens de sa fiche : confidentialité (la section du
+  README qui dit ce qu'il lit et garde), assistance (les issues), documentation.
 - **0.7.1** — 2026-10-29 — Prêt pour l'annuaire officiel d'Anthropic : un
   README en anglais dans son dossier (ce qu'il fait, ce qu'il lit, lance et
   garde), la licence MIT et les liens du dépôt dans `plugin.json`, sa
@@ -151,7 +153,9 @@
   variable. Le README détaille tout ce qu'il lance (les
   commandes git et adb exactes), ce qu'il envoie et où (Haiku, les demandes
   des boutons git, `/suite` ou `/clear`) et ce que changent ses crochets.
-  Icône réduite à 256 couleurs (100 Ko).
+  Icône réduite à 256 couleurs (100 Ko). `plugin.json` donne les liens de sa
+  fiche : confidentialité (la section du README sur ce qu'il lance, envoie et
+  lit), assistance (les issues), documentation.
 - **0.10.19** — 2026-10-29 — Prêt pour l'annuaire officiel d'Anthropic : un
   README en anglais dans son dossier (le bandeau, les garde-fous, et tout ce
   qu'il lit, lance et envoie : git, adb, Haiku), la licence MIT et les liens
