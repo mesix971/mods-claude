@@ -285,6 +285,17 @@ Il rend toujours tout. `/clawd montre <numéro>` en lance un.
 - **Dans le terminal** : son logo en blocs, un emoji pour ce qu'il fait, et
   un ▪ par mini, à sa couleur.
 
+### Ce qu'il lit, ce qu'il garde
+
+Clawd n'appelle aucun modèle, ne fait aucune requête réseau et ne lance aucun
+processus. Il suit les événements de ta session : les outils lancés et leur
+résultat (pour savoir si un build ou un push passe), tes messages, les
+sous-agents, le compactage, les permissions. Il lit aussi ce que l'app lui donne :
+le modèle qui tourne, le mode de permission, le remplissage du contexte et
+les quotas, la liste des sous-agents, la bande publiée par atelier. Il garde
+dans le stockage du mod son compteur de caresses, son expérience, son humeur
+et quelques dates, comme ta dernière visite. Testé avec Claude Code 2.1.309.
+
 ## atelier
 
 **Le bandeau au-dessus du prompt**
