@@ -55,6 +55,13 @@ subagents, and the band published by atelier. It keeps its petting count,
 experience, mood and a few dates (such as your last visit) in the plugin
 store. Command replies are in French; the drawing itself has no text.
 
+Its hooks only watch. Prompts, tool calls, subagent launches and permission
+requests go on unchanged. The permission-request hook decides nothing: it
+raises his paw while the dialog waits, then passes the request on as it
+came. The subagent hook reads the new agent's id and model, to give its
+mini-Clawd the right color. It reads no credential, and `www.w3.org` appears
+in its code only as the namespace of the SVG drawings.
+
 All 73 scenes are shown in the [project's README](https://github.com/mesix971/mods-claude#clawd).
 
 ## License

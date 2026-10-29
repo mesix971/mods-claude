@@ -21,7 +21,6 @@ import type { Humeur } from './humeur'
 import { ACTIVITES, BAILLE_S, BONBON_S, CLAWD_TEXTE, DANSES, EMOJI, EN_BULLE, JEUX_CARTONS, RAPPORT_S, SORTIES, TAILLE, avecT0, bulleDedans, dureeBoulot, dureeRetour, dureeScene, estChoregraphie, etatBoulot, etatScene, minisAPart, svgBulle, svgDecor, svgMinis, svgScene, teinte, teinteConnue, tenueDe } from './sprite'
 import type { Bulle, Deguisement, EnPlace, Insigne, Mini, Sortie, Tenue } from './sprite'
 
-type $ = EngineInterface
 
 const passage = atom({ plugin: 'clawd', key: 'passage' } as const, null)
 const activite = atom({ plugin: 'clawd', key: 'activite' } as const, null)
@@ -248,7 +247,7 @@ function retient(s: EnAttente) {
  * reprend. `fraiche` : combien de temps elle peut attendre avant de tomber.
  * Renvoie son id, null si elle attend.
  */
-export async function scene($: $, anim: ClawdAnim, ms = 4000, urgent = false, fraiche?: number) {
+export async function scene($: EngineInterface, anim: ClawdAnim, ms = 4000, urgent = false, fraiche?: number) {
   const prio = urgent ? 5 : priorite(anim)
   const f = fraiche ?? (urgent || prio >= 3 ? FRAICHE_IMPORTANT_MS : REPONSES.includes(anim) ? FRAICHE_REPONSE_MS : FRAICHE_MS)
   if (sansFin(ms)) durent.add(anim)
@@ -275,7 +274,7 @@ export async function scene($: $, anim: ClawdAnim, ms = 4000, urgent = false, fr
   return joueScene($, anim, ms, maintenant)
 }
 
-async function joueScene($: $, anim: ClawdAnim, ms: number, maintenant: number) {
+async function joueScene($: EngineInterface, anim: ClawdAnim, ms: number, maintenant: number) {
   // ce qui réussit le rend heureux (et lui rapporte de l'expérience, comme un mini qui lui rend son travail)
   if (anim === 'fete' || anim === 'delivrance') humeur = vecu(humeur, 'reussite')
   if (anim === 'fete' || anim === 'delivrance' || anim === 'rapport') void gagne($, anim === 'rapport' ? XP_RAPPORT : XP_REUSSITE).catch(() => {})
@@ -299,7 +298,7 @@ async function joueScene($: $, anim: ClawdAnim, ms: number, maintenant: number) 
  * prend sa place d'un coup : effacer d'abord laissait voir une image du fond
  * entre les deux (ses cartons surgissaient le temps d'un éclair).
  */
-async function finScene($: $, id: number) {
+async function finScene($: EngineInterface, id: number) {
   if (enScene?.id === id) enScene = null
   try {
     await suivanteScene($)
@@ -309,14 +308,14 @@ async function finScene($: $, id: number) {
 }
 
 /** La scène `id` n'est plus affichée, si rien ne l'a remplacée ; la suivante passe */
-async function efface($: $, id: number | null) {
+async function efface($: EngineInterface, id: number | null) {
   if (id === null || (await read($, passage))?.id !== id) return
   await update($, passage, p => (p?.id === id ? null : p))
   await suivanteScene($)
 }
 
 /** La suivante : la plus importante entre la petite qui attend et les longues passées devant, encore valables */
-async function suivanteScene($: $) {
+async function suivanteScene($: EngineInterface) {
   const maintenant = await $.clock.now()
   const numeroActif = (await read($, numero)) !== null || numeroLance
   const activiteActive = (await read($, activite)) !== null && maintenant < finActivite
@@ -354,7 +353,7 @@ async function suivanteScene($: $) {
  * `garde` : elle reste affichée jusqu'à ce que ce qui suit la remplace (le
  * verdict d'une commande), puis `efface` avec l'identifiant rendu.
  */
-async function arrete($: $, quoi: (anim: ClawdAnim) => boolean, garde = false): Promise<number | null> {
+async function arrete($: EngineInterface, quoi: (anim: ClawdAnim) => boolean, garde = false): Promise<number | null> {
   for (const a of [...durent]) if (quoi(a)) durent.delete(a)
   for (const a of [...longues.keys()]) if (quoi(a)) longues.delete(a)
   for (const s of [...enFile]) if (quoi(s.anim)) enFile.splice(enFile.indexOf(s), 1)
@@ -376,7 +375,7 @@ async function arrete($: $, quoi: (anim: ClawdAnim) => boolean, garde = false): 
  * s'arrêtent ; ce qui dure tant qu'une chose dure (une question posée, un
  * build) reprend aussitôt : tu zappes ses humeurs, pas ses informations.
  */
-async function coupeScenes($: $) {
+async function coupeScenes($: EngineInterface) {
   const c = enScene && sansFin(enScene.ms) ? enScene : null
   enFile.length = 0
   enScene = null
@@ -393,7 +392,7 @@ async function coupeScenes($: $) {
  * reprend après lui. Son trajet depuis là où il était, lui, se fait (le rendu
  * n'a jamais de saut).
  */
-async function joueGeste($: $, anim: ClawdAnim, ms: number) {
+async function joueGeste($: EngineInterface, anim: ClawdAnim, ms: number) {
   await finNumero($)
   // son activité s'arrête là (tu lui demandes autre chose) : son minuteur, périmé, n'y touchera plus
   if ((await read($, activite)) !== null) {
@@ -409,7 +408,7 @@ async function joueGeste($: $, anim: ClawdAnim, ms: number) {
 }
 
 /** Un rechargement du mod, ou une nouvelle session : tout repart de zéro */
-async function reinitialiseScenes($: $) {
+async function reinitialiseScenes($: EngineInterface) {
   enScene = null
   enFile.length = 0
   rapportEnCours = null
@@ -433,7 +432,7 @@ function journee(ms: number) {
  * dans une session restée ouverte la nuit) : vrai si la dernière fois qu'il
  * t'a vu, c'était une autre journée. Retenu d'une session à l'autre.
  */
-async function premierDuJour($: $, maintenant: number) {
+async function premierDuJour($: EngineInterface, maintenant: number) {
   const aujourdhui = journee(maintenant)
   const vu = await $.store.get('journee')
   if (vu === aujourdhui) return false
@@ -451,7 +450,7 @@ const MANQUE_MS = 36 * 3_600_000
  * dernière visite est retenue d'une session à l'autre ; la toute première fois,
  * il se souvient de ta dernière séance de travail.
  */
-async function retrouvailles($: $, maintenant: number): Promise<ClawdAnim | null> {
+async function retrouvailles($: EngineInterface, maintenant: number): Promise<ClawdAnim | null> {
   let vu = await $.store.get('vuA').catch(() => undefined)
   if (typeof vu !== 'number') {
     const s = await $.store.get('enchaine').catch(() => undefined)
@@ -483,19 +482,21 @@ const ENVIE_DU: Partial<Record<Deguisement, ClawdAnim>> = { lunettes: 'detente',
 const ENVIE_P = 0.35
 
 /** Il émerge : bâillement, étirement, bonnet jeté, café, et le voilà en forme. */
-const emerge = ($: $) => scene($, 'reveil', dureeScene('reveil') * 1000)
+function emerge($: EngineInterface) {
+  return scene($, 'reveil', dureeScene('reveil') * 1000)
+}
 
 /** Il a sommeil mais finit ce qu'il fait : il s'endort à la fin (nuit : pour de bon, sinon une sieste) */
 let sommeilEnAttente: { nuit: boolean } | null = null
 
-async function sEndort($: $, maintenant: number, nuit: boolean) {
+async function sEndort($: EngineInterface, maintenant: number, nuit: boolean) {
   sommeilEnAttente = null
   finSieste = nuit ? null : maintenant + (3 + Math.random() * 3) * 60_000
   await update($, activite, () => null)
   await update($, dort, () => true)
 }
 
-async function reveil($: $) {
+async function reveil($: EngineInterface) {
   derniereActivite = await $.clock.now()
   sommeilEnAttente = null
   finSieste = null
@@ -504,7 +505,7 @@ async function reveil($: $) {
 }
 
 /** Le temps passe pour son humeur (appelé souvent : le pas de temps est mesuré) */
-async function vitSonHumeur($: $, maintenant: number) {
+async function vitSonHumeur($: EngineInterface, maintenant: number) {
   const dt = humeurVecue ? maintenant - humeurVecue : 0
   humeurVecue = maintenant
   humeur = vit(humeur, dt, { dort: (await read($, dort)) === true, seul: maintenant - derniereActivite > SEUL_MS })
@@ -532,7 +533,7 @@ const MODES_PILOTE: readonly string[] = ['auto', 'bypassPermissions']
  * dit (Maj+Tab le change en cours de route) ; un sous-agent a celui de son
  * parent.
  */
-async function notePilote($: $, e: { permission_mode?: unknown; agent_id?: unknown }) {
+async function notePilote($: EngineInterface, e: { permission_mode?: unknown; agent_id?: unknown }) {
   if (e.agent_id !== undefined || typeof e.permission_mode !== 'string') return
   const p = MODES_PILOTE.includes(e.permission_mode)
   if ((await read($, pilote)) !== p) await update($, pilote, () => p)
@@ -572,14 +573,14 @@ let niveauAFeter: number | null = null
 let notes: Promise<void> = Promise.resolve()
 
 /** Il gagne `n` points ; passé un seuil, son total est noté (avec celui des autres sessions) et il monte de niveau */
-async function gagne($: $, n: number) {
+async function gagne($: EngineInterface, n: number) {
   xp += n
   xpANoter += n
   if (niveauDe(xp) > niveauVu) await noteXp($)
 }
 
 /** Ajoute ce qu'il a gagné au total gardé, une note après l'autre */
-function noteXp($: $): Promise<void> {
+function noteXp($: EngineInterface): Promise<void> {
   notes = notes.then(() => note($)).catch(() => {})
   return notes
 }
@@ -589,7 +590,7 @@ function noteXp($: $): Promise<void> {
  * qu'il a gagné ici. Une lecture ou une écriture ratée ne perd rien : il
  * réessaiera. Puis son niveau suit, et un niveau franchi se fête.
  */
-async function note($: $) {
+async function note($: EngineInterface) {
   if (!xpANoter) return
   let garde: unknown
   try {
@@ -616,7 +617,7 @@ async function note($: $) {
 }
 
 /** Il fête son nouveau niveau, une fois par niveau (même avec plusieurs sessions ouvertes) */
-async function feteNiveau($: $) {
+async function feteNiveau($: EngineInterface) {
   const nv = niveauAFeter
   if (nv === null) return
   niveauAFeter = null
@@ -634,7 +635,7 @@ async function feteNiveau($: $) {
 }
 
 /** Ce que la session lui fait porter (sa visière, sa sueur, son insigne) ; son déguisement du jour s'y ajoute */
-async function tenueSession($: $): Promise<Tenue> {
+async function tenueSession($: EngineInterface): Promise<Tenue> {
   const s = await read($, transpire)
   const i = insigneDe(await read($, niveau))
   return { visiere: (await read($, pilote)) === true, ...(s === 1 || s === 2 ? { sueur: s } : {}), ...(i ? { insigne: i } : {}) }
@@ -660,7 +661,7 @@ export function visiteur(maintenant: number, derniere: number, hasard: number): 
 }
 
 /** Son activité au repos : un visiteur, rarement (il s'en souvient d'une session à l'autre), sinon son tirage */
-async function activiteAuRepos($: $, maintenant: number) {
+async function activiteAuRepos($: EngineInterface, maintenant: number) {
   const v = visiteur(maintenant, derniereVisite, Math.random())
   if (!v) return tirage(maintenant)
   derniereVisite = maintenant
@@ -731,7 +732,7 @@ function lieuActuel(maintenant: number, faitBoulot = boulotEnCours(maintenant)):
 }
 
 /** Lance une activité (ou la balade si `null`) pour sa durée naturelle. */
-async function occupe($: $, prochaine: { anim: ClawdAnim } | null) {
+async function occupe($: EngineInterface, prochaine: { anim: ClawdAnim } | null) {
   const ms = dureeScene(prochaine?.anim ?? 'balade') * 1000
   finActivite = (await $.clock.now()) + ms
   await update($, activite, () => prochaine)
@@ -779,7 +780,7 @@ const estEnchaine = (v: unknown): v is Enchaine =>
  * de vraie pause entre elles) n'en font qu'une : le début le plus ancien, ton
  * dernier signe le plus récent, le rappel s'il est déjà fait ; sinon la plus récente.
  */
-async function relitEnchaine($: $) {
+async function relitEnchaine($: EngineInterface) {
   const sauve = await $.store.get('enchaine').catch(() => undefined)
   if (!estEnchaine(sauve)) return
   const s = { debut: sauve.debut, dernier: sauve.dernier, rappel: sauve.rappel === true }
@@ -802,7 +803,7 @@ function travaille(maintenant: number) {
  * deux heures et qu'il peut te le montrer maintenant (sinon, au tour
  * suivant). La séance est notée pour la session suivante.
  */
-async function pauseDue($: $, maintenant: number, peutMontrer: boolean) {
+async function pauseDue($: EngineInterface, maintenant: number, peutMontrer: boolean) {
   await relitEnchaine($)
   travaille(maintenant)
   const due = peutMontrer && !enchaine!.rappel && maintenant - enchaine!.debut >= ENCHAINE_MS
@@ -867,11 +868,11 @@ function memeScene(avant: string, apres: string) {
   return a.length === b.length && a.every((v, i) => i === 1 || i === 4 || v === b[i])
 }
 
-export async function vueBande($: $) {
+export async function vueBande($: EngineInterface) {
   return { scene: await read($, sceneAtelier), masque: (await read($, atelierMasque)) === true, largeur: largeurBande(), tenus: await read($, emprunts), numero: await read($, numero), bureau, dort: (await read($, dort)) === true }
 }
 
-async function elementsBande($: $) {
+async function elementsBande($: EngineInterface) {
   const s = await read($, sceneAtelier)
   return Array.isArray(s?.elements) ? s.elements : []
 }
@@ -881,7 +882,7 @@ async function elementsBande($: $) {
  * il prend l'original au moment voulu (atelier ne le dessine plus) et le rend
  * toujours. Vrai s'il le joue.
  */
-export async function joueNumero($: $, nom: string): Promise<boolean> {
+export async function joueNumero($: EngineInterface, nom: string): Promise<boolean> {
   refus = null
   try {
     // la grande scène ne se voit que sur desktop ; jamais deux numéros à la fois
@@ -945,13 +946,13 @@ const non = (r: Refus) => ((refus = r), false)
 export const dernierRefus = () => refus
 
 /** Son mot de la nuit, à lire : il le pose (une bulle au-dessus de lui), ou l'efface une fois lu */
-export async function poseMot($: $, m: { id: string; date: string; message: string } | null) {
+export async function poseMot($: EngineInterface, m: { id: string; date: string; message: string } | null) {
   const avant = await read($, motNonLu)
   if ((avant?.id ?? null) !== (m?.id ?? null)) await update($, motNonLu, () => m)
 }
 
 /** Tu as lu son mot (sa bulle, ou /clawd) : il ne le reposera plus */
-export async function motLu($: $) {
+export async function motLu($: EngineInterface) {
   const m = await read($, motNonLu)
   if (!m) return null
   await $.store.set('mot-vu', m.id)
@@ -960,12 +961,12 @@ export async function motLu($: $) {
 }
 
 /** Il joue déjà un numéro */
-export async function joueDeja($: $) {
+export async function joueDeja($: EngineInterface) {
   return (await read($, numero)) !== null
 }
 
 /** Les numéros qu'il peut jouer maintenant avec ce qu'il y a sur la bande (pas ceux réservés à la demande, comme le cadre) */
-export async function numerosPossibles($: $): Promise<string[]> {
+export async function numerosPossibles($: EngineInterface): Promise<string[]> {
   const els = await elementsBande($)
   return Object.entries(NUMEROS)
     .filter(([nom, n]) => n.quand !== 'demande' && prepareNumero(nom, els, largeurBande()) !== null)
@@ -981,7 +982,7 @@ export const commandePublique = { active: true }
 export const estScene = (anim: unknown): anim is ClawdAnim => typeof anim === 'string' && Object.hasOwn(EMOJI, anim)
 
 /** Il joue une scène devant toi, à ta demande : sa durée naturelle (entre 4 et 15 s ; une chorégraphie, en entier) */
-export async function joueDevantToi($: $, anim: ClawdAnim) {
+export async function joueDevantToi($: EngineInterface, anim: ClawdAnim) {
   // dans la file de ses scènes : il finit celle en cours avant, puis elle passe la première
   const s = dureeScene(anim) * 1000
   await scene($, anim, estChoregraphie(anim) ? Math.min(45_000, s) : Math.min(15_000, Math.max(4000, s)), true, 60_000)
@@ -992,7 +993,7 @@ export async function joueDevantToi($: $, anim: ClawdAnim) {
  * hasard parmi ceux qu'il peut jouer), ou pourquoi pas ; null quand ce n'en
  * est pas un.
  */
-export async function montreNumero($: $, quoi: string): Promise<string | null> {
+export async function montreNumero($: EngineInterface, quoi: string): Promise<string | null> {
   const nom = quoi.trim().toLowerCase()
   if ((nom === 'bande' || estNumero(nom)) && !surBureau()) return 'La grande scène ne se voit que dans l’app de bureau.'
   if (nom === 'bande') {
@@ -1017,7 +1018,7 @@ export async function montreNumero($: $, quoi: string): Promise<string | null> {
 }
 
 /** /clawd voit : ce qu'il voit de la bande, et ce qu'il peut y jouer (et pourquoi pas) : pour comprendre un numéro qui ne se joue pas */
-export async function voit($: $) {
+export async function voit($: EngineInterface) {
   const v = await vueBande($)
   const els = Array.isArray(v.scene?.elements) ? v.scene.elements : []
   const lignes = [
@@ -1042,13 +1043,13 @@ export async function voit($: $) {
 }
 
 /** Son niveau, et ce qui fait monter son expérience */
-export async function sonNiveau($: $) {
+export async function sonNiveau($: EngineInterface) {
   const nv = await read($, niveau)
   return `⭐ Niveau ${nv} · ${xp} XP · encore ${Math.max(0, seuilNiveau(nv + 1) - xp)} pour le niveau ${nv + 1} (un outil lancé : 1, une réussite : 5, un mini qui rend son travail : 3)`
 }
 
 /** /clawd de base : son niveau et son humeur ; montre <numéro | bande | scène> ; voit */
-async function commandeDeBase($: $, args: string) {
+async function commandeDeBase($: EngineInterface, args: string) {
   if (/^montre/i.test(args)) {
     const quoi = args.replace(/^montre\s*/i, '').trim().toLowerCase()
     const numero = await montreNumero($, quoi)
@@ -1064,7 +1065,7 @@ async function commandeDeBase($: $, args: string) {
 }
 
 /** Il prend l'original, si son numéro est toujours en cours : jusqu'à la fin du numéro au plus (atelier le redessine ensuite, quoi qu'il arrive) */
-async function prend($: $, id: number, el: string, fin: number) {
+async function prend($: EngineInterface, id: number, el: string, fin: number) {
   if ((await read($, numero))?.id !== id) return
   await update($, emprunts, l => [...l.filter(x => x.id !== el), { id: el, jusqua: fin + 2000, numero: id }])
 }
@@ -1076,7 +1077,7 @@ async function prend($: $, id: number, el: string, fin: number) {
  * copie resterait dessinée à une place vide. Sans atelier (null), il pose son
  * numéro lui-même : rien à comparer.
  */
-async function bandePartie($: $, n: { cibles?: readonly { id: string }[] }) {
+async function bandePartie($: EngineInterface, n: { cibles?: readonly { id: string }[] }) {
   if (!n.cibles?.length) return false
   const s = await read($, sceneAtelier)
   if (s === null) return false
@@ -1089,7 +1090,7 @@ async function bandePartie($: $, n: { cibles?: readonly { id: string }[] }) {
 const auRepos = (e: ElementBande) => e.genre === 'bouton' && e.etat !== 'a-montrer'
 
 /** Le numéro `id` (ou celui en cours) est fini ou interrompu : il rend tout et rentre dans son coin */
-async function finNumero($: $, id?: number) {
+async function finNumero($: EngineInterface, id?: number) {
   const n = await read($, numero)
   if (!n || (id !== undefined && n.id !== id)) return
   await update($, numero, () => null)
@@ -1105,7 +1106,7 @@ async function finNumero($: $, id?: number) {
  * activité, pendant que Claude travaille au hasard, jamais deux de suite.
  * Vrai s'il en joue un.
  */
-async function surprise($: $, maintenant: number) {
+async function surprise($: EngineInterface, maintenant: number) {
   const moment = auTravail ? 'travail' : 'repos'
   // au repos, pas de numéro dans la minute qui suit un de tes signes (il ne se lance pas pile quand tu écris)
   if (moment === 'repos' && maintenant - derniereActivite < 60_000) return false
@@ -1142,7 +1143,7 @@ async function surprise($: $, maintenant: number) {
  * tour court reste à ses cartons ; un jeu n'arrive pas pile quand une
  * commande commence). Vrai s'il en joue un.
  */
-async function jeuDeCartons($: $, maintenant: number) {
+async function jeuDeCartons($: EngineInterface, maintenant: number) {
   // (pas en chemin vers ses cartons : joué sur place, il sauterait au bout de son trajet)
   if (boulotDepuis === null || enRetour(maintenant) || boulotEnCours(maintenant) < BOULOT_AVANT_JEU) return false
   if (maintenant - dernierJeuCartons < ECART_CARTONS || Math.random() >= JEU_CARTONS_P) return false
@@ -1208,7 +1209,7 @@ let echecsDaffilee = 0
  * fois, inquiet la deuxième (il se gratte la tête), découragé à partir de la
  * troisième. Ça passe : la fête, et après une série d'échecs, la délivrance.
  */
-function verdict($: $, ok: boolean) {
+function verdict($: EngineInterface, ok: boolean) {
   if (ok) {
     const serie = echecsDaffilee
     echecsDaffilee = 0
@@ -1220,7 +1221,7 @@ function verdict($: $, ok: boolean) {
 }
 
 /** Une petite réaction (loupe, crayon), sauf s'il vit un grand moment. */
-async function petiteScene($: $, anim: ClawdAnim, ms: number) {
+async function petiteScene($: EngineInterface, anim: ClawdAnim, ms: number) {
   const p = await read($, passage)
   if (p && EMOTIONS.includes(p.anim)) return
   // au travail, il finit son activité : pas de loupe ni de crayon par-dessus
@@ -1238,7 +1239,7 @@ function sceneDe(cmd: string): { anim: ClawdAnim; ms: number } | null {
   return null
 }
 
-async function avantShell($: $, cmd: string) {
+async function avantShell($: EngineInterface, cmd: string) {
   const s = sceneDe(cmd)
   if (s) await scene($, s.anim, s.ms)
 }
@@ -1252,7 +1253,7 @@ const clePermission = (outil: string, entree: unknown) => {
 }
 
 /** Une action est finie : si c'était une de celles qui attendaient, elle ne l'attend plus ; la patte se baisse quand plus aucune n'attend */
-async function finAttente($: $, cle?: string) {
+async function finAttente($: EngineInterface, cle?: string) {
   if (cle !== undefined) {
     const i = permissions.indexOf(cle)
     if (i >= 0) permissions.splice(i, 1)
@@ -1263,12 +1264,12 @@ async function finAttente($: $, cle?: string) {
 }
 
 /** Sa commande est finie (ou a planté) : sa scène s'arrête, et elle seule */
-async function finDeCommande($: $, cmd: string) {
+async function finDeCommande($: EngineInterface, cmd: string) {
   const s = sceneDe(cmd)
   if (s) await arrete($, a => a === s.anim)
 }
 
-async function apresShell($: $, cmd: string, r: ToolCallResult) {
+async function apresShell($: EngineInterface, cmd: string, r: ToolCallResult) {
   // la commande est finie : sa scène (build, tests…) aussi, pas celle d'une autre commande ; elle reste affichée
   // jusqu'à ce que son verdict la remplace (sinon une image de ses cartons s'intercalait entre les deux)
   const s = sceneDe(cmd)
@@ -1281,7 +1282,7 @@ async function apresShell($: $, cmd: string, r: ToolCallResult) {
 }
 
 /** Ce qu'il dit d'une commande finie : l'alerte d'un refus, sa cachette d'un conflit, la fête ou la tristesse… */
-async function verdictDe($: $, cmd: string, r: ToolCallResult) {
+async function verdictDe($: EngineInterface, cmd: string, r: ToolCallResult) {
   if (r.deny !== undefined) return scene($, 'alerte', 5000)
   // interrompue (Échap) : ce n'est ni une réussite ni un échec, pas de verdict
   if (r.isError === true && /interrupt|aborted/i.test(r.text ?? '')) return
@@ -1318,13 +1319,13 @@ async function verdictDe($: $, cmd: string, r: ToolCallResult) {
 }
 
 /** Le mini-Clawd du sous-agent `agentId` change d'occupation (sans redessin inutile). */
-async function copainFait($: $, agentId: string, fait: ClawdCopain['fait']) {
+async function copainFait($: EngineInterface, agentId: string, fait: ClawdCopain['fait']) {
   const equipe = await read($, copains)
   if (!equipe.some(c => c.id === agentId && c.fait !== fait)) return
   await update($, copains, l => l.map(c => (c.id === agentId ? { ...c, fait } : c)))
 }
 
-async function shell($: $, cmd: string, agentId: string | undefined, go: () => Promise<ToolCallResult>) {
+async function shell($: EngineInterface, cmd: string, agentId: string | undefined, go: () => Promise<ToolCallResult>) {
   // un tour que tu n'as pas lancé, pendant qu'il dort : il ne se réveille pas, et ne mime rien
   if (!tourDeToi && (await read($, dort))) return go()
   if (tourDeToi) await reveil($)
@@ -1730,17 +1731,21 @@ export const register: Register = on => {
   // Claude attend ta permission : il se tourne vers toi, lève la patte et tape
   // du pied. Une commande qui dure (build, tests…) garde sa scène : le mod ne
   // sait pas quand tu réponds, il resterait la patte levée pendant tout le build.
+  // Il ne décide rien : la demande passe telle quelle, en dernier (l'annuaire le
+  // vérifie). Si une règle la tranche, sa patte retombe quand l'action est faite.
   on('classic.PermissionRequest', async ($, e, next) => {
-    const r = await next(e)
-    // une règle a déjà tranché : pas de boîte de dialogue, rien à attendre
-    if (r.decision !== undefined || r.block !== undefined) return r
     // la demande d'un sous-agent : son mini-Clawd la porte, pas lui (et rien ne baisserait sa patte)
-    if (e.agent_id !== undefined) return r
-    permissions.push(clePermission(e.tool_name, e.tool_input))
-    await reveil($)
-    const p = await read($, passage)
-    if (!p || !LONGUES.includes(p.anim)) await scene($, 'attend', LONG)
-    return r
+    if (e.agent_id === undefined) {
+      permissions.push(clePermission(e.tool_name, e.tool_input))
+      try {
+        await reveil($)
+        const p = await read($, passage)
+        if (!p || !LONGUES.includes(p.anim)) await scene($, 'attend', LONG)
+      } catch {
+        // (sa patte n'empêche jamais la demande d'arriver jusqu'à toi)
+      }
+    }
+    return next(e)
   })
 
   // Claude te pose une question : il brandit sa pancarte « ? » jusqu'à ta réponse

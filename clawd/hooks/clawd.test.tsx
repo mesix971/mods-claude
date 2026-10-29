@@ -603,12 +603,14 @@ test('il attend ta permission, patte levée, jusqu’à ce que l’action soit f
   await ui.unmount()
 })
 
-test('une permission déjà tranchée par une règle : il n’attend rien', async ($, on) => {
+test('une permission tranchée par une règle : la décision passe telle quelle, sa patte retombe une fois l’action faite', async ($, on) => {
   moteur(on)
   on('classic.PermissionRequest', () => ({ decision: { behavior: 'allow' as const } }))
-  await $.classic.PermissionRequest({ tool_name: 'Edit', tool_input: {} } as never)
+  const r = await $.classic.PermissionRequest({ tool_name: 'Bash', tool_input: { command: 'rm x' } } as never)
+  expect((r as { decision?: unknown }).decision).toEqual({ behavior: 'allow' })
+  await $.tool.call({ tool: 'Bash', command: 'rm x' })
   const ui = await $.ui.mount({ ...BAND(true), surface: 'desktop' })
-  expect(await scene(ui as never)).toContain('boulot')
+  expect(await scene(ui as never)).not.toContain('attend')
   await ui.unmount()
 })
 

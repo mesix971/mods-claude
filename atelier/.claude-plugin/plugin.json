@@ -1,6 +1,6 @@
 {
   "name": "atelier",
-  "version": "0.10.19",
+  "version": "0.10.20",
   "description": "A project band for Android developers above the prompt (APK and phone versions, git, quotas, cost, model advice, tasks) plus guardrails on shell commands. Unofficial and fan-made.",
   "author": {
     "name": "mesix971"

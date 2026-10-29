@@ -31,7 +31,6 @@ import { CELLULE, DEMANDES_GIT, ECHELLE, HAUTEUR_DESSIN, LIBELLE_INSTALLER, empr
 import { LIBELLE_NOUVELLE, TAILLE_TEXTE, commandeSuite } from './suite'
 import { ajouteTache, depuisTaskList, depuisTodos, horodate, interrompue, majTache, planFini, resumeTaches, suitPlan, texteTaches, toutFait } from './taches'
 
-type $ = EngineInterface
 
 const android = atom({ plugin: 'atelier', key: 'android' } as const, null)
 const git = atom({ plugin: 'atelier', key: 'git' } as const, null)
@@ -59,7 +58,7 @@ const memoire = atom({ plugin: 'atelier', key: 'memoire' } as const, { seuilsVus
 
 const slash = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '')
 
-async function run($: $, argv: string[], timeoutMs = 10_000) {
+async function run($: EngineInterface, argv: string[], timeoutMs = 10_000) {
   try {
     return await $.process.run(argv, { timeoutMs })
   } catch {
@@ -67,7 +66,7 @@ async function run($: $, argv: string[], timeoutMs = 10_000) {
   }
 }
 
-async function readText($: $, path: string) {
+async function readText($: EngineInterface, path: string) {
   try {
     return await $.fs.read(path)
   } catch {
@@ -113,7 +112,7 @@ const enDur = (v: string | undefined) => (v && !v.includes('$') ? v : null)
  * un fichier de propriétés du projet (version.properties, gradle.properties),
  * en `versionName=…` ou en `versionMajor` / `versionMinor` / `versionPatch`.
  */
-async function versionDesProprietes($: $, dossiers: readonly string[]) {
+async function versionDesProprietes($: EngineInterface, dossiers: readonly string[]) {
   for (const d of dossiers) {
     for (const f of ['version.properties', 'gradle.properties']) {
       const t = await readText($, `${d}/${f}`)
@@ -129,7 +128,7 @@ async function versionDesProprietes($: $, dossiers: readonly string[]) {
   return null
 }
 
-async function firstExisting($: $, paths: readonly (string | null | undefined)[]) {
+async function firstExisting($: EngineInterface, paths: readonly (string | null | undefined)[]) {
   for (const p of paths) {
     if (p && (await $.fs.exists(p).catch(() => false))) return p
   }
@@ -139,7 +138,7 @@ async function firstExisting($: $, paths: readonly (string | null | undefined)[]
 // ------------------------------------------ outils Android, trouvés tout seuls
 
 /** adb : SDK déclaré, puis emplacements standard (Windows, macOS, Linux), sinon le PATH. */
-async function trouverAdb($: $): Promise<string> {
+async function trouverAdb($: EngineInterface): Promise<string> {
   const sdks = [await $.env.get('ANDROID_HOME'), await $.env.get('ANDROID_SDK_ROOT')].filter((v): v is string => !!v).map(slash)
   const local = await $.env.get('LOCALAPPDATA')
   const maison = (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE'))
@@ -157,7 +156,7 @@ async function trouverAdb($: $): Promise<string> {
  * Windows on regarde tous les dossiers d'Android Studio : selon l'installation
  * il s'appelle « Android Studio », « Android Studio1 », « …Preview »…
  */
-async function trouverJbr($: $): Promise<string | null> {
+async function trouverJbr($: EngineInterface): Promise<string | null> {
   const candidats: string[] = []
   for (const racine of ['C:/Program Files/Android', 'C:/Program Files (x86)/Android']) {
     try {
@@ -182,7 +181,7 @@ const hhmm = (ms: number) => {
  * Met la liste de tâches à jour (avec l'heure des débuts et des fins) sans
  * jamais gêner l'outil : une pastille ratée ne casse pas l'appel.
  */
-async function majTaches($: $, f: (l: readonly AtelierTache[]) => AtelierTache[]) {
+async function majTaches($: EngineInterface, f: (l: readonly AtelierTache[]) => AtelierTache[]) {
   try {
     const maintenant = await $.clock.now()
     await update($, taches, l => horodate(l, f(l), maintenant))
@@ -193,7 +192,7 @@ async function majTaches($: $, f: (l: readonly AtelierTache[]) => AtelierTache[]
 }
 
 /** De même pour la conso, le build et les sous-agents */
-async function majConso($: $, f: (c: AtelierConso | null) => AtelierConso | null) {
+async function majConso($: EngineInterface, f: (c: AtelierConso | null) => AtelierConso | null) {
   try {
     await update($, conso, f)
     void publieScene($)
@@ -201,7 +200,7 @@ async function majConso($: $, f: (c: AtelierConso | null) => AtelierConso | null
     // idem
   }
 }
-async function majBuild($: $, f: (b: AtelierBuild | null) => AtelierBuild | null) {
+async function majBuild($: EngineInterface, f: (b: AtelierBuild | null) => AtelierBuild | null) {
   try {
     await update($, build, f)
     void publieScene($)
@@ -209,7 +208,7 @@ async function majBuild($: $, f: (b: AtelierBuild | null) => AtelierBuild | null
     // idem
   }
 }
-async function majAgents($: $, f: (l: readonly AtelierAgent[]) => AtelierAgent[]) {
+async function majAgents($: EngineInterface, f: (l: readonly AtelierAgent[]) => AtelierAgent[]) {
   try {
     await update($, agents, f)
     void publieScene($)
@@ -218,7 +217,7 @@ async function majAgents($: $, f: (l: readonly AtelierAgent[]) => AtelierAgent[]
   }
 }
 
-async function noteFinDuTour($: $, t: number | null) {
+async function noteFinDuTour($: EngineInterface, t: number | null) {
   try {
     await update($, finDuTour, () => t)
   } catch {
@@ -233,7 +232,7 @@ async function noteFinDuTour($: $, t: number | null) {
  * seul le dernier demandé compte.
  */
 let dernierConseil = 0
-async function conseille($: $, texte: string) {
+async function conseille($: EngineInterface, texte: string) {
   const n = ++dernierConseil
   try {
     // avant la première requête, le modèle de la session (l'effort viendra avec elle)
@@ -295,7 +294,7 @@ let suiteEnFile: number | null = null
 let suiteSeDecide = false
 let publication: Promise<void> | null = null
 let aRepublier = false
-function publieScene($: $): Promise<void> {
+function publieScene($: EngineInterface): Promise<void> {
   if (publication) {
     aRepublier = true
     return publication
@@ -312,7 +311,7 @@ function publieScene($: $): Promise<void> {
   })()
   return publication
 }
-async function publieUneFois($: $) {
+async function publieUneFois($: EngineInterface) {
   try {
     const maintenant = await $.clock.now()
     const plan = (await read($, isHidden))
@@ -344,7 +343,7 @@ async function publieUneFois($: $) {
 }
 
 /** 5 minutes après que tout est fini, les pastilles finies s'en vont (appelé chaque minute) */
-async function rangeLesFinis($: $) {
+async function rangeLesFinis($: EngineInterface) {
   try {
     const maintenant = await $.clock.now()
     // Clawd joue sur la bande : la ranger maintenant décalerait ses copies (son dessin est figé) ; ce sera la minute suivante
@@ -361,7 +360,7 @@ async function rangeLesFinis($: $) {
 }
 
 /** Ce que la session a coûté jusqu'ici au tarif de l'API, d'après /cost, ou null si le moteur ne le tient pas */
-async function coutSession($: $): Promise<number | null> {
+async function coutSession($: EngineInterface): Promise<number | null> {
   try {
     const c = (await $.session.usage()).cost?.usd
     return typeof c === 'number' && Number.isFinite(c) ? c : null
@@ -376,7 +375,7 @@ const finisAvantNaissance = new Map<string, { cause: AtelierAgent['cause']; fin:
 const MAX_FINIS_AVANT_NAISSANCE = 20
 
 /** La date de dernière écriture d'un fichier (la fin d'un build de fond), ou null */
-async function dateDe($: $, chemin: string): Promise<number | null> {
+async function dateDe($: EngineInterface, chemin: string): Promise<number | null> {
   const p = slash(chemin)
   const i = p.lastIndexOf('/')
   if (i < 0) return null
@@ -388,7 +387,7 @@ async function dateDe($: $, chemin: string): Promise<number | null> {
 }
 
 /** L'heure, ou null quand l'horloge manque (un test qui ne la simule pas) */
-async function maintenantOuRien($: $): Promise<number | null> {
+async function maintenantOuRien($: EngineInterface): Promise<number | null> {
   try {
     return await $.clock.now()
   } catch {
@@ -400,7 +399,7 @@ async function maintenantOuRien($: $): Promise<number | null> {
 
 type Projet = { gradle: string; apkDir: string; pubspec: string | null }
 
-async function detectProjet($: $, cwd: string): Promise<Projet | null> {
+async function detectProjet($: EngineInterface, cwd: string): Promise<Projet | null> {
   const natif = await firstExisting($, [`${cwd}/app/build.gradle.kts`, `${cwd}/app/build.gradle`])
   if (natif) return { gradle: natif, apkDir: `${cwd}/app/build/outputs/apk`, pubspec: null }
 
@@ -414,7 +413,7 @@ async function detectProjet($: $, cwd: string): Promise<Projet | null> {
   return null
 }
 
-async function findApks($: $, dir: string, depth = 0): Promise<{ path: string; name: string; mtimeMs: number }[]> {
+async function findApks($: EngineInterface, dir: string, depth = 0): Promise<{ path: string; name: string; mtimeMs: number }[]> {
   if (depth > 3) return []
   let entries
   try {
@@ -440,7 +439,7 @@ async function findApks($: $, dir: string, depth = 0): Promise<{ path: string; n
  * cas), une heure du tel se lit donc comme une heure locale du PC, qui
  * connaît l'heure d'été de chaque date.
  */
-async function phoneClockOffset($: $, adb: string, serial: string) {
+async function phoneClockOffset($: EngineInterface, adb: string, serial: string) {
   const r = await run($, [adb, '-s', serial, 'shell', 'date', '+%s_%Y-%m-%dT%H:%M:%S'])
   const m = r?.stdout.trim().match(/^(\d+)_(\S+)$/)
   if (!m) return null
@@ -450,7 +449,7 @@ async function phoneClockOffset($: $, adb: string, serial: string) {
   return { decalage, memeFuseau: decalage === -new Date(epoch).getTimezoneOffset() * 60_000 }
 }
 
-async function refreshAndroid($: $, cwd: string): Promise<AtelierAndroid | null> {
+async function refreshAndroid($: EngineInterface, cwd: string): Promise<AtelierAndroid | null> {
   const projet = await detectProjet($, cwd)
   if (!projet) return null
 
@@ -557,7 +556,7 @@ const VERSION_FILES = [
  * de perdre sa ligne git). Sans verrou (`--no-optional-locks`) : un `git
  * status` de fond ne fait jamais échouer un `git commit` de Claude.
  */
-async function refreshGit($: $, cwd: string): Promise<AtelierGit | null | undefined> {
+async function refreshGit($: EngineInterface, cwd: string): Promise<AtelierGit | null | undefined> {
   const st = await run($, ['git', '--no-optional-locks', '-C', cwd, 'status', '--porcelain=v1', '-b'])
   if (!st) return undefined
   if (st.exitCode !== 0) return null
@@ -622,7 +621,7 @@ function usageDepuis(
 }
 
 /** Relit les quotas à la demande (gratuit) : bouton ↻, chaque minute, ouverture de session. */
-async function rafraichirUsage($: $) {
+async function rafraichirUsage($: EngineInterface) {
   try {
     const u = await $.session.usage()
     if (u.rateLimits.length === 0 && u.context.percent === undefined) return
@@ -635,7 +634,7 @@ async function rafraichirUsage($: $) {
 
 let refreshing: Promise<void> | null = null
 
-function refresh($: $) {
+function refresh($: EngineInterface) {
   // un seul rafraîchissement à la fois : les suivants attendent le même
   refreshing ??= (async () => {
     await rafraichirUsage($)
@@ -655,7 +654,7 @@ function refresh($: $) {
   return refreshing
 }
 
-async function installApk($: $) {
+async function installApk($: EngineInterface) {
   const a = await read($, android)
   if (!a?.apk) return 'Pas d’APK construit dans ce projet.'
   if (!a.device) return 'Aucun téléphone branché (adb devices vide).'
@@ -684,7 +683,7 @@ async function installApk($: $) {
   }
 }
 
-async function launchApp($: $) {
+async function launchApp($: EngineInterface) {
   const a = await read($, android)
   if (!a?.device || !a.installed) return
   await run($, [
@@ -702,7 +701,7 @@ const SECRET = /(^|\/)(local\.properties|google-services\.json|key\.properties|\
  * dépôt par dépôt (celui du `cd` ou du `-C` de chaque appel, sinon celui de la
  * session). Une suppression n'envoie rien : elle ne compte pas.
  */
-async function secretsAboutToLeave($: $, envois: readonly EnvoiGit[]) {
+async function secretsAboutToLeave($: EngineInterface, envois: readonly EnvoiGit[]) {
   const session = slash(await $.session.cwd())
   const lists: string[] = []
   const add = async (depot: string, argv: string[]) => {
@@ -734,7 +733,7 @@ async function secretsAboutToLeave($: $, envois: readonly EnvoiGit[]) {
  * qu'il faut en dire à Claude (ton refus, ce que tu as écrit sous « Other »,
  * ou la question fermée sans réponse, et en `-p`, où personne ne répond).
  */
-async function confirm($: $, question: string): Promise<true | string> {
+async function confirm($: EngineInterface, question: string): Promise<true | string> {
   try {
     const r = (await $.ui.ask(question, ['Autoriser', 'Refuser'])).trim()
     if (r === 'Autoriser') return true
@@ -757,7 +756,7 @@ const demandeDeToi = (o: { kind: string; name?: string } | undefined) =>
 const extrait = (cmd: string, texte: string) => `${texte.slice(0, 300)}${cmd.length > texte.length ? `\n(dans une commande de ${cmd.length} caractères)` : ''}`
 
 async function guard(
-  $: $,
+  $: EngineInterface,
   tool: 'Bash' | 'PowerShell',
   command: string,
   isBackground: boolean,
@@ -860,7 +859,7 @@ const TOUCHE_ETAT = /gradlew|\badb\b|flutter|\bgit\b|release\.ps1|build\.gradle|
 const BUILD_APK = /assemble\w*|flutter\s+build\s+apk|release\.ps1|installDebug/i
 
 async function shell(
-  $: $,
+  $: EngineInterface,
   tool: 'Bash' | 'PowerShell',
   command: string,
   isBackground: boolean,

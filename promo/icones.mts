@@ -1,9 +1,10 @@
 // Les icônes des deux mods (PNG carrés de 1024 px, dans .claude-plugin/icon.png) : Clawd dessiné par son vrai moteur,
-// les bras en l'air ; pour atelier, son bandeau en pixels (le téléphone et ses jauges). Capturées par Edge sans fenêtre.
+// les bras en l'air ; pour atelier, son bandeau en pixels (le téléphone et ses jauges). Capturées par Edge sans fenêtre,
+// puis réduites à 256 couleurs par ffmpeg.
 //
 //   node --experimental-strip-types promo/icones.mts
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { register } from 'node:module'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
@@ -41,17 +42,24 @@ for (const [mod, svg, fond] of [
   ['atelier', atelier, 'radial-gradient(circle at 50% 45%, #2b3036 0%, #1b1e22 70%)'],
 ] as const) {
   const html = `${travail}icone-${mod}.html`
+  const brut = `${travail}icone-${mod}-brut.png`
   const png = fileURLToPath(new URL(`../${mod}/.claude-plugin/icon.png`, import.meta.url))
   writeFileSync(html, page(svg, fond), 'utf8')
-  rmSync(png, { force: true })
-  spawnSync(EDGE, ['--headless=new', '--disable-gpu', '--hide-scrollbars', `--user-data-dir=${travail}profil`, '--window-size=1024,1024', '--force-device-scale-factor=1', '--virtual-time-budget=2000', `--screenshot=${png}`, pathToFileURL(html).href])
+  rmSync(brut, { force: true })
+  spawnSync(EDGE, ['--headless=new', '--disable-gpu', '--hide-scrollbars', `--user-data-dir=${travail}profil`, '--window-size=1024,1024', '--force-device-scale-factor=1', '--virtual-time-budget=2000', `--screenshot=${brut}`, pathToFileURL(html).href])
   // (Edge rend la main avant d'avoir fini d'écrire : on attend que le fichier ne grossisse plus)
   let n = -1
   for (let i = 0; i < 60; i++) {
-    const t = existsSync(png) ? statSync(png).size : -1
+    const t = existsSync(brut) ? statSync(brut).size : -1
     if (t > 0 && t === n) break
     n = t
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 300)
   }
+  // 256 couleurs suffisent (des aplats, un dégradé discret) : l'icône pèse moitié moins
+  spawnSync('ffmpeg', ['-v', 'error', '-y', '-i', brut, '-vf', 'split[a][b];[a]palettegen=max_colors=256:stats_mode=full[p];[b][p]paletteuse=dither=none', '-pred', 'mixed', png])
+  // L'annuaire lit le texte imprimable des images : une suite d'octets qui ressemble par hasard à une commande
+  // qui télécharge et lance (« irm … », « | sh ») y met l'icône en attente d'un relecteur
+  const louche = readFileSync(png).toString('latin1').match(/curl|wget|iwr|irm|iex|bash|\|\s*sh/i)
+  if (louche) console.warn(`⚠️ ${mod} : « ${louche[0]} » dans les octets de l'icône : change un détail du dessin et relance`)
   console.log(`${mod} : ${png} (${(statSync(png).size / 1024).toFixed(0)} Ko)`)
 }
