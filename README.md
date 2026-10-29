@@ -370,8 +370,18 @@ et quelques dates, comme ta dernière visite. Testé avec Claude Code 2.1.309.
   transmis à Claude.
 - Secrets (`local.properties`, keystore, `google-services.json`, `.env`) en
   partance dans un commit ou un push : demande de confirmation, dans le dépôt
-  visé (celui du `cd` ou du `-C`). Une suppression ne compte pas, et
-  `GARDE_FOU_OK=1` (ton accord déjà donné au garde-fou global) non plus.
+  visé (celui du `cd` ou du `-C`). Une suppression ne compte pas.
+- Option `garde_fou_ok` (désactivée par défaut, dans `/config`) : pour qui a
+  son propre garde-fou global qui lit `GARDE_FOU_OK=1`.
+  - Activée, une commande qui pose ce drapeau (`GARDE_FOU_OK=1 …`,
+    `export GARDE_FOU_OK=1; …`, ou `$env:GARDE_FOU_OK = 1` en PowerShell)
+    saute le contrôle des secrets d'atelier : ton garde-fou est censé avoir
+    déjà eu ton accord. Et après ton « Autoriser », atelier ajoute le drapeau
+    à la commande, pour que ton garde-fou ne te redemande pas.
+  - Désactivée, atelier ignore le drapeau et ne l'ajoute jamais. Sinon,
+    n'importe quelle commande pourrait le poser pour sauter ce contrôle.
+  - C'est un booléen JSON : une autre valeur écrite à la main dans
+    `settings.json` empêche atelier de se charger, garde-fous compris.
 - Push non demandé : demande de confirmation (un commit passe sans demander).
   Seule ta demande compte, pas une notification de tâche de fond.
 - Refusés : `bash` lancé depuis PowerShell (sous Windows, ça ouvre WSL) et les

@@ -157,6 +157,13 @@
 
 ## atelier
 
+- **0.11.0** — 2026-10-29 — `GARDE_FOU_OK=1` ne compte plus que si tu
+  actives l'option `garde_fou_ok` (dans `/config`, désactivée par défaut).
+  Jusqu'ici, n'importe quelle commande pouvait le poser pour sauter le
+  contrôle des secrets. Désactivée, atelier ignore le drapeau, et ton
+  « Autoriser » ne l'ajoute plus à la commande : un garde-fou global qui le
+  lit te redemandera. Activée, rien ne change, et `export GARDE_FOU_OK=1; …`
+  (la forme qu'atelier écrit lui-même) compte aussi.
 - **0.10.20** — 2026-10-29 — Ce que l'annuaire d'Anthropic sait lire : `$`
   n'est plus le nom d'un type, ni `h` (que le JSX appelle) celui d'une
   variable. Le README détaille tout ce qu'il lance (les

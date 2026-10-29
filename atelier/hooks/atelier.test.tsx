@@ -440,6 +440,10 @@ test('garde-fous : une commande qui CITE une commande dangereuse ne demande rien
   expect(consentiGardeFou('GARDE_FOU_OK=1 git commit -m x')).toBe(true)
   expect(consentiGardeFou("$env:GARDE_FOU_OK = '1'; git commit -m x", 'PowerShell')).toBe(true)
   expect(consentiGardeFou('git commit -m "doc: GARDE_FOU_OK=1 expliqué"')).toBe(false)
+  // la forme qu'atelier écrit lui-même après ton « Autoriser » ; un echo qui la cite ne compte pas
+  expect(consentiGardeFou('export GARDE_FOU_OK=1; git commit -m x')).toBe(true)
+  expect(consentiGardeFou('export GARDE_FOU_OK=1 && git commit -m x')).toBe(true)
+  expect(consentiGardeFou('echo export GARDE_FOU_OK=1; git commit -m x')).toBe(false)
   // les attentes bloquantes : additionnées, abréviations et alias compris ; une boucle d'attente est bloquante
   expect(attenteBloquante('Start-Sleep -Seconds 1; Start-Sleep -Seconds 300')).toBe(301)
   expect(attenteBloquante('Start-Sleep -Sec 300')).toBe(300)
@@ -460,24 +464,37 @@ test('garde-fous : un gh -f ne passe plus pour un push forcé, et ce que tu écr
   expect(ran.length).toBe(1)
 })
 
-test('garde-fous : les secrets sont cherchés dans le dépôt du cd, et GARDE_FOU_OK=1 ne redemande pas', async ($, on) => {
+test('garde-fous : les secrets sont cherchés dans le dépôt du cd, et avec l’option garde_fou_ok, GARDE_FOU_OK=1 ne redemande pas', { options: { garde_fou_ok: true } }, async ($, on) => {
   const { ran, asked, lances } = shellStubs(on as never, { answer: 'Refuser', staged: 'local.properties\n' })
   await $.prompt.submit({ text: 'commit' })
   await $.tool.call({ tool: 'Bash', command: 'cd "/c/Users/moi/projets/autre" && git commit -m "x"' })
   expect(lances.filter(a => a.includes('--cached')).map(a => a[a.indexOf('-C') + 1])).toEqual(['C:/Users/moi/projets/autre'])
   expect(asked.length).toBe(1)
   await $.tool.call({ tool: 'Bash', command: 'GARDE_FOU_OK=1 git commit -m "x"' })
+  await $.tool.call({ tool: 'Bash', command: 'export GARDE_FOU_OK=1; git commit -m "x"' })
+  await $.tool.call({ tool: 'PowerShell', command: '$env:GARDE_FOU_OK = 1; git commit -m "x"' })
   expect(asked.length).toBe(1)
-  expect(ran).toEqual(['GARDE_FOU_OK=1 git commit -m "x"'])
+  expect(ran).toEqual(['GARDE_FOU_OK=1 git commit -m "x"', 'export GARDE_FOU_OK=1; git commit -m "x"', '$env:GARDE_FOU_OK = 1; git commit -m "x"'])
 })
 
-test('garde-fous : ton « Autoriser » pour des secrets passe au garde-fou global (pas une deuxième question)', async ($, on) => {
+test('garde-fous : avec l’option garde_fou_ok, ton « Autoriser » pour des secrets passe au garde-fou global (pas une deuxième question)', { options: { garde_fou_ok: true } }, async ($, on) => {
   const { ran, asked } = shellStubs(on as never, { answer: 'Autoriser', staged: 'local.properties\n' })
   await $.prompt.submit({ text: 'commit' })
   await $.tool.call({ tool: 'Bash', command: 'git commit -m "x"' })
   await $.tool.call({ tool: 'PowerShell', command: 'git commit -m "x"' })
   expect(asked.length).toBe(2)
   expect(ran).toEqual(['export GARDE_FOU_OK=1; git commit -m "x"', '$env:GARDE_FOU_OK=1; git commit -m "x"'])
+})
+
+test('garde-fous : sans l’option garde_fou_ok (par défaut), GARDE_FOU_OK=1 ne saute pas le contrôle des secrets, et ton « Autoriser » ne le pose pas', async ($, on) => {
+  const { ran, asked } = shellStubs(on as never, { answer: 'Autoriser', staged: 'local.properties\n' })
+  await $.prompt.submit({ text: 'commit' })
+  await $.tool.call({ tool: 'Bash', command: 'GARDE_FOU_OK=1 git commit -m "x"' })
+  await $.tool.call({ tool: 'Bash', command: 'export GARDE_FOU_OK=1; git commit -m "x"' })
+  await $.tool.call({ tool: 'PowerShell', command: '$env:GARDE_FOU_OK = 1; git commit -m "x"' })
+  await $.tool.call({ tool: 'Bash', command: 'git commit -m "x"' })
+  expect(asked.length).toBe(4)
+  expect(ran).toEqual(['GARDE_FOU_OK=1 git commit -m "x"', 'export GARDE_FOU_OK=1; git commit -m "x"', '$env:GARDE_FOU_OK = 1; git commit -m "x"', 'git commit -m "x"'])
 })
 
 test('ligne git : en retard, branche supprimée, HEAD détachée, sans remote', () => {

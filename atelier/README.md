@@ -95,16 +95,21 @@ as the namespace of its SVG drawings.
 
 ### What its hooks change
 
-- **Bash and PowerShell commands**: it rewrites a command in three cases only.
+- **Bash and PowerShell commands**: it rewrites a command in two cases, plus a
+  third with the `garde_fou_ok` option below.
   - A path to a broken Android Studio JBR is replaced with the working one.
   - A `gradlew` command gets `JAVA_HOME` set to that JBR when yours is missing
     or broken.
-  - After you approve, in its dialog, secret files going into a commit or a
-    push, the command gets `GARDE_FOU_OK=1`. That flag tells a guard script of
-    your own (if you have one) that you already said yes; it does nothing
-    else.
-- A command that already sets `GARDE_FOU_OK=1` counts as approved and skips
-  its secrets check.
+- **Option `garde_fou_ok`** (off by default): for a guard script of your own
+  that reads `GARDE_FOU_OK=1`.
+  - When it is on, a command that sets this flag (`GARDE_FOU_OK=1 …`,
+    `export GARDE_FOU_OK=1; …`, or `$env:GARDE_FOU_OK = 1` in PowerShell)
+    skips atelier's secrets check. After you approve secret files in its
+    dialog, atelier adds the flag to that command.
+  - When it is off, atelier ignores the flag and never adds it.
+  - Set it in `/config`. It is a JSON boolean: a value of another type written
+    by hand in `settings.json` stops atelier from loading, guardrails
+    included.
 - It refuses `bash` or `wsl` launched from PowerShell, and PowerShell
   foreground waits of 20 seconds or more, and tells Claude why.
 - It asks you in a dialog before a destructive command, before secret files go

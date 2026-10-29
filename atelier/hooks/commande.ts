@@ -364,9 +364,15 @@ export function attenteBloquante(cmd: string): number {
 
 /**
  * La commande porte-t-elle ton accord au garde-fou global (`GARDE_FOU_OK=1`
- * posé devant une commande, ou `$env:GARDE_FOU_OK = 1` en PowerShell) ? Cité
- * dans un message de commit, il ne compte pas.
+ * posé devant une commande, `export GARDE_FOU_OK=1; …`, la forme qu'atelier
+ * écrit lui-même, ou `$env:GARDE_FOU_OK = 1` en PowerShell) ? Cité dans un
+ * message de commit, il ne compte pas.
  */
 export function consentiGardeFou(cmd: string, shell: Shell = 'Bash'): boolean {
-  return segments(cmd, shell).some(s => s.env.some(w => /^GARDE_FOU_OK=1$/i.test(w)) || /^\$env:GARDE_FOU_OK\s*=\s*['"]?1['"]?$/i.test(s.texte.trim()))
+  return segments(cmd, shell).some(
+    s =>
+      s.env.some(w => /^GARDE_FOU_OK=1$/i.test(w)) ||
+      (shell === 'Bash' && s.tete === 'export' && s.mots.some(w => /^GARDE_FOU_OK=1$/i.test(w))) ||
+      /^\$env:GARDE_FOU_OK\s*=\s*['"]?1['"]?$/i.test(s.texte.trim()),
+  )
 }

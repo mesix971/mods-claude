@@ -746,6 +746,14 @@ async function confirm($: EngineInterface, question: string): Promise<true | str
 /** La dernière demande écrite par toi (ou par le bouton « Commit + push », une routine, `claude -p`) : elle seule dit si un push est voulu */
 let lastPrompt = ''
 let jbrToastShown = false
+/**
+ * Option `garde_fou_ok` (désactivée par défaut) : pour qui a son propre garde-fou global (garde-fou.ps1) qui lit
+ * `GARDE_FOU_OK=1`. Activée, une commande qui pose ce drapeau saute le contrôle des secrets (ton garde-fou est censé
+ * avoir déjà eu ton accord : pas de deuxième question), et ton « Autoriser » le lui transmet. Désactivée, atelier
+ * l'ignore et ne l'ajoute jamais : n'importe quelle commande pourrait le poser pour sauter son contrôle. Les
+ * options sont fixes pour un chargement : `register` la relit.
+ */
+let accordGlobal = false
 
 /** Ce qui vient de toi, pour le push : pas une notification de tâche de fond, ni le message d'une autre session (sans origine connue : comme avant, ta demande) */
 const demandeDeToi = (o: { kind: string; name?: string } | undefined) =>
@@ -817,8 +825,8 @@ async function guard(
   const maison = (await $.env.get('USERPROFILE')) ?? (await $.env.get('HOME'))
   const envois = envoisGit(cmd, slash(await $.session.cwd()), tool, maison ? slash(maison) : undefined)
   if (envois.length > 0) {
-    // garde-fou.ps1 a déjà eu ton accord (GARDE_FOU_OK=1) : pas une deuxième question pour la même chose
-    const leaks = consentiGardeFou(cmd, tool) ? [] : await secretsAboutToLeave($, envois)
+    // avec l'option garde_fou_ok, ton garde-fou global a déjà eu ton accord (GARDE_FOU_OK=1) : pas une deuxième question
+    const leaks = accordGlobal && consentiGardeFou(cmd, tool) ? [] : await secretsAboutToLeave($, envois)
     if (leaks.length > 0) {
       const ok = await confirm($, `🔑 Fichiers sensibles sur le point de partir dans git : ${leaks.join(', ')}. Autoriser quand même ?`)
       if (ok !== true) {
@@ -826,9 +834,9 @@ async function guard(
           deny: `Secrets détectés (${leaks.join(', ')}), pas d’accord (${ok}) : ajoute-les au .gitignore et retire-les de l’index (git rm --cached) avant de committer/pousser.`,
         }
       }
-      // tu viens d'autoriser : le garde-fou global (garde-fou.ps1) ne te redemande pas la même chose
+      // tu viens d'autoriser : avec l'option garde_fou_ok, ton garde-fou global ne te redemande pas la même chose
       // (GARDE_FOU_OK=1 ne lève que son contrôle des secrets)
-      cmd = tool === 'Bash' ? `export GARDE_FOU_OK=1; ${cmd}` : `$env:GARDE_FOU_OK=1; ${cmd}`
+      if (accordGlobal) cmd = tool === 'Bash' ? `export GARDE_FOU_OK=1; ${cmd}` : `$env:GARDE_FOU_OK=1; ${cmd}`
     }
     // (accepter des secrets n'est pas accepter un push que tu n'as pas demandé : deux questions distinctes)
     if (envois.some(e => e.sous === 'push') && !DEMANDE_GIT.test(lastPrompt)) {
@@ -940,7 +948,8 @@ function isEnglish(answer: string) {
 
 // ------------------------------------------------------------------ hooks
 
-export const register: Register = on => {
+export const register: Register = (on, options) => {
+  accordGlobal = options?.garde_fou_ok === true
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: 'tel', description: 'Installe le dernier APK du projet sur le téléphone branché' })
     await $.command.register({ name: 'atelier', description: 'Affiche/masque le bandeau atelier et le rafraîchit' })
