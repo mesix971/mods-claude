@@ -21,6 +21,10 @@ Anthropic.
 - Claude's task list, its subagents and Gradle or Flutter builds, as small
   pills.
 - 🆕 opens a new conversation.
+- With **Clawd** from the same marketplace, a tiny pixel-art Claude lives at
+  the end of the band and plays short gags across it (he steals the loading
+  orb, makes the pills pop like popcorn), then puts everything back. Each mod
+  also works on its own.
 
 ## Guardrails
 
