@@ -33,8 +33,8 @@ Anthropic.
 - It also asks before secrets (`local.properties`, keystores,
   `google-services.json`, `.env`) go into a commit or a push, and before a
   push you did not ask for.
-- It refuses `bash` launched from PowerShell, and foreground waits of 20
-  seconds or more.
+- It refuses `bash` or `wsl` launched from PowerShell, and PowerShell
+  foreground waits (`Start-Sleep`) of 20 seconds or more.
 - It finds adb and Android Studio's JBR by itself. It rewrites a command that
   points to a broken JBR, and adds `JAVA_HOME` to `gradlew` when it is missing.
 - If Claude answers in English, it adds a short reminder to the next turn to
@@ -57,11 +57,13 @@ Requires Claude Code 2.1.287 or later (mods).
 
 Only `git` and `adb`, each with fixed arguments:
 
-- `git status --porcelain=v1 -b`, `git remote`, and `git diff HEAD -U0` on the
-  changed files, to draw the git line of the band.
-- Before a `git commit` or `git push` that Claude runs, `git ls-files` and
-  `git diff --name-only`, to list the files it would send and warn you about
-  secrets.
+- `git status --porcelain=v1 -b` and `git remote`, to draw the git line of the
+  band, and `git diff HEAD -U0` on the version files you changed (Gradle
+  script, `pubspec.yaml`…), to spot a version bump without a changelog entry.
+- Before a `git commit` or `git push` that Claude runs: `git ls-files`,
+  `git ls-files --others --exclude-standard` and `git diff --name-only` (staged
+  or not), to list the files it would send and warn you about secrets.
+- Every git call uses `--no-optional-locks`, so it never locks your repository.
 - `adb devices -l`, then on the phone `date`, `pm list packages` and
   `dumpsys package`, to read the installed version.
 - `adb install -r` with the latest APK, only when you press **Install** or
@@ -80,23 +82,31 @@ Only `git` and `adb`, each with fixed arguments:
   plugins and a hidden band send nothing.
 - **To Claude, as if you typed it**: the **Commit + push**, **Commit**,
   **Pull** and **Push** buttons each submit one fixed request, written in
-  French. It asks Claude to commit, pull or push, then to check the result.
-  Nothing from the conversation is added. Claude then runs git with its usual
-  permissions, and push and pull talk to your git remote.
-- **Slash commands**: 🆕 runs `/suite` when you have a command with that name.
-  Otherwise it asks you first, then runs `/clear`.
+  French. It asks Claude to commit, pull or push, and to check that a push or
+  a pull went through. Nothing from the conversation is added. Claude then
+  runs git with its usual permissions, and push and pull talk to your git
+  remote.
+- **Slash commands**: 🆕 runs `/suite` when a command with that name exists
+  (yours or another plugin's). Otherwise it asks you first, then runs
+  `/clear`.
 
 It makes no network request of its own. `www.w3.org` appears in its code only
 as the namespace of its SVG drawings.
 
 ### What its hooks change
 
-- **Bash and PowerShell commands**: it rewrites a command in two cases only.
-  A path to a broken Android Studio JBR is replaced with the working one. A
-  `gradlew` command gets `JAVA_HOME` set to that JBR when yours is missing or
-  broken.
-- It refuses `bash` or `wsl` launched from PowerShell, and foreground waits of
-  20 seconds or more, and tells Claude why.
+- **Bash and PowerShell commands**: it rewrites a command in three cases only.
+  - A path to a broken Android Studio JBR is replaced with the working one.
+  - A `gradlew` command gets `JAVA_HOME` set to that JBR when yours is missing
+    or broken.
+  - After you approve, in its dialog, secret files going into a commit or a
+    push, the command gets `GARDE_FOU_OK=1`. That flag tells a guard script of
+    your own (if you have one) that you already said yes; it does nothing
+    else.
+- A command that already sets `GARDE_FOU_OK=1` counts as approved and skips
+  its secrets check.
+- It refuses `bash` or `wsl` launched from PowerShell, and PowerShell
+  foreground waits of 20 seconds or more, and tells Claude why.
 - It asks you in a dialog before a destructive command, before secret files go
   into a commit or a push, and before a push you did not ask for. It never
   approves anything for you: a command it lets through still goes through
@@ -117,10 +127,14 @@ as the namespace of its SVG drawings.
   `LOCALAPPDATA`, `HOME` and `USERPROFILE`, only to find adb and the JBR.
 - The quota, context and cost figures that Claude Code provides, and Claude's
   task list and subagents, for the band.
+- The output of the build commands it follows, to tell a success from a
+  failure, and the text of Claude's answers, to spot one in English.
+- Its own `plugin.json`, for its version.
 
-It reads no token, password or key. Those words appear in its code only to
-mask secrets in the commands it shows on the band, and to spot secret files
-before a commit. It keeps its state in Claude Code's plugin state.
+It stores and sends no token, password or key: it reads `gradle.properties`
+only for the app version. Those words appear in its code only to mask secrets
+in the commands it shows on the band, and to spot secret files before a
+commit. It writes no file, and keeps its state in Claude Code's plugin state.
 
 ## License
 

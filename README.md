@@ -204,7 +204,7 @@ puis repart, chaque fois d'une autre façon.
   et les joues rouges à 70 %.
 - Chaque outil lancé ensemble lui rapporte un point d'expérience, une
   réussite 5, un mini qui rend son travail 3. À chaque niveau, une étoile lui
-  tombe du ciel, et sa médaille change.
+  tombe du ciel ; sa médaille change aux niveaux 1, 5, 10 et 20.
 - Survole-le et clique ⭐ pour savoir où il en est.
 
 <table>

@@ -24,14 +24,16 @@ Anthropic.
   five ways.
 - He sweats as the context fills up, wears an autopilot visor in auto or
   bypass mode, and earns experience from tool calls: each new level drops a
-  star from the sky and changes the medal on his belly.
+  star from the sky, and the medal on his belly upgrades at levels 1, 5, 10
+  and 20.
 - With the atelier mod from the same marketplace, he plays short gags across
   its band (he steals the loading orb, makes the pills pop like popcorn) and
   always puts everything back.
 
 Hover him for ♥ (pet), 🎲 (new activity), 🕺 (dance) and ⭐ (level).
 `/clawd` shows his level and mood, `/clawd montre <scene>` plays a scene, and
-`/clawd voit` explains what he sees on atelier's band.
+`/clawd voit` explains what he sees on atelier's band (the keywords and
+replies are in French).
 
 ## Install
 
@@ -55,8 +57,10 @@ subagents, and the band published by atelier. It keeps its petting count,
 experience, mood and a few dates (such as your last visit) in the plugin
 store. Command replies are in French; the drawing itself has no text.
 
-Its hooks only watch. Prompts, tool calls, subagent launches and permission
-requests go on unchanged. The permission-request hook decides nothing: it
+It never reads the text of your prompts or of Claude's answers. Its hooks
+never change what Claude does: prompts, tool calls, subagent launches and
+permission requests go on unchanged. The permission-request hook decides
+nothing: it
 raises his paw while the dialog waits, then passes the request on as it
 came. The subagent hook reads the new agent's id and model, to give its
 mini-Clawd the right color. It reads no credential, and `www.w3.org` appears
