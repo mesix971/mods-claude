@@ -32,7 +32,7 @@ Anthropic.
   `connectedAndroidTest`, force push, `reset --hard`…).
 - It also asks before secrets (`local.properties`, keystores,
   `google-services.json`, `.env`) go into a commit or a push, and before a
-  push you did not ask for.
+  push you did not ask for (unless the `push_sans_demande` option is on).
 - It refuses `bash` or `wsl` launched from PowerShell, and PowerShell
   foreground waits (`Start-Sleep`) of 20 seconds or more.
 - It finds adb and Android Studio's JBR by itself. It rewrites a command that
@@ -110,6 +110,9 @@ as the namespace of its SVG drawings.
   - Set it in `/config`. It is a JSON boolean: a value of another type written
     by hand in `settings.json` stops atelier from loading, guardrails
     included.
+- **Option `push_sans_demande`** (off by default): when it is on, a push you
+  did not ask for goes through without a dialog. Secret files are still
+  checked. Set it in `/config`.
 - It refuses `bash` or `wsl` launched from PowerShell, and PowerShell
   foreground waits of 20 seconds or more, and tells Claude why.
 - It asks you in a dialog before a destructive command, before secret files go

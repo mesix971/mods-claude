@@ -383,7 +383,9 @@ et quelques dates, comme ta dernière visite. Testé avec Claude Code 2.1.309.
   - C'est un booléen JSON : une autre valeur écrite à la main dans
     `settings.json` empêche atelier de se charger, garde-fous compris.
 - Push non demandé : demande de confirmation (un commit passe sans demander).
-  Seule ta demande compte, pas une notification de tâche de fond.
+  Seule ta demande compte, pas une notification de tâche de fond. Avec
+  l'option `push_sans_demande` (désactivée par défaut, dans `/config`), il
+  passe sans question ; les secrets, eux, demandent toujours.
 - Refusés : `bash` lancé depuis PowerShell (sous Windows, ça ouvre WSL) et les
   attentes de 20 s ou plus au premier plan (`Start-Sleep` et `sleep`,
   additionnés, et les boucles d'attente) : mieux vaut une tâche de fond.

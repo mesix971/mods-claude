@@ -157,6 +157,9 @@
 
 ## atelier
 
+- **0.12.0** — 2026-10-30 — Nouvelle option `push_sans_demande` (dans
+  `/config`, désactivée par défaut) : activée, un push que tu n'as pas
+  demandé passe sans question. Les secrets en partance demandent toujours.
 - **0.11.0** — 2026-10-29 — `GARDE_FOU_OK=1` ne compte plus que si tu
   actives l'option `garde_fou_ok` (dans `/config`, désactivée par défaut).
   Jusqu'ici, n'importe quelle commande pouvait le poser pour sauter le

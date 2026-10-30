@@ -382,6 +382,22 @@ test('commit : toujours direct ; push non demandé : confirmation, demandé : di
   expect(ran).toEqual(['git commit -am "fix: minuteur"', 'git push'])
 })
 
+test('push non demandé : avec l’option push_sans_demande, il passe sans question ; les secrets, eux, demandent encore', { options: { push_sans_demande: true } }, async ($, on) => {
+  const { ran, asked } = shellStubs(on as never, { answer: 'Refuser' })
+  await $.prompt.submit({ text: 'corrige le bug du minuteur' })
+  await $.tool.call({ tool: 'Bash', command: 'git push' })
+  expect(asked.length).toBe(0)
+  expect(ran).toEqual(['git push'])
+})
+
+test('push non demandé, option push_sans_demande : un secret en partance demande toujours', { options: { push_sans_demande: true } }, async ($, on) => {
+  const { ran, asked } = shellStubs(on as never, { answer: 'Refuser', staged: 'local.properties\n' })
+  await $.prompt.submit({ text: 'corrige le bug du minuteur' })
+  await $.tool.call({ tool: 'Bash', command: 'git commit -m "x" && git push' })
+  expect(asked.length).toBe(1)
+  expect(ran.length).toBe(0)
+})
+
 test('garde-fous : une commande qui CITE une commande dangereuse ne demande rien ; les vraies, si', () => {
   const silencieux = [
     'cd "/c/Users/moi/projets/app" && git push origin main 2>&1 | tail -1 && gh workflow run verdict.yml -R moi/autre -f essai=true',

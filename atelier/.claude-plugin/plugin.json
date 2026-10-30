@@ -1,6 +1,6 @@
 {
   "name": "atelier",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "A project band for Android developers above the prompt (APK and phone versions, git, quotas, cost, model advice, tasks) plus guardrails on shell commands. Unofficial and fan-made.",
   "author": {
     "name": "mesix971"
@@ -24,6 +24,12 @@
       "type": "boolean",
       "title": "Trust GARDE_FOU_OK=1 (your own guard script)",
       "description": "For a separate guard script of yours that reads GARDE_FOU_OK=1. On: a command that sets it skips atelier's secrets check, and after you approve secret files atelier adds it to the command. Off: atelier ignores the flag and never adds it.",
+      "default": false
+    },
+    "push_sans_demande": {
+      "type": "boolean",
+      "title": "Let Claude push without asking",
+      "description": "On: a git push you did not ask for goes through without a dialog (secret files are still checked). Off: atelier asks you first.",
       "default": false
     }
   },

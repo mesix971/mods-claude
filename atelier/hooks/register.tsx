@@ -754,6 +754,8 @@ let jbrToastShown = false
  * options sont fixes pour un chargement : `register` la relit.
  */
 let accordGlobal = false
+/** Option `push_sans_demande` (désactivée par défaut) : un push que tu n'as pas demandé passe sans question */
+let pushLibre = false
 
 /** Ce qui vient de toi, pour le push : pas une notification de tâche de fond, ni le message d'une autre session (sans origine connue : comme avant, ta demande) */
 const demandeDeToi = (o: { kind: string; name?: string } | undefined) =>
@@ -839,7 +841,8 @@ async function guard(
       if (accordGlobal) cmd = tool === 'Bash' ? `export GARDE_FOU_OK=1; ${cmd}` : `$env:GARDE_FOU_OK=1; ${cmd}`
     }
     // (accepter des secrets n'est pas accepter un push que tu n'as pas demandé : deux questions distinctes)
-    if (envois.some(e => e.sous === 'push') && !DEMANDE_GIT.test(lastPrompt)) {
+    // (avec l'option push_sans_demande, Claude pousse sans demander : seuls les secrets arrêtent encore un push)
+    if (!pushLibre && envois.some(e => e.sous === 'push') && !DEMANDE_GIT.test(lastPrompt)) {
       // un commit se défait ; un push, beaucoup moins : seul le push demande l'accord
       const ok = await confirm($, 'Claude veut faire un `git push` sans que tu l’aies demandé. Autoriser ?')
       if (ok !== true) return { deny: `Pas de push sans demande (${ok}) : propose-le au lieu de le faire.` }
@@ -950,6 +953,7 @@ function isEnglish(answer: string) {
 
 export const register: Register = (on, options) => {
   accordGlobal = options?.garde_fou_ok === true
+  pushLibre = options?.push_sans_demande === true
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: 'tel', description: 'Installe le dernier APK du projet sur le téléphone branché' })
     await $.command.register({ name: 'atelier', description: 'Affiche/masque le bandeau atelier et le rafraîchit' })
