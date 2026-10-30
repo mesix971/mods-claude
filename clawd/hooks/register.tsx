@@ -1132,7 +1132,8 @@ async function surprise($: EngineInterface, maintenant: number) {
   // rien à animer (atelier masqué ou absent, ou seulement son bouton 🆕 au repos) : il ne se lance pas dans un numéro pour rien
   const els = await elementsBande($)
   const choix = els.some(e => !auRepos(e)) ? numerosJouables(moment, els, largeurBande()) : []
-  return choix.length > 0 && joueNumero($, pioche(choix))
+  // certains reviennent plus souvent (`poids`) : le petit, qui joue avec les pastilles
+  return choix.length > 0 && joueNumero($, pioche(choix.flatMap(nom => Array.from({ length: NUMEROS[nom]?.poids ?? 1 }, () => nom))))
 }
 
 /**

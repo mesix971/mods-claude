@@ -92,8 +92,8 @@ test('grande scène : il vise l’orbe qui tourne, la tient le temps voulu, et s
   expect(numerosJouables('repos', [])).toEqual(['tournee'])
   // pendant que Claude travaille, des intermèdes aussi (et l'inspection, rien qu'au travail)
   expect(numerosJouables('travail', [])).toEqual(['tournee'])
-  expect(numerosJouables('travail', ELEMENTS)).toEqual(['chipe', 'tournee', 'bousculade', 'popcorn', 'echange', 'inspection'])
-  expect(numerosJouables('repos', ELEMENTS)).toEqual(['chipe', 'tournee', 'bousculade', 'popcorn', 'echange'])
+  expect(numerosJouables('travail', ELEMENTS)).toEqual(['chipe', 'tournee', 'bousculade', 'popcorn', 'echange', 'lilliput', 'geant', 'inspection'])
+  expect(numerosJouables('repos', ELEMENTS)).toEqual(['chipe', 'tournee', 'bousculade', 'popcorn', 'echange', 'lilliput', 'geant'])
 
   const n = { nom: 'chipe', cibles: prep.cibles, elements: ELEMENTS }
   const svg = svgNumero(n, TEINTES.opus)
@@ -117,6 +117,31 @@ test('grande scène : il vise l’orbe qui tourne, la tient le temps voulu, et s
   expect(svgNumero({ nom: 'cadre', elements: ELEMENTS, colonnes: 120 }, TEINTES.opus)).toContain('>120 colonnes · 906 à 914 px prévus</text>')
   expect(svgNumero({ nom: 'cadre', elements: ELEMENTS }, TEINTES.opus)).not.toContain('colonnes')
   expect(svgNumero({ nom: 'inconnu', elements: [] }, TEINTES.opus)).toBe(COIN_VIDE)
+})
+
+test('le petit et le géant : il rapetisse ou grandit au bout de la rangée, joue avec les pastilles, les rend et reprend sa taille', () => {
+  const lil = prepareNumero('lilliput', ELEMENTS, LARGEUR)!
+  const gea = prepareNumero('geant', ELEMENTS, LARGEUR)!
+  // les dernières pastilles de la rangée (trois au plus pour le petit), et elles sont toutes rendues à leur place
+  expect(lil.cibles.map(c => c.id)).toEqual(['build', 'tache-plan-1', 'tache-plan-2'])
+  expect(gea.cibles.map(c => c.id)).toEqual(['build', 'tache-plan-1', 'tache-plan-2'])
+  expect(lil.emprunts.map(e => e.id)).toEqual(['build', 'tache-plan-1', 'tache-plan-2'])
+  expect(lil.duree).toBeGreaterThan(10)
+  expect(lil.duree).toBeLessThan(MAX_DUREE)
+  expect(gea.duree).toBeLessThan(MAX_DUREE)
+  // une seule pastille : rien à faire sauter
+  expect(prepareNumero('lilliput', ELEMENTS.slice(0, 2), LARGEUR)).toBeNull()
+  expect(prepareNumero('geant', ELEMENTS.slice(0, 2), LARGEUR)).toBeNull()
+  // le petit vaut deux tirages (il est plus souvent avec elles), le géant un
+  expect(NUMEROS.lilliput!.poids).toBe(2)
+  expect(NUMEROS.geant!.poids).toBeUndefined()
+  // à la moitié de sa taille d'abord, puis le double pour l'autre ; reprise de taille normale à la fin
+  const petit = svgNumero({ nom: 'lilliput', elements: ELEMENTS, cibles: lil.cibles }, TEINTES.opus)
+  const grand = svgNumero({ nom: 'geant', elements: ELEMENTS, cibles: gea.cibles }, TEINTES.opus)
+  expect(petit).toContain('scale(0.5)')
+  expect(grand).toContain('scale(2)')
+  expect(petit).not.toBe(COIN_VIDE)
+  expect(grand).not.toBe(COIN_VIDE)
 })
 
 test('/clawd montre bande : il prend l’orbe (atelier ne la dessine plus), la rend, et publie son dessin pour qu’atelier le pose', async ($, on) => {

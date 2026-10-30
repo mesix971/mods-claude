@@ -27,8 +27,9 @@ Anthropic.
   star from the sky, and the medal on his belly upgrades at levels 1, 5, 10
   and 20.
 - With the atelier mod from the same marketplace, he plays short gags across
-  its band (he steals the loading orb, makes the pills pop like popcorn) and
-  always puts everything back.
+  its band (he steals the loading orb, makes the pills pop like popcorn,
+  shrinks to hop from pill to pill and run on the orb, or grows to shake them)
+  and always puts everything back.
 
 Hover him for ♥ (pet), 🎲 (new activity), 🕺 (dance) and ⭐ (level).
 `/clawd` shows his level and mood, `/clawd montre <scene>` plays a scene, and

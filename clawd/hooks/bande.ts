@@ -156,6 +156,8 @@ export type Pas = {
 export type Numero = {
   /** Quand il peut le jouer de lui-même : au repos, pendant que Claude travaille, partout, ou seulement sur demande */
   quand: 'repos' | 'travail' | 'partout' | 'demande'
+  /** Combien de fois plus souvent il le tire au sort, parmi ceux qu'il peut jouer (1 par défaut) */
+  poids?: number
   /** Ce qu'il lui faut sur la bande, dit à l'utilisateur quand il ne peut pas le jouer (« une pastille… ») */
   besoin?: string
   /** Ce qu'il vise sur la bande, dans l'ordre de ses pas ; rien de convenable (undefined ou liste vide) : il ne le joue pas */
@@ -552,6 +554,89 @@ const echange: Numero = {
 }
 
 /**
+ * Le petit : il rapetisse au bout de la rangée, devient de la taille d'une
+ * pastille, grimpe dessus et saute de l'une à l'autre (elles s'enfoncent sous
+ * ses pieds). Sur la dernière, il se met à courir dessus comme sur une balle
+ * de cirque : elle roule sous lui dans un sens, puis dans l'autre. Il revient
+ * en sautant, reprend sa taille et rentre. Tiré deux fois plus souvent que les
+ * autres : c'est quand il est petit qu'il joue le plus avec elles.
+ */
+const lilliput: Numero = {
+  quand: 'partout',
+  poids: 2,
+  besoin: 'au moins deux pastilles en bas de la bande (tâches, sous-agents, build)',
+  cibles: els => {
+    // les dernières de la rangée : il part du bout où il est, sans cacher celles d'après
+    const bas = duBas(els).slice(-3)
+    return bas.length >= 2 ? bas : undefined
+  },
+  pas: c => {
+    const dernier = c.length - 1
+    // où il se pose : sur la pastille, ses pieds sur son dessus (elle s'enfonce de 2 px sous lui)
+    const posee = (n: number, avant?: number): Pas[] => [
+      { duree: 0.5, images: [bond.part, bond.haut, bond.haut], a: { cible: 0, n, h: dessus(c[n]!) }, saut: 8 },
+      { duree: 0.2, images: [bond.recoit], gestes: [{ n, dy: -2 }, ...(avant === undefined ? [] : [{ n: avant, dy: 0 }])] },
+    ]
+    const loin = CORPS.demiLargeur + 16
+    return [
+      { duree: 1.2, images: [f({ yeux: 'gauche' }), f({ yeux: 'clin' })], de: { coin: 0 } },
+      { duree: 0.4, images: [court], a: { cible: loin, n: dernier }, vitesse: 'vite', mouvement: 'doux' },
+      // il rapetisse : à cette taille, une pastille est un rocher
+      { duree: 0.8, images: [f({ yeux: 'grand' }), f({ yeux: 'heureux' })], echelle: 0.5, fx: effets.etincelles() },
+      { duree: 0.3, images: [court], a: { cible: 10, n: dernier }, vitesse: 'vite' },
+      ...posee(dernier),
+      ...Array.from({ length: dernier }, (_, k) => posee(dernier - 1 - k, dernier - k)).flat(),
+      // sur la dernière : il court sur place, elle roule sous lui, dans un sens puis dans l'autre
+      { duree: 1.4, images: [pousse], gestes: [{ n: 0, rot: -720 }] },
+      { duree: 1.2, images: [miroir(pousse)], gestes: [{ n: 0, rot: 720 }] },
+      { duree: 0.7, images: [f({ g: 'ciel', d: 'ciel', yeux: 'heureux' })], fx: effets.notes() },
+      ...Array.from({ length: dernier }, (_, k) => posee(1 + k, k)).flat(),
+      // il redescend de l'autre côté, loin d'elles, avant de reprendre sa taille
+      { duree: 0.5, images: [bond.part, bond.haut, bond.haut], a: { cible: loin, n: dernier, h: 0 }, saut: 8, gestes: [{ n: dernier, dy: 0 }] },
+      { duree: 0.2, images: [bond.recoit] },
+      { duree: 0.8, images: [f({ g: 'haut', d: 'haut', yeux: 'heureux' }), f({ yeux: 'heureux' })], echelle: 1, fx: effets.etincelles() },
+      { duree: 0.4, images: [miroir(court)], a: { coin: 0 }, vitesse: 'vite', mouvement: 'doux' },
+      { duree: 0.6, images: [f({ yeux: 'heureux' })] },
+    ]
+  },
+}
+
+/**
+ * Le géant : il grandit au bout de la rangée, deux fois sa taille. Il tape du
+ * pied (les pastilles sursautent toutes ensemble, comme un tremblement de
+ * terre), en chiquenaude une qui vole très haut en tournant, bombe le torse,
+ * rapetisse et rentre.
+ */
+const geant: Numero = {
+  quand: 'partout',
+  besoin: 'au moins deux pastilles en bas de la bande (tâches, sous-agents, build)',
+  cibles: els => {
+    const bas = duBas(els).slice(-5)
+    return bas.length >= 2 ? bas : undefined
+  },
+  pas: c => {
+    const dernier = c.length - 1
+    // toutes à la fois, chacune à sa façon : la terre tremble
+    const secousse = (haut: number): Geste[] => c.map((_, n) => ({ n, saut: haut + (n % 3), rot: n % 2 ? -360 : 360, mouvement: 'freine' as const }))
+    return [
+      { duree: 1.2, images: [f({ yeux: 'gauche' }), f({ yeux: 'clin' })], de: { coin: 0 } },
+      // il ne se met pas les bras en l'air : à cette taille, ils sortiraient de la bande
+      { duree: 1, images: [f({ g: 'haut', d: 'haut', yeux: 'grand' }), f({ yeux: 'grand', bouche: 'o' })], echelle: 2, fx: effets.etincelles() },
+      { duree: 0.4, images: [court], a: { cible: 2 * CORPS.demiLargeur + 6, n: dernier }, vitesse: 'vite', mouvement: 'doux' },
+      { duree: 0.7, images: [f({ jambes: 'tape', yeux: 'grand' }), f({ yeux: 'grand', bouche: 'o' })], gestes: secousse(6) },
+      { duree: 0.7, images: [f({ jambes: 'tape', yeux: 'grand' }), f({ yeux: 'grand', bouche: 'o' })], gestes: secousse(10) },
+      // la chiquenaude : la plus proche de lui s'envole
+      { duree: 0.6, images: [f({ g: 'tendu', yeux: 'gauche' })] },
+      { duree: 1, images: [f({ g: 'tendu', yeux: 'heureux' })], gestes: [{ n: dernier, saut: 38, rot: 720, mouvement: 'freine' }] },
+      { duree: 1.2, images: [f({ yeux: 'heureux' }), f({ yeux: 'clin' })], fx: effets.notes() },
+      { duree: 0.8, images: [f({ yeux: 'grand' }), f({ yeux: 'heureux' })], echelle: 1, fx: effets.etincelles() },
+      { duree: 0.4, images: [miroir(court)], a: { coin: 0 }, vitesse: 'vite', mouvement: 'doux' },
+      { duree: 0.6, images: [f({ yeux: 'heureux' })] },
+    ]
+  },
+}
+
+/**
  * L'inspection, pendant que Claude travaille : il pose ses cartons et fait le
  * tour des quotas comme un contremaître, de droite à gauche. Il tapote
  * chacun (à bout de bras, ou d'un petit bond quand c'est au-dessus de sa
@@ -697,7 +782,7 @@ const installe: Numero = {
   },
 }
 
-export const NUMEROS: Record<string, Numero> = { chipe, tournee, bousculade, popcorn, echange, inspection, rappel, installe, cadre }
+export const NUMEROS: Record<string, Numero> = { chipe, tournee, bousculade, popcorn, echange, lilliput, geant, inspection, rappel, installe, cadre }
 
 export const estNumero = (nom: unknown): nom is string => typeof nom === 'string' && Object.hasOwn(NUMEROS, nom)
 

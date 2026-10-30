@@ -260,6 +260,9 @@ Quand atelier dessine sa bande, Clawd y joue de temps en temps un numéro :
 - il chipe l'orbe qui tourne, la casse… et la recolle en vitesse ;
 - il fait sauter les pastilles comme du pop-corn ;
 - il bouscule les quotas ;
+- il rapetisse, saute d'une pastille à l'autre et court sur l'orbe qui roule
+  sous lui (celui-là revient deux fois plus souvent) ;
+- il grandit, fait trembler les pastilles et en chiquenaude une très haut ;
 - il fait le tour de la bande ;
 - il échange deux pastilles, qui reprennent leur place toutes seules ;
 - il inspecte les quotas en contremaître ;
@@ -270,6 +273,8 @@ Il rend toujours tout. `/clawd montre <numéro>` en lance un.
 <p align="center"><img src="promo/vitrine/numero-chipe.gif" width="880" alt="Clawd chipe l'orbe qui tourne sur la bande d'atelier, la casse et la recolle"><br><sub>Il chipe l'orbe</sub></p>
 <p align="center"><img src="promo/vitrine/numero-popcorn.gif" width="880" alt="Les pastilles sautent comme du pop-corn"><br><sub>Le pop-corn</sub></p>
 <p align="center"><img src="promo/vitrine/numero-bousculade.gif" width="880" alt="Clawd bouscule les quotas"><br><sub>La bousculade</sub></p>
+<p align="center"><img src="promo/vitrine/numero-lilliput.gif" width="880" alt="Clawd rapetisse et court sur l'orbe qui roule sous ses pieds"><br><sub>Le petit</sub></p>
+<p align="center"><img src="promo/vitrine/numero-geant.gif" width="880" alt="Clawd géant fait trembler les pastilles"><br><sub>Le géant</sub></p>
 
 ### Et aussi
 

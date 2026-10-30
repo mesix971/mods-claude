@@ -43,6 +43,11 @@
 
 ## clawd
 
+- **0.8.0** — 2026-10-30 — Deux numéros de plus sur la bande : le petit (il
+  rapetisse, saute d'une pastille à l'autre et court sur l'orbe qui roule sous
+  lui ; tiré deux fois plus souvent que les autres) et le géant (il grandit, fait
+  trembler les pastilles et en chiquenaude une très haut). Un numéro peut avoir
+  un `poids` dans le tirage.
 - **0.7.2** — 2026-10-29 — Ce que l'annuaire d'Anthropic sait lire : `$`
   n'est plus le nom d'un type, `h` (que le JSX appelle) et `e` ne nomment plus
   de variables, et le crochet des permissions rend la demande
