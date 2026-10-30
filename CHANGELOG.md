@@ -43,6 +43,12 @@
 
 ## clawd
 
+- **0.9.0** — 2026-10-31 — L'équipe : ses minis sortent sur la bande. Chacun
+  court à la pastille de son sous-agent, dans la couleur de son modèle, la
+  tapote, la soulève au-dessus de sa tête, sautille avec et rentre dans sa
+  case ; Clawd les envoie et les encourage depuis son coin (tiré deux fois plus
+  souvent). La grande scène sait faire jouer plusieurs acteurs à la fois
+  (`Numero.copains`).
 - **0.8.0** — 2026-10-30 — Deux numéros de plus sur la bande : le petit (il
   rapetisse, saute d'une pastille à l'autre et court sur l'orbe qui roule sous
   lui ; tiré deux fois plus souvent que les autres) et le géant (il grandit, fait

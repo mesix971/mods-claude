@@ -3546,4 +3546,4 @@ export const ACTIVITES: readonly ClawdAnim[] = [
  * Ses pinceaux, pour la grande scène (bande.ts) : son corps, son profil, ses
  * accessoires et ses effets, et de quoi les animer image par image.
  */
-export const PINCEAUX = { PAL, X0, Y0, VUE, CSS, vit, THEME, FILTRE, OMBRE, corps, profil, miroir, A, art, effets, fenetres, reutilises, recolore, deguiseEn }
+export const PINCEAUX = { PAL, X0, Y0, VUE, CSS, vit, THEME, FILTRE, OMBRE, corps, profil, miroir, A, art, effets, fenetres, reutilises, recolore, deguiseEn, enPetit }

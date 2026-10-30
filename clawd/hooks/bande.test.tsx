@@ -144,6 +144,64 @@ test('le petit et le géant : il rapetisse ou grandit au bout de la rangée, jou
   expect(grand).not.toBe(COIN_VIDE)
 })
 
+test('l’équipe : chaque mini court à la pastille de son sous-agent, dans sa couleur, la soulève, la rend et rentre dans sa case', () => {
+  const agents: ElementBande[] = [
+    ...ELEMENTS,
+    { id: 'agent-a1', genre: 'agent', etat: 'encours', x: 70, largeur: 17, ligne: 0, teinte: '#9CB86A' },
+    { id: 'agent-a2', genre: 'agent', etat: 'encours', x: 87, largeur: 17, ligne: 0, teinte: '#E2604A' },
+  ]
+  // sans sous-agent sur la bande, pas d'équipe
+  expect(prepareNumero('equipe', ELEMENTS, LARGEUR)).toBeNull()
+  const prep = prepareNumero('equipe', agents, LARGEUR)!
+  expect(prep.cibles.map(c => c.id)).toEqual(['agent-a1', 'agent-a2'])
+  // chacune rendue à sa place ; le numéro dure le temps du dernier mini rentré (lui l'attend dans son coin)
+  expect(prep.emprunts.map(e => e.id)).toEqual(['agent-a1', 'agent-a2'])
+  expect(prep.duree).toBeGreaterThan(8)
+  expect(prep.duree).toBeLessThan(MAX_DUREE)
+  expect(NUMEROS.equipe!.poids).toBe(2)
+  // Clawd en Sonnet : deux minis, chacun sa boîte et ses pistes, à mi-taille, dans la couleur de son modèle (Haiku,
+  // Fable), pas dans celle de Clawd
+  const svg = svgNumero({ nom: 'equipe', elements: agents, cibles: prep.cibles }, TEINTES.sonnet)
+  expect(svg).not.toContain('pos-equipe-m2')
+  expect(svg).toContain('scale(0.5)')
+  const boite = (cls: string) => {
+    const i = svg.indexOf(`<g class="${cls}">`)
+    expect(i).toBeGreaterThan(-1)
+    return svg.slice(i, svg.indexOf('</svg>', i))
+  }
+  // (le corps de chacun : le groupe de son bond ; celui de sa position contient d'abord son ombre)
+  const [lui, m0, m1] = ['arc-equipe', 'arc-equipe-m0', 'arc-equipe-m1'].map(boite)
+  expect(lui).toContain(TEINTES.sonnet.O)
+  expect(m0).toContain(TEINTES.haiku.O)
+  expect(m0).not.toContain(TEINTES.sonnet.O)
+  expect(m1).toContain(TEINTES.fable.O)
+  expect(m1).not.toContain(TEINTES.sonnet.O)
+  // au plus trois minis, les trois premiers, comme dans son coin
+  const six: ElementBande[] = Array.from({ length: 6 }, (_, i) => ({ id: `agent-b${i}`, genre: 'agent', etat: 'encours', x: 20 * i, largeur: 17, ligne: 0 }))
+  expect(prepareNumero('equipe', six, LARGEUR)!.cibles.map(c => c.id)).toEqual(['agent-b0', 'agent-b1', 'agent-b2'])
+})
+
+test('le moteur : deux acteurs ne touchent jamais la même pastille, et un mini qui ne rentre pas dans sa case annule le numéro', () => {
+  const essai = (n: Numero) => {
+    NUMEROS.essai = n
+    try {
+      return prepareNumero('essai', ELEMENTS, LARGEUR)
+    } finally {
+      delete NUMEROS.essai
+    }
+  }
+  const base = { quand: 'demande' as const, cibles: (els: readonly ElementBande[]) => els.filter(e => e.ligne === 0) }
+  const tape = { duree: 1, images: ['<g/>'], gestes: [{ n: 0, secoue: 1 }] }
+  expect(essai({ ...base, pas: () => [{ duree: 1, images: ['<g/>'] }], copains: () => [{ place: 0, pas: [tape] }] })).not.toBeNull()
+  expect(essai({ ...base, pas: () => [tape], copains: () => [{ place: 0, pas: [tape] }] })).toBeNull()
+  expect(essai({ ...base, pas: () => [{ duree: 1, images: ['<g/>'] }], copains: () => [{ place: 0, pas: [{ duree: 1, images: ['<g/>'], a: { x: 10 } }] }] })).toBeNull()
+  // chacun sa case, une vraie
+  expect(essai({ ...base, pas: () => [{ duree: 1, images: ['<g/>'] }], copains: () => [{ place: 0, pas: [{ duree: 1, images: ['<g/>'] }] }, { place: 0, pas: [{ duree: 1, images: ['<g/>'] }] }] })).toBeNull()
+  expect(essai({ ...base, pas: () => [{ duree: 1, images: ['<g/>'] }], copains: () => [{ place: Number.NaN, pas: [{ duree: 1, images: ['<g/>'] }] }] })).toBeNull()
+  // un mini ne porte rien
+  expect(essai({ ...base, pas: () => [{ duree: 1, images: ['<g/>'] }], copains: () => [{ place: 0, pas: [{ duree: 1, images: ['<g/>'], objet: 'tenu' }] }] })).toBeNull()
+})
+
 test('/clawd montre bande : il prend l’orbe (atelier ne la dessine plus), la rend, et publie son dessin pour qu’atelier le pose', async ($, on) => {
   const { horloge, dernier, tenus } = moteur(on)
   // la bande se dessine sur desktop : la grande scène peut s'y voir

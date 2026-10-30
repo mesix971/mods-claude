@@ -24,10 +24,12 @@
 // il peut le jouer, ce qu'il vise sur la bande (`cibles`) et ses pas.
 
 import type { ClawdNumero, ElementBande } from '../types'
-import { PINCEAUX, TAILLE } from './sprite'
+import { PINCEAUX, TAILLE, TEINTES } from './sprite'
 import type { Deguisement, Teinte, Tenue } from './sprite'
 
-const { PAL, VUE, CSS, vit, THEME, FILTRE, OMBRE, corps, profil, miroir, effets, fenetres, reutilises, recolore, deguiseEn } = PINCEAUX
+const { PAL, VUE, CSS, vit, THEME, FILTRE, OMBRE, corps, profil, miroir, effets, fenetres, reutilises, recolore, deguiseEn, enPetit } = PINCEAUX
+/** La teinte d'un modèle d'après sa couleur (celle d'une pastille de sous-agent), si c'en est une */
+const teinteDe = (c: string | undefined): Teinte | undefined => Object.values(TEINTES).find(t => t.O.toLowerCase() === c?.toLowerCase())
 
 /** Sa hauteur : les trois lignes du bas (ce qui dépasse de la bande est coupé, sans dommage ; au-dessus, la bande reste cliquable) */
 export const HAUTEUR = 64
@@ -163,7 +165,25 @@ export type Numero = {
   /** Ce qu'il vise sur la bande, dans l'ordre de ses pas ; rien de convenable (undefined ou liste vide) : il ne le joue pas */
   cibles?: (elements: readonly ElementBande[]) => readonly ElementBande[] | undefined
   pas: (cibles: readonly ElementBande[]) => Pas[]
+  /** Ses minis qui jouent avec lui, chacun ses pas (en même temps que les siens) */
+  copains?: (cibles: readonly ElementBande[]) => Copain[]
 }
+
+/**
+ * Un de ses mini-Clawds sur la bande : il sort de sa case dans le coin (la
+ * `place`-ième, 0 la plus proche de Clawd, comme dans sa petite scène), à
+ * mi-taille, dans la `teinte` de son modèle (celle de sa pastille), joue ses
+ * pas et y revient. Ses lieux `coin` se comptent depuis sa case. Il ne porte
+ * rien (`objet`), et ne touche pas ce que touche un autre.
+ */
+export type Copain = { place: number; teinte?: string; pas: Pas[] }
+
+/** Au plus trois minis sur la bande, comme dans son coin */
+const MINIS_MAX = 3
+/** La taille d'un mini */
+const DEMI = 0.5
+/** Le bord gauche de la boîte d'un mini dans sa case (px depuis celui de Clawd) : son axe, là où sa petite scène le dessine (`mini`, sprite.ts) */
+export const coinCopain = (place: number) => Math.round((PINCEAUX.X0 - 24 - 40 * place - 90) * ECHELLE_TOILE * 10) / 10
 
 /** La largeur de la bande quand on ne la connaît pas (px) : celle d'une fenêtre moyenne */
 export const LARGEUR_BANDE = 760
@@ -636,6 +656,56 @@ const geant: Numero = {
   },
 }
 
+/** De combien un mini soulève sa pastille (px) : au bout de ses bras levés, au-dessus de sa tête */
+const LEVE = 10
+
+/**
+ * L'équipe : chaque mini sort de sa case et court à sa pastille (celle de son
+ * sous-agent, dans sa couleur), l'un après l'autre. Il la tapote (elle
+ * tremble), se glisse dessous, la soulève au-dessus de sa tête, sautille avec,
+ * la repose et rentre. Clawd les envoie du bras depuis son coin, puis les
+ * encourage. Tiré deux fois plus souvent : c'est leur moment.
+ */
+const equipe: Numero = {
+  quand: 'partout',
+  poids: 2,
+  besoin: 'une pastille de sous-agent en bas de la bande (un sous-agent au travail)',
+  // (une par mini, les premières : son coin montre ses trois premiers minis)
+  cibles: els => {
+    const agents = duBas(els).filter(e => e.genre === 'agent').slice(0, MINIS_MAX)
+    return agents.length ? agents : undefined
+  },
+  pas: () => [
+    { duree: 0.8, images: [f({ d: 'tendu', yeux: 'gauche' }), f({ d: 'haut', yeux: 'gauche' })], de: { coin: 0 } },
+    { duree: 1.2, images: [f({ d: 'haut', yeux: 'gauche' }), f({ yeux: 'clin' })], tours: 2 },
+    { duree: 1.6, images: [f({ g: 'haut', d: 'haut', yeux: 'heureux' }), f({ yeux: 'heureux' })], tours: 4, fx: effets.notes() },
+  ],
+  // à leur taille, sans sa sueur ni son insigne ; la première pastille au mini le plus proche de lui
+  copains: c =>
+    enPetit(() => {
+      const court = profil('vite')
+      const leve = f({ g: 'ciel', d: 'ciel', yeux: 'heureux' })
+      return c.map((el, n): Copain => ({
+        place: n,
+        teinte: el.teinte,
+        pas: [
+          // chacun son tour
+          { duree: 0.6 + 0.4 * n, images: [f({ yeux: 'gauche' }), f({ yeux: 'heureux' })], de: { coin: 0 } },
+          { duree: 0.4, images: [court], a: { cible: el.largeur / 2 + Math.round(CORPS.demiLargeur * DEMI) + 2, n }, vitesse: 320, mouvement: 'doux' },
+          { duree: 0.6, images: [f({ g: 'tendu', yeux: 'gauche' }), f({ yeux: 'gauche' })], gestes: [{ n, secoue: 1.2 }] },
+          { duree: 0.3, images: [court], a: { cible: 0, n } },
+          { duree: 0.5, images: [leve], gestes: [{ n, dy: LEVE, mouvement: 'freine' }] },
+          // elle bondit avec lui
+          { duree: 0.5, images: [leve], saut: 5, gestes: [{ n, saut: 5 }] },
+          { duree: 0.5, images: [leve], saut: 5, gestes: [{ n, saut: 5 }] },
+          { duree: 0.4, images: [f({ g: 'haut', d: 'haut', yeux: 'heureux' })], gestes: [{ n, dy: 0, mouvement: 'elan' }] },
+          { duree: 0.4, images: [miroir(court)], a: { coin: 0 }, vitesse: 320, mouvement: 'doux' },
+          { duree: 0.4, images: [f({ yeux: 'heureux' })] },
+        ],
+      }))
+    }),
+}
+
 /**
  * L'inspection, pendant que Claude travaille : il pose ses cartons et fait le
  * tour des quotas comme un contremaître, de droite à gauche. Il tapote
@@ -782,7 +852,7 @@ const installe: Numero = {
   },
 }
 
-export const NUMEROS: Record<string, Numero> = { chipe, tournee, bousculade, popcorn, echange, lilliput, geant, inspection, rappel, installe, cadre }
+export const NUMEROS: Record<string, Numero> = { chipe, tournee, bousculade, popcorn, echange, lilliput, geant, equipe, inspection, rappel, installe, cadre }
 
 export const estNumero = (nom: unknown): nom is string => typeof nom === 'string' && Object.hasOwn(NUMEROS, nom)
 
@@ -885,84 +955,106 @@ type Lui = { x: Piste; sol: Piste; arc: Piste; tr: Piste; ombreTaille: Piste; om
 type PistesEl = { dx: Piste; dy: Piste; arc: Piste; tr: Piste; o: Piste }
 
 /**
- * Son trajet et celui de ses cibles, pas à pas, en pistes d'animation. Null
- * si un pas vise une cible absente, ou s'il laisse une cible ailleurs qu'à
- * sa place à la fin du dernier pas qui la touche (il remet tout en place).
+ * Un acteur de la grande scène : lui (le premier), ou un de ses minis. Chacun
+ * part de son coin (`depart` px depuis celui de Clawd ; la case d'un mini,
+ * voir `coinCopain`), à sa taille `s0`, et y revient à la fin.
  */
-function trajets(pas: readonly Pas[], cibles: readonly ElementBande[], depart = 0) {
-  const coin: X = { pct: 1, px: depart - TAILLE.largeur }
-  const lui: Lui = { x: piste(tx(coin)), sol: piste(ty(0)), arc: piste(ty(0)), tr: piste(tr(1, 0)), ombreTaille: piste('scale(1)'), ombreArc: piste(reduit(0)) }
+type Acteur = { pas: readonly Pas[]; depart: number; s0: number }
+
+/**
+ * Leurs trajets et ceux de leurs cibles, pas à pas, en pistes d'animation.
+ * Null si un pas vise une cible absente, si deux acteurs touchent la même
+ * cible, si un acteur ne revient pas à son coin, à sa taille, ou s'il laisse
+ * une cible ailleurs qu'à sa place à la fin du dernier pas qui la touche (il
+ * remet tout en place). Seul Clawd porte ce qu'il prend (`objet`).
+ */
+function trajets(acteurs: readonly Acteur[], cibles: readonly ElementBande[]) {
   const els: PistesEl[] = cibles.map(() => ({ dx: piste('translateX(0px)'), dy: piste(ty(0)), arc: piste(ty(0)), tr: piste(trEl(1, 0)), o: piste('1') }))
   const tenue = cibles.map(() => [] as [number, number][])
   const devant = cibles.map(() => [] as [number, number][])
   const touchee = cibles.map(() => [] as [number, number][])
   const etats = cibles.map(() => ({ ...REPOS }))
-  let ici = { x: coin, h: 0, s: 1, r: 0 }
-  let t = 0
-  for (const p of pas) {
-    const t1 = t + p.duree
-    const de = p.de ? xDe(p.de, cibles, depart) : ici.x
-    const a = p.a ? xDe(p.a, cibles, depart) : de
-    if (!de || !a) return null
-    const h0 = p.de ? (p.de.h ?? 0) : ici.h
-    const h1 = p.a ? (p.a.h ?? 0) : h0
-    const s1 = p.echelle ?? ici.s
-    const r1 = p.rot ?? ici.r
-    const c = COURBE[p.mouvement ?? 'lineaire']
-    va(lui.x, t, t1, tx(de), tx(a), c)
-    va(lui.sol, t, t1, ty(h0), ty(h1), c)
-    va(lui.tr, t, t1, tr(ici.s, ici.r), tr(s1, r1), c)
-    va(lui.ombreTaille, t, t1, `scale(${arrondi(ici.s, 3)})`, `scale(${arrondi(s1, 3)})`, c)
-    if (p.saut) {
-      bondit(lui.arc, t, t1, ty(0), ty(p.saut))
-      bondit(lui.ombreArc, t, t1, reduit(0), reduit(p.saut))
-    }
-    // un tour complet le laisse comme il était : l'angle repart de 0 (le saut de 360 à 0 ne se voit pas)
-    const r = tourComplet(r1) ? 0 : r1
-    if (r !== r1) pose(lui.tr, t1, tr(s1, 0))
-    ici = { x: a, h: h1, s: s1, r }
-
-    if (p.objet) {
-      const n = p.tient ?? 0
-      if (!cibles[n]) return null
-      tenue[n]!.push([t, t1])
-      touchee[n]!.push([t, t1])
-    }
-    const vues = new Set<number>()
-    for (const g of p.gestes ?? []) {
-      const n = g.n ?? 0
-      const pe = els[n]
-      if (!pe || vues.has(n)) return null
-      vues.add(n)
-      touchee[n]!.push([t, t1])
-      if (g.devant) devant[n]!.push([t, t1])
-      const av = etats[n]!
-      const ap: EtatEl = { dx: g.dx ?? av.dx, dy: g.dy ?? av.dy, r: g.rot ?? av.r, s: g.echelle ?? av.s, o: g.opacite ?? av.o }
-      const m = g.mouvement ?? 'lineaire'
-      if (g.secoue) {
-        // la secousse, suivie de près : elle s'amortit et s'arrête net
-        pose(pe.dx, t, `translateX(${arrondi(av.dx, 1)}px)`)
-        for (let i = 1; i <= 24; i++) {
-          const u = i / 24
-          const v = lerp(av.dx, ap.dx, LISSE[m](u)) + g.secoue * Math.sin(u * Math.PI * 12) * (1 - u)
-          pe.dx.cles.push({ t: i === 24 ? finDe(t, t1) : t + u * p.duree, v: `translateX(${arrondi(v, 1)}px)` })
-        }
-      } else va(pe.dx, t, t1, `translateX(${arrondi(av.dx, 1)}px)`, `translateX(${arrondi(ap.dx, 1)}px)`, COURBE[m])
-      va(pe.dy, t, t1, ty(av.dy), ty(ap.dy), COURBE[m])
-      va(pe.tr, t, t1, trEl(av.s, av.r), trEl(ap.s, ap.r), COURBE[m])
-      va(pe.o, t, t1, `${arrondi(av.o, 2)}`, `${arrondi(ap.o, 2)}`, COURBE[m])
-      if (g.saut) bondit(pe.arc, t, t1, ty(0), ty(g.saut))
-      // un tour complet sur elle-même la laisse comme elle était : l'angle repart de 0, au même instant
-      if (tourComplet(ap.r)) {
-        ap.r = 0
-        pose(pe.tr, t1, trEl(ap.s, 0))
-      }
-      etats[n] = ap
-    }
-    t = t1
+  // (les pistes d'une cible se suivent dans le temps : un seul acteur peut la toucher)
+  const qui = cibles.map(() => -1)
+  const prend = (n: number, k: number) => {
+    if (qui[n] !== -1 && qui[n] !== k) return false
+    qui[n] = k
+    return true
   }
-  // il finit comme il a commencé : à son coin (ou là où il travaillait), au sol, à sa taille, droit
-  if (ici.x.pct !== 1 || Math.abs(ici.x.px + TAILLE.largeur - depart) > 0.5 || ici.h !== 0 || ici.s !== 1 || ici.r !== 0) return null
+  const luis: Lui[] = []
+  let duree = 0
+  for (const [k, { pas, depart, s0 }] of acteurs.entries()) {
+    const coin: X = { pct: 1, px: depart - TAILLE.largeur }
+    const lui: Lui = { x: piste(tx(coin)), sol: piste(ty(0)), arc: piste(ty(0)), tr: piste(tr(s0, 0)), ombreTaille: piste(`scale(${arrondi(s0, 3)})`), ombreArc: piste(reduit(0)) }
+    let ici = { x: coin, h: 0, s: s0, r: 0 }
+    let t = 0
+    for (const p of pas) {
+      const t1 = t + p.duree
+      const de = p.de ? xDe(p.de, cibles, depart) : ici.x
+      const a = p.a ? xDe(p.a, cibles, depart) : de
+      if (!de || !a) return null
+      const h0 = p.de ? (p.de.h ?? 0) : ici.h
+      const h1 = p.a ? (p.a.h ?? 0) : h0
+      const s1 = p.echelle ?? ici.s
+      const r1 = p.rot ?? ici.r
+      const c = COURBE[p.mouvement ?? 'lineaire']
+      va(lui.x, t, t1, tx(de), tx(a), c)
+      va(lui.sol, t, t1, ty(h0), ty(h1), c)
+      va(lui.tr, t, t1, tr(ici.s, ici.r), tr(s1, r1), c)
+      va(lui.ombreTaille, t, t1, `scale(${arrondi(ici.s, 3)})`, `scale(${arrondi(s1, 3)})`, c)
+      if (p.saut) {
+        bondit(lui.arc, t, t1, ty(0), ty(p.saut))
+        bondit(lui.ombreArc, t, t1, reduit(0), reduit(p.saut))
+      }
+      // un tour complet le laisse comme il était : l'angle repart de 0 (le saut de 360 à 0 ne se voit pas)
+      const r = tourComplet(r1) ? 0 : r1
+      if (r !== r1) pose(lui.tr, t1, tr(s1, 0))
+      ici = { x: a, h: h1, s: s1, r }
+
+      if (p.objet) {
+        const n = p.tient ?? 0
+        if (!cibles[n] || k > 0 || !prend(n, k)) return null
+        tenue[n]!.push([t, t1])
+        touchee[n]!.push([t, t1])
+      }
+      const vues = new Set<number>()
+      for (const g of p.gestes ?? []) {
+        const n = g.n ?? 0
+        const pe = els[n]
+        if (!pe || vues.has(n) || !prend(n, k)) return null
+        vues.add(n)
+        touchee[n]!.push([t, t1])
+        if (g.devant) devant[n]!.push([t, t1])
+        const av = etats[n]!
+        const ap: EtatEl = { dx: g.dx ?? av.dx, dy: g.dy ?? av.dy, r: g.rot ?? av.r, s: g.echelle ?? av.s, o: g.opacite ?? av.o }
+        const m = g.mouvement ?? 'lineaire'
+        if (g.secoue) {
+          // la secousse, suivie de près : elle s'amortit et s'arrête net
+          pose(pe.dx, t, `translateX(${arrondi(av.dx, 1)}px)`)
+          for (let i = 1; i <= 24; i++) {
+            const u = i / 24
+            const v = lerp(av.dx, ap.dx, LISSE[m](u)) + g.secoue * Math.sin(u * Math.PI * 12) * (1 - u)
+            pe.dx.cles.push({ t: i === 24 ? finDe(t, t1) : t + u * p.duree, v: `translateX(${arrondi(v, 1)}px)` })
+          }
+        } else va(pe.dx, t, t1, `translateX(${arrondi(av.dx, 1)}px)`, `translateX(${arrondi(ap.dx, 1)}px)`, COURBE[m])
+        va(pe.dy, t, t1, ty(av.dy), ty(ap.dy), COURBE[m])
+        va(pe.tr, t, t1, trEl(av.s, av.r), trEl(ap.s, ap.r), COURBE[m])
+        va(pe.o, t, t1, `${arrondi(av.o, 2)}`, `${arrondi(ap.o, 2)}`, COURBE[m])
+        if (g.saut) bondit(pe.arc, t, t1, ty(0), ty(g.saut))
+        // un tour complet sur elle-même la laisse comme elle était : l'angle repart de 0, au même instant
+        if (tourComplet(ap.r)) {
+          ap.r = 0
+          pose(pe.tr, t1, trEl(ap.s, 0))
+        }
+        etats[n] = ap
+      }
+      t = t1
+    }
+    // il finit comme il a commencé : à son coin (ou là où il travaillait), au sol, à sa taille, droit
+    if (ici.x.pct !== 1 || Math.abs(ici.x.px + TAILLE.largeur - depart) > 0.5 || ici.h !== 0 || Math.abs(ici.s - s0) > 1e-6 || ici.r !== 0) return null
+    luis.push(lui)
+    duree = Math.max(duree, t)
+  }
   // chaque cible touchée est empruntée du premier au dernier pas qui la touche, et rendue à sa place
   const emprunts: { n: number; de: number; a: number }[] = []
   for (let n = 0; n < cibles.length; n++) {
@@ -971,7 +1063,7 @@ function trajets(pas: readonly Pas[], cibles: readonly ElementBande[], depart = 
     if (!auRepos(etats[n]!)) return null
     emprunts.push({ n, de: arrondi(Math.min(...w.map(x => x[0])), 3), a: arrondi(Math.max(...w.map(x => x[1])), 3) })
   }
-  return { lui, els, tenue, devant, emprunts, duree: t }
+  return { lui: luis[0]!, minis: luis.slice(1), els, tenue, devant, emprunts, duree }
 }
 
 // ------------------------------------------------------------- la préparation
@@ -984,9 +1076,9 @@ const pxDe = (x: X, largeur: number) => x.pct * largeur + x.px
  * vient de sa distance sur cette bande, au pas de ses pattes et à sa taille.
  * Null si un pas est mal formé.
  */
-function resous(pas: readonly Pas[], cibles: readonly ElementBande[], largeur: number, depart = 0): Pas[] | null {
+function resous(pas: readonly Pas[], cibles: readonly ElementBande[], largeur: number, depart = 0, s0 = 1): Pas[] | null {
   let ici: X = { pct: 1, px: depart - TAILLE.largeur }
-  let s = 1
+  let s = s0
   const r: Pas[] = []
   for (const p of pas) {
     if (!(p.duree > 0) || !Number.isFinite(p.duree) || !p.images.length) return null
@@ -1007,15 +1099,36 @@ function resous(pas: readonly Pas[], cibles: readonly ElementBande[], largeur: n
   return r
 }
 
-/** Ses pas joués sur cette bande et leurs pistes, ou null : un numéro qui plante, mal formé ou trop long ne se joue pas (sans faire tomber les autres) */
+const somme = (pas: readonly Pas[]) => pas.reduce((s, p) => s + p.duree, 0)
+
+/**
+ * Ses pas et ceux de ses minis joués sur cette bande, et leurs pistes, ou
+ * null : un numéro qui plante, mal formé ou trop long ne se joue pas (sans
+ * faire tomber les autres). Le premier rentré attend les autres chez lui, sur
+ * sa dernière image.
+ */
 function monte(numero: Numero, cibles: readonly ElementBande[], largeur: number, depart = 0) {
   try {
     const pas = resous(numero.pas(cibles), cibles, largeur, depart)
     if (!pas || !pas.length) return null
-    const total = pas.reduce((s, p) => s + p.duree, 0)
+    const copains: Copain[] = []
+    for (const c of (numero.copains?.(cibles) ?? []).slice(0, MINIS_MAX)) {
+      // une case de son coin, chacun la sienne
+      if (!Number.isInteger(c.place) || c.place < 0 || c.place >= MINIS_MAX || copains.some(x => x.place === c.place)) return null
+      const p = resous(c.pas, cibles, largeur, coinCopain(c.place), DEMI)
+      if (!p || !p.length) return null
+      copains.push({ ...c, pas: p })
+    }
+    const total = Math.max(somme(pas), ...copains.map(c => somme(c.pas)))
     if (!Number.isFinite(total) || total > MAX_DUREE) return null
-    const tj = trajets(pas, cibles, depart)
-    return tj ? { pas, tj } : null
+    const cale = (l: Pas[]): Pas[] => {
+      const reste = arrondi(total - somme(l), 3)
+      return reste > 0 ? [...l, { duree: reste, images: [l.at(-1)!.images.at(-1)!] }] : l
+    }
+    const sien = cale(pas)
+    const leurs = copains.map(c => ({ ...c, pas: cale(c.pas) }))
+    const tj = trajets([{ pas: sien, depart, s0: 1 }, ...leurs.map(c => ({ pas: c.pas, depart: coinCopain(c.place), s0: DEMI }))], cibles)
+    return tj ? { pas: sien, copains: leurs, tj } : null
   } catch {
     return null
   }
@@ -1044,8 +1157,9 @@ export function diagnostic(nom: string, elements: readonly ElementBande[], large
   if (!pas || !pas.length) return 'un pas mal formé (durée, images, tours, lieu ou vitesse)'
   const total = pas.reduce((s, p) => s + p.duree, 0)
   if (total > MAX_DUREE) return `trop long : ${arrondi(total, 1)} s (au plus ${MAX_DUREE})`
-  if (!trajets(pas, cibles)) return 'un trajet impossible (une cible absente, laissée ailleurs qu’à sa place, ou il ne revient pas à son coin)'
-  return `jouable : ${arrondi(total, 1)} s${cibles.length ? `, vise ${cibles.map(c => c.id).join(', ')}` : ''}`
+  const m = monte(n, cibles, largeur)
+  if (!m) return 'un trajet impossible (une cible absente, laissée ailleurs qu’à sa place, il ne revient pas à son coin, ou un de ses minis non plus)'
+  return `jouable : ${arrondi(m.tj.duree, 1)} s${cibles.length ? `, vise ${cibles.map(c => c.id).join(', ')}` : ''}`
 }
 
 /**
@@ -1186,29 +1300,6 @@ function dessineNumero(n: Pick<ClawdNumero, 'nom' | 'elements' | 'largeur' | 'de
   const N = n.nom
   let css = CSS_BANDE
 
-  // ses pistes ; ses pieds sont l'origine de sa taille, et de celle de son ombre
-  const c = { pos: `pos-${N}`, sol: `sol-${N}`, arc: `arc-${N}`, tr: `tr-${N}`, ot: `ot-${N}`, oa: `oa-${N}` }
-  css += `.${c.pos},.${c.sol},.${c.arc}{transform-box:view-box;transform-origin:0 0}.${c.tr},.${c.ot},.${c.oa}{transform-box:view-box;transform-origin:${AXE}px ${HAUTEUR}px}`
-  css += anime(c.pos, tj.lui.x, T, 'transform', true) + anime(c.sol, tj.lui.sol, T) + anime(c.arc, tj.lui.arc, T) + anime(c.tr, tj.lui.tr, T)
-  css += anime(c.ot, tj.lui.ombreTaille, T) + anime(c.oa, tj.lui.ombreArc, T)
-
-  // ses images, chacune visible pendant ses fenêtres ; les effets de même
-  const vues = new Map<string, [number, number][]>()
-  const fx = new Map<string, [number, number][]>()
-  const vus: [number, number][] = []
-  let t = 0
-  for (const p of pas) {
-    const k = p.images.length * (p.tours ?? 1)
-    for (let i = 0; i < k; i++) {
-      // son ombre est dessinée à part, au sol
-      const img = p.images[i % p.images.length]!.replace(/<rect class="ombre[^"]*"[^>]*\/>/g, '')
-      const debut = t + (i * p.duree) / k
-      vues.set(img, [...(vues.get(img) ?? []), [debut, debut + p.duree / k]])
-    }
-    if (p.fx) fx.set(p.fx, [...(fx.get(p.fx) ?? []), [t, t + p.duree]])
-    if (p.repere) vus.push([t, t + p.duree])
-    t += p.duree
-  }
   let id = 0
   const fenetre = (ws: [number, number][], contenu: string) => {
     if (!ws.length) return ''
@@ -1219,9 +1310,49 @@ function dessineNumero(n: Pick<ClawdNumero, 'nom' | 'elements' | 'largeur' | 'de
     css += `.${cls}{opacity:0;animation:${cls} ${T}s steps(1,end) both;animation-delay:var(--t0,0s)}@keyframes ${cls}{${fenetres(ws, T)}${tenue}}`
     return `<g class="${cls}">${contenu}</g>`
   }
-  let images = ''
-  for (const [img, ws] of vues) images += fenetre(ws, img)
-  for (const [effet, ws] of fx) images += fenetre(ws, effet)
+
+  // Clawd (ou un mini) à sa taille, dans un SVG imbriqué au cadrage de sa petite scène ; son ombre de même, à part, au sol
+  const cadrage = `x="0" y="${BOITE}" width="${TAILLE.largeur}" height="${TAILLE.hauteur}" viewBox="${VUE.x} ${VUE.y} ${VUE.w} ${VUE.h}" overflow="visible" shape-rendering="crispEdges"`
+  /**
+   * Un acteur : ses pistes (ses pieds sont l'origine de sa taille, et de celle
+   * de son ombre), ses images chacune visible pendant ses fenêtres (les effets
+   * de même), dans sa teinte ; `pinces` : ce qu'il porte, qui le suit
+   */
+  const acteur = (suffixe: string, sesPas: readonly Pas[], lui: Lui, teinte: Teinte, pinces = '') => {
+    const c = { pos: `pos-${N}${suffixe}`, sol: `sol-${N}${suffixe}`, arc: `arc-${N}${suffixe}`, tr: `tr-${N}${suffixe}`, ot: `ot-${N}${suffixe}`, oa: `oa-${N}${suffixe}` }
+    css += `.${c.pos},.${c.sol},.${c.arc}{transform-box:view-box;transform-origin:0 0}.${c.tr},.${c.ot},.${c.oa}{transform-box:view-box;transform-origin:${AXE}px ${HAUTEUR}px}`
+    css += anime(c.pos, lui.x, T, 'transform', true) + anime(c.sol, lui.sol, T) + anime(c.arc, lui.arc, T) + anime(c.tr, lui.tr, T)
+    css += anime(c.ot, lui.ombreTaille, T) + anime(c.oa, lui.ombreArc, T)
+    const vues = new Map<string, [number, number][]>()
+    const fx = new Map<string, [number, number][]>()
+    let t = 0
+    for (const p of sesPas) {
+      const k = p.images.length * (p.tours ?? 1)
+      for (let i = 0; i < k; i++) {
+        // son ombre est dessinée à part, au sol
+        const img = p.images[i % p.images.length]!.replace(/<rect class="ombre[^"]*"[^>]*\/>/g, '')
+        const debut = t + (i * p.duree) / k
+        vues.set(img, [...(vues.get(img) ?? []), [debut, debut + p.duree / k]])
+      }
+      if (p.fx) fx.set(p.fx, [...(fx.get(p.fx) ?? []), [t, t + p.duree]])
+      t += p.duree
+    }
+    let images = ''
+    for (const [img, ws] of vues) images += fenetre(ws, img)
+    for (const [effet, ws] of fx) images += fenetre(ws, effet)
+    return {
+      images,
+      corps: emboite([c.pos, c.sol, c.arc, c.tr], recolore(`<svg ${cadrage}><g filter="url(#contour)">${images}</g></svg>`, teinte) + pinces),
+      ombre: emboite([c.pos, c.sol, c.ot, c.oa], `<svg ${cadrage}>${OMBRE}</svg>`),
+    }
+  }
+  // les cadres de repérage, pendant ses pas qui les demandent
+  const vus: [number, number][] = []
+  let t = 0
+  for (const p of pas) {
+    if (p.repere) vus.push([t, t + p.duree])
+    t += p.duree
+  }
 
   // ses cibles : à leur place pendant l'emprunt (sauf quand il les porte), derrière ou devant lui
   let derriere = ''
@@ -1252,14 +1383,15 @@ function dessineNumero(n: Pick<ClawdNumero, 'nom' | 'elements' | 'largeur' | 'de
   }
   const decor = (vus.length ? fenetre(vus, reperes(n.elements)) : '') + (N === 'cadre' ? regle(n.colonnes) : '')
 
-  // Clawd à sa taille, dans un SVG imbriqué au cadrage de sa petite scène ; son ombre de même, à part, au sol
-  const cadrage = `x="0" y="${BOITE}" width="${TAILLE.largeur}" height="${TAILLE.hauteur}" viewBox="${VUE.x} ${VUE.y} ${VUE.w} ${VUE.h}" overflow="visible" shape-rendering="crispEdges"`
-  // lui seul prend la teinte du modèle : les copies gardent leurs couleurs (un sous-agent Opus reste terracotta)
-  const lui = emboite([c.pos, c.sol, c.arc, c.tr], recolore(`<svg ${cadrage}><g filter="url(#contour)">${images}</g></svg>`, couleur) + portees)
-  const ombre = emboite([c.pos, c.sol, c.ot, c.oa], `<svg ${cadrage}>${OMBRE}</svg>`)
+  // lui prend la teinte de son modèle, chaque mini celle du sien (celle de sa pastille) : les copies gardent leurs
+  // couleurs (un sous-agent Opus reste terracotta)
+  const lui = acteur('', pas, tj.lui, couleur, portees)
+  const minis = m.copains.map((cp, i) => acteur(`-m${i}`, cp.pas, tj.minis[i]!, teinteDe(cp.teinte) ?? couleur))
+  const images = lui.images + minis.map(x => x.images).join('')
+  // (ses minis devant lui : ils sortent de leurs cases, devant la sienne)
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="${HAUTEUR}" style="--t0:0s">` +
     recolore(`<style>${CSS}${vit(reutilises(images) + images)}${THEME}${css}</style>${FILTRE}${reutilises(images)}`, couleur) +
-    `${decor}${derriere}${ombre}${lui}${devant}</svg>`
+    `${decor}${derriere}${lui.ombre}${minis.map(x => x.ombre).join('')}${lui.corps}${minis.map(x => x.corps).join('')}${devant}</svg>`
   )
 }

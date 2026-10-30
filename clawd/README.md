@@ -28,8 +28,9 @@ Anthropic.
   and 20.
 - With the atelier mod from the same marketplace, he plays short gags across
   its band (he steals the loading orb, makes the pills pop like popcorn,
-  shrinks to hop from pill to pill and run on the orb, or grows to shake them)
-  and always puts everything back.
+  shrinks to hop from pill to pill and run on the orb, or grows to shake them;
+  his minis each run to their own subagent's pill and lift it overhead) and
+  always puts everything back.
 
 Hover him for ♥ (pet), 🎲 (new activity), 🕺 (dance) and ⭐ (level).
 `/clawd` shows his level and mood, `/clawd montre <scene>` plays a scene, and
