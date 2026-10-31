@@ -304,6 +304,8 @@ test('le poids : avec trois minis, leurs figurants et des dessins dâ€™atelier rÃ
       if (!prep) continue
       const svg = svgNumero({ nom, elements: bande, cibles: prep.cibles, largeur: LARGEUR, variante, figurants }, TEINTES.opus)
       expect(svg.length).toBeLessThan(MAX_SVG)
+      // et pas un mot : lui ne parle pas
+      expect(svg).not.toContain('<text')
     }
   }
 })

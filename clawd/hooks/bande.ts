@@ -1104,7 +1104,8 @@ const sieste: Numero = {
       { duree: 0.3, images: [f({ jambes: 'assis', yeux: 'heureux' })], gestes: [{ dy: -2 }] },
       { duree: 1.6, images: [f({ jambes: 'assis', yeux: 'mi' }), f({ jambes: 'assis2', yeux: 'mi' })], tours: 4 },
       { duree: 0.8, images: [f({ jambes: 'assis', yeux: 'ferme', bouche: 'grand' })] },
-      { duree: 2.4, images: [f({ jambes: 'assis', yeux: 'ferme', dy: 2 })], fx: effets.zzz() },
+      // (des bulles en pixels, pas des z : sur la bande, pas un mot)
+      { duree: 2.4, images: [f({ jambes: 'assis', yeux: 'ferme', dy: 2 })], fx: effets.bulles() },
       { duree: 0.4, images: [f({ jambes: 'assis', yeux: 'grand', bouche: 'o' })], saut: 6 },
       { duree: 0.5, images: [bond.part, bond.haut], a: { cible: aCote(el!, 4), h: 0 }, saut: 8, gestes: [{ dy: 0 }] },
       { duree: 0.2, images: [bond.recoit] },

@@ -43,6 +43,9 @@
 
 ## clawd
 
+- **0.10.1** — 2026-10-31 — La sieste sur une pastille souffle des bulles en
+  pixels au lieu de « zzz » écrits : sur la bande, pas un mot (vérifié par un
+  test sur tous les numéros).
 - **0.10.0** — 2026-10-31 — Plus fluide, plus d'actions.
   - Fluidité : il prend son élan et freine (sa silhouette de profil, tassée), et
     fait demi-tour (profil, face, profil) au lieu de se retourner d'un coup ;
