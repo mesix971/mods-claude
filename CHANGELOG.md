@@ -43,6 +43,16 @@
 
 ## clawd
 
+- **0.11.0** — 2026-10-31 — Il a l'air de comprendre ce que tu fais.
+  - Son regard : quand quelque chose change sur la bande d'atelier, ses yeux
+    s'y tournent quelques secondes, quoi qu'il fasse (ses minis aussi).
+  - Sa mémoire : il retient le moment fort de sa journée (une délivrance après
+    une série d'échecs, une galère, un push). Le lendemain matin, après son
+    réveil, il s'en souvient : le trophée dans sa bulle (`souvenir`), ou
+    l'orage d'une galère pas finie, et il serre les poings (`revanche`).
+  - Le coup de pouce : des modifs attendent un commit depuis 30 min (atelier
+    0.13.0) ; il va se planter à côté du bouton, le montre, tape du pied bras
+    croisés, et rentre. Il ne clique jamais. Au plus une fois toutes les 20 min.
 - **0.10.2** — 2026-10-31 — Chaque mini va à la pastille de SON sous-agent
   (d'après son identifiant), depuis sa vraie case : plus de supposition sur
   l'ordre des pastilles d'atelier.
@@ -186,6 +196,10 @@
 
 ## atelier
 
+- **0.13.0** — 2026-10-31 — La bande partagée publie aussi le bouton de la
+  ligne git (Commit + push, Commit, Pull, Push), juste après 🆕 : « à montrer »
+  quand des modifs attendent un commit depuis 30 min, sans build raté ni en
+  cours. Clawd vient alors le montrer, sans jamais cliquer.
 - **0.12.0** — 2026-10-30 — Nouvelle option `push_sans_demande` (dans
   `/config`, désactivée par défaut) : activée, un push que tu n'as pas
   demandé passe sans question. Les secrets en partance demandent toujours.

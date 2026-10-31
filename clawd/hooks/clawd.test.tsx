@@ -978,6 +978,77 @@ test('la galère, puis la délivrance : triste, inquiet, découragé… puis le 
   expect(await apres('./gradlew assembleDebug')).toContain('fete')
 })
 
+test('sa mémoire : il retient le moment fort de sa journée (une délivrance l’emporte sur la galère, qui l’emporte sur un push)', async ($, on) => {
+  const sortie = { isError: false, text: 'BUILD SUCCESSFUL' }
+  const { horloge, stockage } = moteur(on, sortie, new Date(2026, 9, 14, 15, 0).getTime())
+  const lance = async (cmd: string) => {
+    await horloge.advance(20_000)
+    await $.tool.call({ tool: 'Bash', command: cmd })
+  }
+  const souvenir = () => (stockage.get('souvenir') as { quoi?: string; jour?: string } | undefined)?.quoi
+  await lance('git push')
+  expect(souvenir()).toBe('push')
+  expect((stockage.get('souvenir') as { jour: string }).jour).toBe('2026-10-14')
+  sortie.isError = true
+  for (let i = 0; i < 3; i++) await lance('./gradlew assembleDebug')
+  expect(souvenir()).toBe('galere')
+  // un push ne la fait pas oublier
+  sortie.isError = false
+  await lance('git push')
+  expect(souvenir()).toBe('galere')
+  sortie.isError = true
+  for (let i = 0; i < 2; i++) await lance('./gradlew assembleDebug')
+  sortie.isError = false
+  await lance('./gradlew assembleDebug')
+  expect(souvenir()).toBe('delivrance')
+  // la galère du jour vécue dans une autre session : la première réussite d'ici la résout
+  stockage.set('souvenir', { jour: '2026-10-14', quoi: 'galere', quand: new Date(2026, 9, 14, 10, 0).getTime() })
+  await lance('./gradlew assembleDebug')
+  expect(souvenir()).toBe('delivrance')
+})
+
+/** Le premier matin d'après `jour` (8 h), avec ce souvenir-là en tête : ce qu'il joue jusqu'à `motif` (ou 40 s) */
+async function auReveil($: Parameters<Parameters<typeof test>[1]>[0], on: On, matin: Date, souvenir: unknown, motif: string) {
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  const { horloge, stockage } = moteur(on, undefined, matin.getTime())
+  stockage.set('journee', '2026-10-14')
+  stockage.set('souvenir', souvenir)
+  await $.session.start({ cwd: '/projet', surface: 'desktop', isInteractive: true })
+  return { vu: await vuJusqua($, horloge, motif, 40), stockage }
+}
+
+test('le lendemain matin, après son réveil, la veille lui revient : le trophée d’une victoire, une seule fois', { timeoutMs: 30_000 }, async ($, on) => {
+  const { vu, stockage } = await auReveil($, on, new Date(2026, 9, 15, 8, 0), { jour: '2026-10-14', quoi: 'delivrance', quand: new Date(2026, 9, 14, 18, 0).getTime() }, 'souvenir')
+  expect(vu).toContain('souvenir')
+  expect(stockage.get('souvenir')).toBeNull()
+})
+
+test('une galère pas finie la veille : au réveil, l’orage dans sa bulle, puis il serre les poings (sa revanche)', { timeoutMs: 30_000 }, async ($, on) => {
+  const { vu } = await auReveil($, on, new Date(2026, 9, 15, 8, 0), { jour: '2026-10-14', quoi: 'galere', quand: new Date(2026, 9, 14, 19, 0).getTime() }, 'revanche')
+  expect(vu).toContain('revanche')
+})
+
+test('un souvenir de plus de quatre jours s’efface sans qu’il y repense', { timeoutMs: 30_000 }, async ($, on) => {
+  const { vu, stockage } = await auReveil($, on, new Date(2026, 9, 15, 8, 0), { jour: '2026-10-10', quoi: 'delivrance', quand: new Date(2026, 9, 10, 18, 0).getTime() }, 'souvenir')
+  expect(vu).not.toContain('souvenir')
+  expect(stockage.get('souvenir')).toBeNull()
+})
+
+test('💭 souvenir et revanche, son regard : sans texte, légers, pareils d’un rendu à l’autre ; ses yeux ouverts se tournent vers la bande', () => {
+  for (const anim of ['souvenir', 'revanche'] as const) {
+    const dessin = svgScene(anim)
+    expect(dessin).not.toContain('<text')
+    expect(dessin.length).toBeLessThan(40 * 1024)
+    expect(svgScene(anim)).toBe(dessin)
+  }
+  // un coup d'œil change son dessin (ses yeux), pas sans ; le regard fait partie de sa tenue
+  expect(svgScene('repos', [], 0, TEINTES.opus, undefined, undefined, { regard: 'gauche' })).not.toBe(svgScene('repos'))
+  expect(svgScene('repos', [], 0, TEINTES.opus, undefined, undefined, { regard: 'haut' })).not.toBe(svgScene('repos', [], 0, TEINTES.opus, undefined, undefined, { regard: 'gauche' }))
+  expect(tenueDe({ regard: 'haut' })).toEqual({ regard: 'haut' })
+  // des yeux qui disent quelque chose (fermés, heureux) ne bougent pas : son dodo reste un dodo
+  expect(svgScene('dodo', [], 0, TEINTES.opus, undefined, undefined, { regard: 'gauche' })).toBe(svgScene('dodo'))
+})
+
 test('🎆 : découragement et délivrance se dessinent sans texte, assez petits, pareils d’un rendu à l’autre', () => {
   for (const anim of ['decourage', 'delivrance'] as const) {
     const dessin = svgScene(anim)

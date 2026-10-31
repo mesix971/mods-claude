@@ -1,7 +1,7 @@
 // Tests du mod atelier : adb, git et le disque sont simulés avec de vraies
 // sorties réelles d'adb et de git, anonymisées (app, appareil, utilisateur).
 import { expect, mock, test } from 'claude-code/testing'
-import type { AtelierAndroid, AtelierBuild } from '../types'
+import type { AtelierAndroid, AtelierBuild, AtelierGit } from '../types'
 
 import { ajouteAgent, causeDe, finAgent, nettoieAgents, pastillesAgents, pingAgent } from './agents'
 import { analyse, estBuild, pastilleBuild, quoiBuild, sortieFond } from './build'
@@ -2029,4 +2029,31 @@ test('bandeau desktop étroit : la conso descend sur sa rangée, et nos lignes r
   // la colonne de nos lignes peut rétrécir : le coin de Clawd, à côté, reste dans la bande
   expect(JSON.stringify(await ui.find({ type: 'Box' }))).toContain('"minWidth":0')
   await ui.unmount()
+})
+
+test('la bande partagée : le bouton de la ligne git juste après 🆕, « à montrer » quand des modifs attendent un commit depuis 30 min', () => {
+  const maintenant = Date.UTC(2026, 9, 31, 14, 0)
+  const MIN = 60_000
+  const g: AtelierGit = { branch: 'main', changed: 3, ahead: 0, hasUpstream: true, hasRemote: true, warnings: [] }
+  const etat = (x: Partial<Parameters<typeof planBandeau>[0]>) =>
+    sceneDuBandeau(planBandeau({ android: null, git: g, usage: null, taches: [], conso: null, build: null, agents: [], busy: null, ...x }, maintenant), quandDe(maintenant), 900)
+  const s = etat({ modifsDepuis: maintenant - 31 * MIN })
+  const n = s.elements.find(e => e.id === 'nouvelle')!
+  const c = s.elements.find(e => e.id === 'commit')
+  // juste après 🆕 et sa case vide, sur la même rangée, dans son cadre
+  expect(c).toMatchObject({ genre: 'bouton', etat: 'a-montrer', largeur: largeurEncadre('Commit + push'), ligne: n.ligne })
+  expect(Math.abs(c!.x - (n.x + largeurNouvelle() + largeurTexte(' ')))).toBeLessThan(0.1)
+  // pas assez longtemps, un build raté ou en cours : publié au repos (Clawd ne vient pas)
+  expect(etat({ modifsDepuis: maintenant - 20 * MIN }).elements.find(e => e.id === 'commit')?.etat).toBe('repos')
+  expect(etat({ modifsDepuis: maintenant - 60 * MIN, build: { quoi: 'assembleDebug', debut: maintenant - 2 * MIN, fin: maintenant - MIN, etat: 'echec' } }).elements.find(e => e.id === 'commit')?.etat).toBe('repos')
+  expect(etat({ modifsDepuis: null }).elements.find(e => e.id === 'commit')?.etat).toBe('repos')
+  // rien à commiter mais des commits à pousser : « Push », jamais à montrer
+  const push = sceneDuBandeau(planBandeau({ android: null, git: { ...g, changed: 0, ahead: 2 }, usage: null, taches: [], conso: null, build: null, agents: [], busy: null, modifsDepuis: maintenant - 60 * MIN }, maintenant), quandDe(maintenant), 900).elements.find(e => e.id === 'commit')
+  expect(push).toMatchObject({ etat: 'repos', largeur: largeurEncadre('Push') })
+  // pendant une installation (`busy`), le bouton n'est pas dessiné : rien de publié (pendant un tour, il est publié mais
+  // caché ; Clawd ne vient le montrer qu'au repos)
+  expect(etat({ modifsDepuis: maintenant - 60 * MIN, busy: 'gradlew' }).elements.find(e => e.id === 'commit')).toBeUndefined()
+  // une bande trop étroite (il passerait à la ligne, ou mordrait sur le coin de Clawd) : pas publié
+  const etroite = sceneDuBandeau(planBandeau({ android: null, git: g, usage: null, taches: [], conso: null, build: null, agents: [], busy: null, modifsDepuis: maintenant - 60 * MIN }, maintenant), quandDe(maintenant), 250)
+  expect(etroite.elements.find(e => e.id === 'commit')).toBeUndefined()
 })

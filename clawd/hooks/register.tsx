@@ -33,6 +33,7 @@ const numero = atom({ plugin: 'clawd', key: 'numero' } as const, null)
 const motNonLu = atom({ plugin: 'clawd', key: 'mot' } as const, null)
 const emprunts = atom({ plugin: 'clawd', key: 'emprunts' } as const, [])
 const grandeScene = atom({ plugin: 'clawd', key: 'grandeScene' } as const, null)
+const coupDOeil = atom({ plugin: 'clawd', key: 'regard' } as const, null)
 const pilote = atom({ plugin: 'clawd', key: 'pilote' } as const, false)
 const transpire = atom({ plugin: 'clawd', key: 'sueur' } as const, 0)
 const niveau = atom({ plugin: 'clawd', key: 'niveau' } as const, 0)
@@ -215,7 +216,7 @@ function dejaDit(anim: ClawdAnim, p: { anim: ClawdAnim } | null) {
 export function priorite(anim: ClawdAnim): number {
   if (anim === 'alerte' || anim === 'question') return 4
   // (le rapport d'un mini aussi : son mini a déjà quitté l'équipe, une loupe ne doit pas le remplacer)
-  if (['fete', 'triste', 'delivrance', 'decourage', 'gratte', 'paquet', 'pause', 'rapport', 'vertige', 'soulage', 'attendu', 'retrouvailles', 'niveau'].includes(anim)) return 3
+  if (['fete', 'triste', 'delivrance', 'decourage', 'gratte', 'paquet', 'pause', 'rapport', 'vertige', 'soulage', 'attendu', 'retrouvailles', 'niveau', 'souvenir', 'revanche'].includes(anim)) return 3
   if (LONGUES.includes(anim) || anim === 'tasse' || anim === 'attend' || anim === 'nuit' || anim === 'cache') return 2
   return anim === 'coucou' ? 0 : 1
 }
@@ -836,6 +837,11 @@ const RAPPEL_MS = 10 * 60_000
 /** La dernière fois qu'il t'a montré le bouton Installer (un nouvel APK attend) : au plus une fois toutes les 30 min */
 let dernierInstalle = 0
 const INSTALLE_MS = 30 * 60_000
+/** La dernière fois qu'il est venu te montrer le bouton Commit (des modifs qui attendent) : au plus une fois toutes les 20 min */
+let dernierPresse = 0
+const PRESSE_MS = 20 * 60_000
+/** Ses coups de pouce restés sans suite (le bouton toujours « à montrer ») */
+let pressesSansSuite = 0
 /** Au repos, un numéro au plus toutes les 6 min ; pendant que Claude travaille, toutes les 20 min */
 const ECART_REPOS = 6 * 60_000
 /** Pendant que Claude travaille, un intermède sur la bande toutes les 4 min environ : ses cartons restent l'essentiel */
@@ -1133,6 +1139,18 @@ async function surprise($: EngineInterface, maintenant: number) {
       return true
     }
   }
+  // des modifs attendent un commit depuis longtemps (atelier dit son bouton Commit « à montrer ») : il vient te le montrer,
+  // en tapant du pied, au plus toutes les 20 min ; au repos seulement (pendant un tour, le bouton n'est pas dessiné) ; trois
+  // fois sans suite, il n'insiste plus tant que le bouton ne s'est pas calmé (un dossier toujours en chantier)
+  const aCommiter = (await elementsBande($)).some(el => el.genre === 'bouton' && el.id === 'commit' && el.etat === 'a-montrer')
+  if (!aCommiter) pressesSansSuite = 0
+  else if (moment === 'repos' && pressesSansSuite < 3 && maintenant - dernierPresse >= PRESSE_MS) {
+    if (await joueNumero($, 'presse')) {
+      dernierPresse = maintenant
+      pressesSansSuite++
+      return true
+    }
+  }
   // au repos, plus il s'ennuie, plus il vient jouer sur la bande
   if (maintenant - dernierNumero < (auTravail ? ECART_TRAVAIL : Math.min(ECART_REPOS, ecartRepos(humeur)))) return false
   if (moment === 'repos' ? maintenant < finActivite || Math.random() < 0.5 * (1 - humeur.ennui) : Math.random() > 0.05) return false
@@ -1184,6 +1202,10 @@ async function remarque($: EngineInterface, maintenant: number) {
   const els = await elementsBande($)
   const avant = dejaVu
   dejaVu = new Map(els.map(el => [el.id, el.etat]))
+  // ce qui vient d'apparaître ou de changer (pas un bouton qui retourne au repos) : il y jette un œil
+  const change = avant ? els.find(el => avant.get(el.id) !== el.etat && !(el.genre === 'bouton' && el.etat === 'repos')) : undefined
+  // (son coup d'œil raté ne lui fait pas manquer la réaction qui suit)
+  if (change) await jetteUnOeil($, change, maintenant).catch(() => {})
   if (avant && !reaction && maintenant - derniereReaction >= ECART_REACTION) {
     const devient = (el: ElementBande, etat: string) => el.etat === etat && avant.get(el.id) !== undefined && avant.get(el.id) !== etat
     const vue = (
@@ -1196,6 +1218,25 @@ async function remarque($: EngineInterface, maintenant: number) {
     ).find(([, el]) => el)
     if (vue) reaction = { nom: vue[0], vise: vue[1]!.id, jusqua: maintenant + ATTENTE_REACTION }
   }
+}
+
+/** Son dernier coup d'œil (ms) : au plus un toutes les 6 s, il ne roule pas des yeux à chaque pastille */
+let dernierCoupDOeil = 0
+/** Combien de temps ses yeux restent tournés vers ce qui a changé (ms) */
+const COUP_D_OEIL_MS = 3500
+
+/**
+ * Quelque chose vient de changer sur la bande : ses yeux s'y tournent, quoi
+ * qu'il soit en train de faire (sa scène continue, redessinée là où elle en
+ * est), puis reviennent. À sa gauche (la bande est à sa gauche), ou au-dessus
+ * de lui quand c'est plus haut que sa tête (la ligne git, la ligne 📱).
+ */
+async function jetteUnOeil($: EngineInterface, el: ElementBande, maintenant: number) {
+  if (maintenant - dernierCoupDOeil < 6000) return
+  dernierCoupDOeil = maintenant
+  const jusqua = maintenant + COUP_D_OEIL_MS
+  await update($, coupDOeil, () => ({ vers: el.ligne >= 2 ? 'haut' : 'gauche', jusqua }))
+  $.clock.after(COUP_D_OEIL_MS + 100, () => void update($, coupDOeil, r => (r && r.jusqua <= jusqua ? null : r)).catch(() => {}))
 }
 
 /** Sa réaction en attente, jouée dès qu'il est libre (avant qu'elle ne soit plus de saison). Vrai s'il la joue. */
@@ -1290,15 +1331,74 @@ let echecsDaffilee = 0
  * fois, inquiet la deuxième (il se gratte la tête), découragé à partir de la
  * troisième. Ça passe : la fête, et après une série d'échecs, la délivrance.
  */
-function verdict($: EngineInterface, ok: boolean) {
+async function verdict($: EngineInterface, ok: boolean) {
   if (ok) {
     const serie = echecsDaffilee
     echecsDaffilee = 0
+    // une série d'échecs enfin passée ; ou la galère du jour (vécue dans une autre session) que cette réussite résout
+    if (serie >= 2 || (await galereDuJour($))) await retiens($, 'delivrance')
     return serie >= 2 ? scene($, 'delivrance', dureeScene('delivrance') * 1000) : scene($, 'fete', 6000)
   }
   echecsDaffilee++
-  if (echecsDaffilee >= 3) return scene($, 'decourage', dureeScene('decourage') * 1000)
+  if (echecsDaffilee >= 3) {
+    await retiens($, 'galere')
+    return scene($, 'decourage', dureeScene('decourage') * 1000)
+  }
   return echecsDaffilee === 2 ? scene($, 'gratte', 5000) : scene($, 'triste', 7000)
+}
+
+// ------------------------------------------------------ sa mémoire
+
+/** Les moments forts d'une journée, du plus marquant au moins marquant : il retient le plus fort */
+const MOMENTS = ['delivrance', 'galere', 'push'] as const
+type Moment = (typeof MOMENTS)[number]
+type Souvenir = { jour: string; quoi: Moment; quand: number }
+const estSouvenir = (s: unknown): s is Souvenir =>
+  typeof s === 'object' && s !== null && typeof (s as Souvenir).jour === 'string' && (MOMENTS as readonly unknown[]).includes((s as Souvenir).quoi) && typeof (s as Souvenir).quand === 'number'
+/** Au-delà, un souvenir s'efface sans qu'il y repense (tu n'es pas venu depuis plusieurs jours) */
+const OUBLI_MS = 4 * 86_400_000
+
+/**
+ * Il retient le moment fort de sa journée (gardé d'une session à l'autre) :
+ * une délivrance (une série d'échecs enfin passée) l'emporte sur une galère
+ * (elle est résolue), qui l'emporte sur un push réussi.
+ */
+async function retiens($: EngineInterface, quoi: Moment) {
+  try {
+    const quand = await $.clock.now()
+    const jour = journee(quand)
+    const s = await $.store.get('souvenir')
+    if (estSouvenir(s) && s.jour === jour && MOMENTS.indexOf(s.quoi) <= MOMENTS.indexOf(quoi)) return
+    await $.store.set('souvenir', { jour, quoi, quand })
+  } catch {
+    // sans stockage, il oublie : rien de grave
+  }
+}
+
+/** Le moment fort d'aujourd'hui est-il une galère pas encore résolue ? */
+async function galereDuJour($: EngineInterface) {
+  try {
+    const s = await $.store.get('souvenir')
+    return estSouvenir(s) && s.quoi === 'galere' && s.jour === journee(await $.clock.now())
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Le premier signe de vie d'une nouvelle journée : il se souvient du moment
+ * fort de la veille (ou d'avant, s'il n'est pas trop vieux), une fois, après
+ * son réveil : le trophée d'une victoire, ou l'orage d'une galère pas finie
+ * (il serre les poings : aujourd'hui, ça va passer).
+ */
+async function seSouvient($: EngineInterface, maintenant: number) {
+  const s = await $.store.get('souvenir').catch(() => null)
+  if (!estSouvenir(s) || s.jour === journee(maintenant)) return
+  await $.store.set('souvenir', null).catch(() => {})
+  if (maintenant - s.quand > OUBLI_MS) return
+  const anim = s.quoi === 'galere' ? 'revanche' : 'souvenir'
+  // (il attend la fin de son réveil, plus long que la patience d'une scène ordinaire)
+  await scene($, anim, dureeScene(anim) * 1000, false, 60_000)
 }
 
 /** Une petite réaction (loupe, crayon), sauf s'il vit un grand moment. */
@@ -1383,7 +1483,10 @@ async function verdictDe($: EngineInterface, cmd: string, r: ToolCallResult) {
   }
   // passée dans un `| tail`, une commande ratée sort en 0 : sa sortie le dit
   if (lance(BUILD, cmd) || lance(TESTS, cmd)) return verdict($, ok && !SORTIE_ECHEC.test(r.text ?? ''))
-  if (lance(PUSH, cmd)) return scene($, ok ? 'fete' : 'triste', ok ? 6000 : 7000)
+  if (lance(PUSH, cmd)) {
+    if (ok) await retiens($, 'push')
+    return scene($, ok ? 'fete' : 'triste', ok ? 6000 : 7000)
+  }
   // un pull réussi (sans conflit : vu plus haut) : les nouveautés de GitHub sont là, une petite fête ; rien de neuf, rien
   if (lance(PULL, cmd)) {
     if (!ok) return scene($, 'triste', 6000)
@@ -1485,6 +1588,8 @@ export const register: Register = on => {
     reaction = null
     derniereReaction = 0
     dernierJeuMinis = 0
+    dernierPresse = 0
+    pressesSansSuite = 0
     lieuNumero = null
     retourChez = null
     placeDuPassage = null
@@ -1507,8 +1612,11 @@ export const register: Register = on => {
     // la première session de la journée, il sort du lit ; ensuite, il est en forme ;
     // et si tu étais parti longtemps, il te fait la fête (après son café, le matin)
     const retour = await retrouvailles($, derniereActivite)
-    if (await premierDuJour($, derniereActivite)) await emerge($)
-    else if (!retour) await scene($, 'coucou', 4000)
+    if (await premierDuJour($, derniereActivite)) {
+      await emerge($)
+      // et la veille lui revient (dans une session que tu vois : une session en arrière-plan ne le gâche pas)
+      if ((e as { isInteractive?: boolean }).isInteractive !== false) await seSouvient($, derniereActivite)
+    } else if (!retour) await scene($, 'coucou', 4000)
     if (retour) await scene($, retour, dureeScene(retour) * 1000)
 
     // son humeur, relue d'une session à l'autre
@@ -1663,6 +1771,7 @@ export const register: Register = on => {
     const retour = await retrouvailles($, maintenant)
     if (await premierDuJour($, maintenant)) {
       await emerge($)
+      await seSouvient($, maintenant)
       if (retour) await scene($, retour, dureeScene(retour) * 1000)
     } else if (retour) {
       await scene($, retour, dureeScene(retour) * 1000)
@@ -1968,8 +2077,11 @@ export const register: Register = on => {
     const deguise = deguisementDu(maintenant)
     // sa tenue : son déguisement du jour, sa visière, sa sueur, son insigne ; ses minis n'ont que le déguisement et la visière
     const porte = await tenueSession($)
-    const tenue = tenueDe({ ...porte, deguise })
-    const tenueMinis = tenueDe({ deguise, visiere: porte.visiere })
+    // son coup d'œil vers ce qui vient de changer sur la bande (ses minis tournent la tête avec lui)
+    const oeil = await read($, coupDOeil)
+    const regard = oeil && maintenant < oeil.jusqua ? oeil.vers : undefined
+    const tenue = tenueDe({ ...porte, deguise, ...(regard ? { regard } : {}) })
+    const tenueMinis = tenueDe({ deguise, visiere: porte.visiere, ...(regard ? { regard } : {}) })
     const nv = await read($, niveau)
     // un numéro sur toute la bande : son coin reste vide pendant ce temps (n'y restent que ses cartons quand il l'a lancé
     // en plein déménagement : il revient les reprendre là où il les a laissés)

@@ -31,9 +31,13 @@ Anthropic.
   shrinks to hop from pill to pill and run on the orb, or grows to shake them;
   his minis each run to their own subagent's pill and lift it overhead, play
   leapfrog, build a pyramid or pass a pill around) and always puts everything
-  back. He also reacts live to the band: he bangs on a failed build, holds
-  back a quota turning red, checks a finished subagent's work and cheers each
-  completed step.
+  back. He also reacts live to the band: his eyes turn to whatever changes, he
+  bangs on a failed build, holds back a quota turning red, checks a finished
+  subagent's work, cheers each completed step, and when changes have waited
+  half an hour for a commit he stands by the Commit button tapping his foot
+  (he never clicks it).
+- He remembers the high point of his day (a fix after a run of failures, a
+  rough patch, a push) and recalls it the next morning, in a thought bubble.
 
 Hover him for ♥ (pet), 🎲 (new activity), 🕺 (dance) and ⭐ (level).
 `/clawd` shows his level and mood, `/clawd montre <scene>` plays a scene, and
@@ -59,8 +63,9 @@ passing build from a failing one), your prompts, subagents, compaction and
 permission requests. It reads what Claude Code provides: the current model,
 the permission mode, the context and rate-limit figures, the list of
 subagents, and the band published by atelier. It keeps its petting count,
-experience, mood and a few dates (such as your last visit) in the plugin
-store. Command replies are in French; the drawing itself has no text.
+experience, mood, a few dates (such as your last visit) and the day's high
+point (a word like `delivrance` and its date, never a command or its output)
+in the plugin store. Command replies are in French; the drawing itself has no text.
 
 It never reads the text of your prompts or of Claude's answers. Its hooks
 never change what Claude does: prompts, tool calls, subagent launches and

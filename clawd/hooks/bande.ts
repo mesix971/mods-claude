@@ -1243,6 +1243,51 @@ const rappel: Numero = {
 }
 
 /**
+ * Le coup de pouce : des modifs attendent un commit depuis longtemps (atelier
+ * publie le bouton de sa ligne git `a-montrer`, sans build raté ni travail en
+ * cours). Il va se planter à côté (dessous quand il est au-dessus de sa
+ * tête), le montre, tape du pied bras croisés en le fixant, te regarde l'air
+ * de dire « alors ? », le remontre (parfois en sautillant), hausse les épaules
+ * et rentre. Il ne le touche jamais : c'est toi qui décides. Joué quand il est
+ * temps (register.tsx), pas tiré au hasard.
+ */
+const presse: Numero = {
+  quand: 'demande',
+  besoin: 'le bouton Commit à montrer sur la bande (atelier le dit quand des modifs attendent un commit depuis longtemps), au plus sur la troisième ligne',
+  cibles: els => {
+    const b = els.find(e => e.genre === 'bouton' && e.id === 'commit' && e.etat === 'a-montrer' && e.ligne <= 2)
+    return b ? [b] : undefined
+  },
+  pas: ([b], { variante }) => {
+    // comme pour 🆕 : il ne cache jamais ce qu'il montre (juste à sa gauche ; sur la ligne git, sous son bord gauche)
+    const haut = b!.ligne >= 2
+    const ici: Lieu = { cible: haut ? -b!.largeur / 2 + 4 : -b!.largeur / 2 - CORPS.demiLargeur - 4 }
+    const vers: 'haut' | 'droite' = haut ? 'haut' : 'droite'
+    const montre = haut ? [f({ d: 'ciel', yeux: 'haut' }), f({ d: 'haut', yeux: 'haut' })] : [f({ d: 'tendu', yeux: 'droite' }), f({ d: 'tendu', yeux: 'heureux' })]
+    const impatient = [f({ g: 'devant', d: 'devant', jambes: 'tape', yeux: vers }), f({ g: 'devant', d: 'devant', yeux: vers })]
+    return [
+      { duree: 0.8, images: [f({ yeux: 'gauche' }), f({ yeux: 'clin' })], de: { coin: 0 } },
+      { duree: 0.5, images: [court], a: ici, vitesse: 'vite', mouvement: 'doux' },
+      { duree: 1.2, images: montre, tours: 3 },
+      // il tape du pied, bras croisés, en le fixant… puis se tourne vers toi : alors ?
+      { duree: 1.6, images: impatient, tours: 4 },
+      { duree: 1, images: [f({ g: 'devant', d: 'devant', yeux: 'mi' }), f({ g: 'devant', d: 'devant', yeux: 'mi', bouche: 'o' })] },
+      ...(choix(variante, 2)
+        ? [
+            { duree: 0.45, images: [bond.part, bond.haut], saut: haut ? 14 : 10 },
+            { duree: 0.2, images: [bond.recoit] },
+          ]
+        : []),
+      { duree: 1.2, images: montre, tours: 3 },
+      // tant pis : il hausse les épaules, et rentre
+      { duree: 0.9, images: [f({ g: 'haut', d: 'haut', yeux: 'mi' }), f({ g: 'bas', d: 'bas', yeux: 'mi' })] },
+      { duree: 0.4, images: [miroir(court)], a: { coin: 0 }, vitesse: 'vite', mouvement: 'doux' },
+      { duree: 0.4, images: [f()] },
+    ]
+  },
+}
+
+/**
  * Le cadre, pour vérifier la grande scène sur une capture (/clawd montre
  * cadre) : les cadres de repérage autour de ce qu'atelier dessine, une règle
  * graduée tous les 50 px, et Clawd à son coin, qui fait coucou.
@@ -1284,7 +1329,7 @@ const installe: Numero = {
   },
 }
 
-export const NUMEROS: Record<string, Numero> = { chipe, tournee, bousculade, popcorn, echange, lilliput, geant, funambule, sieste, equipe, mouton, pyramide, passe, bravo, repare, retient, controle, inspection, rappel, installe, cadre }
+export const NUMEROS: Record<string, Numero> = { chipe, tournee, bousculade, popcorn, echange, lilliput, geant, funambule, sieste, equipe, mouton, pyramide, passe, bravo, repare, retient, controle, inspection, rappel, installe, presse, cadre }
 
 export const estNumero = (nom: unknown): nom is string => typeof nom === 'string' && Object.hasOwn(NUMEROS, nom)
 

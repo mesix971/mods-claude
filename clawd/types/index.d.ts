@@ -85,6 +85,9 @@ export type ClawdAnim =
   // un conflit git : il se cache derrière un carton, puis ressort soulagé quand c'est résolu
   | 'cache'
   | 'soulage'
+  // le matin, il se souvient du moment fort de la veille : une victoire (souvenir), une galère pas finie (revanche)
+  | 'souvenir'
+  | 'revanche'
   // tu reviens après une longue absence : il t'a attendu (8 h), il saute de joie (un jour et demi)
   | 'attendu'
   | 'retrouvailles'
@@ -196,6 +199,8 @@ declare module 'claude-code' {
        * tout le dessin suit (l'app recrée l'image quand la bande change)
        */
       grandeScene: { id: number; svg: string; hauteur: number; debut: number; fin: number } | null
+      /** Son coup d'œil : quelque chose vient de changer sur la bande, ses yeux s'y tournent (à sa gauche, ou au-dessus de lui) jusqu'à `jusqua` (ms) */
+      regard: { vers: 'gauche' | 'haut'; jusqua: number } | null
       /** Claude agit sans te demander (mode auto ou bypass) : il porte sa visière de pilote automatique */
       pilote: boolean
       /** Le contexte se remplit : 0 rien, 1 une goutte de sueur (la moitié), 2 deux gouttes et les joues rouges (70 %) */

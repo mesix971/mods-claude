@@ -33,7 +33,12 @@ export type EtatBandeau = {
   busy: string | null
   /** Le conseil de modèle tel que le bandeau le montre (null : rien à dire) */
   conseil?: { texte: string; titre: string } | null
+  /** Depuis quand il y a des modifs pas commitées (ms ; null : aucune), pour le bouton Commit à montrer */
+  modifsDepuis?: number | null
 }
+
+/** Des modifs en attente depuis tout ce temps, sans build raté ni travail en cours : Clawd vient montrer le bouton Commit */
+export const COMMIT_ATTENTE_MS = 30 * 60_000
 
 /** Ce que le bandeau dessine, ligne par ligne */
 export type Plan = {
@@ -53,6 +58,12 @@ export type Plan = {
   git: AtelierGit | null
   /** La ligne 📱, ses textes et ses boutons (la place d'Installer en dépend) */
   android?: LigneAndroid | null
+  /**
+   * Le bouton de la ligne git (son libellé), quand il est dessiné (pas pendant
+   * un tour) ; `aMontrer` : des modifs attendent un commit depuis
+   * `COMMIT_ATTENTE_MS`, sans build raté ni en cours (Clawd vient le montrer)
+   */
+  commit?: { libelle: string; aMontrer: boolean } | null
 }
 
 const pluriel = (n: number, mot: string) => `${n} ${mot}${n > 1 ? 's' : ''}`
@@ -202,7 +213,17 @@ export function planBandeau(x: EtatBandeau, maintenant: number): Plan {
     nouvelle: texteNouvelle(x.usage, x.conso),
     git: x.git,
     android: x.android ? ligneAndroid(x.android, maintenant, x.busy !== null) : null,
+    commit: planCommit(x, maintenant),
   }
+}
+
+/** Le bouton de la ligne git tel que la bande partagée le publie (voir `Plan.commit`) */
+function planCommit(x: EtatBandeau, maintenant: number): Plan['commit'] {
+  const libelle = x.git ? libelleCommit(x.git) : null
+  if (!libelle || x.busy !== null) return null
+  const attend = (libelle === 'Commit + push' || libelle === 'Commit') && typeof x.modifsDepuis === 'number' && maintenant - x.modifsDepuis >= COMMIT_ATTENTE_MS
+  const buildOk = x.build?.etat !== 'echec' && x.build?.etat !== 'encours'
+  return { libelle, aMontrer: attend && buildOk }
 }
 
 const genreDe = (id: string): AtelierElement['genre'] => (id.startsWith('agent-') ? 'agent' : id === 'build' ? 'build' : 'tache')
@@ -370,6 +391,22 @@ export function sceneDuBandeau(p: Plan, quand: (ms: number) => string, bandePx: 
       hauteur: HAUTEUR_DESSIN,
       ligne: ligne(rangee),
     })
+    // le bouton de la ligne git (Commit + push, Commit, Pull, Push), juste après 🆕 et sa case vide, sur la même
+    // rangée : `a-montrer` quand des modifs attendent un commit depuis longtemps (Clawd vient le montrer), `repos` sinon ;
+    // passé à la ligne (bande trop étroite) : pas publié
+    const c = p.commit
+    const xCommit = xNouvelle + ESPACE + largeurNouvelle() + ESPACE
+    if (c && tient(xCommit, c.libelle, bandePx)) {
+      elements.push({
+        id: 'commit',
+        genre: 'bouton',
+        etat: c.aMontrer ? 'a-montrer' : 'repos',
+        x: +xCommit.toFixed(1),
+        largeur: largeurEncadre(c.libelle),
+        hauteur: HAUTEUR_DESSIN,
+        ligne: ligne(rangee),
+      })
+    }
   }
   // le bouton Installer de la ligne 📱, quand il est là : au bout de ses textes (la version en gras) et de la pastille du
   // build ; `a-montrer` quand il est jaune (Clawd vient le montrer), `repos` sinon. Passé à la ligne (bande trop étroite) :

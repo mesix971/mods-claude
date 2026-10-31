@@ -23,8 +23,10 @@ Anthropic.
 - 🆕 opens a new conversation.
 - With **Clawd** from the same marketplace, a tiny pixel-art Claude lives at
   the end of the band and plays short gags across it (he steals the loading
-  orb, makes the pills pop like popcorn), then puts everything back. Each mod
-  also works on its own.
+  orb, makes the pills pop like popcorn), then puts everything back. When
+  changes have waited 30 minutes for a commit, with no failed build, he comes
+  and points at the Commit button (he never presses it). Each mod also works
+  on its own.
 
 ## Guardrails
 

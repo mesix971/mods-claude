@@ -147,7 +147,10 @@ export type Tenue = {
   sueur?: 1 | 2
   /** l'insigne de son niveau */
   insigne?: Insigne
+  /** où il regarde : ce qui vient de changer sur la bande (à sa gauche, ou au-dessus de lui) ; ses yeux ouverts s'y tournent */
+  regard?: 'gauche' | 'haut'
 }
+let regardVers: 'gauche' | 'haut' | null = null
 let visiere = false
 let sueur: 0 | 1 | 2 = 0
 let insigne: Insigne | null = null
@@ -171,6 +174,7 @@ export function tenueDe(t: Tenue): Tenue | undefined {
     ...(t.visiere ? { visiere: true } : {}),
     ...(t.sueur ? { sueur: t.sueur } : {}),
     ...(t.insigne ? { insigne: t.insigne } : {}),
+    ...(t.regard ? { regard: t.regard } : {}),
   }
   return Object.keys(n).length ? n : undefined
 }
@@ -269,8 +273,13 @@ const visage = (x0: number, y0: number, yeux: Yeux) => {
   if (deguisement === 'cernes') return `<use href="#cernes" x="${x0}" y="${y0}"/>`
   return ''
 }
-/** Le lundi matin, son regard ordinaire est à moitié fermé */
-const regard = (yeux: Yeux): Yeux => (deguisement === 'cernes' && yeux === 'normal' ? 'mi' : yeux)
+/**
+ * Son regard ordinaire : tourné vers ce qui vient de changer sur la bande
+ * (`regardVers`), sinon à moitié fermé le lundi matin. Seuls ses yeux grands
+ * ouverts sans rien de particulier s'y tournent : un clin d'œil, des yeux
+ * heureux ou fermés gardent ce qu'ils disent.
+ */
+const regard = (yeux: Yeux): Yeux => (yeux !== 'normal' ? yeux : regardVers ?? (deguisement === 'cernes' ? 'mi' : yeux))
 
 type Yeux =
   | 'normal' | 'ferme' | 'heureux' | 'mi' | 'grand' | 'croix' | 'coeur'
@@ -1877,6 +1886,40 @@ const SCENES: Record<ClawdAnim, () => Scene> = {
       corps({ dy: 1, g: 'bas', d: 'ciel', yeux: 'heureux' }),
     ],
   }),
+  // Le matin, il se souvient du moment fort de la veille (sa mémoire, register.tsx) : une bulle de pensée au-dessus de
+  // lui, et dedans le trophée de sa délivrance ou de son push ; il sourit, puis saute de joie
+  souvenir: () => {
+    const pense = pensee(TROPHEE)
+    return {
+      duree: 5,
+      images: [
+        corps({ yeux: 'haut' }) + pense,
+        corps({ yeux: 'haut', d: 'tete' }) + pense,
+        corps({ yeux: 'heureux', d: 'tete' }) + pense,
+        corps({ yeux: 'heureux' }) + pense,
+        corps({ g: 'haut', d: 'haut', dy: -6, jambes: 'replie', yeux: 'heureux', masse: 'etire' }),
+        corps({ g: 'ciel', d: 'ciel', yeux: 'heureux' }),
+        corps({ yeux: 'heureux' }),
+      ],
+    }
+  },
+  // … ou de la galère qu'il n'a pas vue finir : l'orage dans sa bulle, il grimace, puis serre les poings, décidé :
+  // aujourd'hui, ça va passer
+  revanche: () => {
+    const pense = pensee(ORAGE)
+    return {
+      duree: 5,
+      images: [
+        corps({ yeux: 'haut' }) + pense,
+        corps({ yeux: 'mi', bouche: 'o' }) + pense,
+        corps({ d: 'tete', yeux: 'mi' }) + pense,
+        corps({ yeux: 'grand' }),
+        corps({ g: 'haut', d: 'haut', yeux: 'grand' }),
+        corps({ g: 'haut', d: 'haut', yeux: 'heureux', jambes: 'tape' }),
+        corps({ yeux: 'clin' }),
+      ],
+    }
+  },
   gratte: () => ({
     duree: 1.6,
     fx: glyphe('?', 70, -10, 16, PAL.Y!, 'scintille'),
@@ -3243,12 +3286,13 @@ const sonDeguisement = (anim: ClawdAnim, d?: Deguisement | Tenue): Deguisement |
  * visage : il garde sa sueur et son insigne.
  */
 function deguiseEn<T>(d: Deguisement | Tenue | undefined, dessine: () => T): T {
-  const avant = { deguisement, visiere, sueur, insigne }
+  const avant = { deguisement, visiere, sueur, insigne, regardVers }
   if (typeof d === 'object') {
     deguisement = d.deguise ?? null
     visiere = d.visiere === true
     sueur = d.sueur ?? 0
     insigne = d.insigne ?? null
+    regardVers = d.regard ?? null
   } else {
     deguisement = d ?? null
     visiere = false
@@ -3256,7 +3300,7 @@ function deguiseEn<T>(d: Deguisement | Tenue | undefined, dessine: () => T): T {
   try {
     return dessine()
   } finally {
-    ;({ deguisement, visiere, sueur, insigne } = avant)
+    ;({ deguisement, visiere, sueur, insigne, regardVers } = avant)
   }
 }
 
@@ -3461,6 +3505,16 @@ const ICONES = {
   coeur: COEUR,
 }
 
+// Ses souvenirs de la veille, dans sa bulle de pensée : le trophée d'une victoire, l'orage d'une galère
+const TROPHEE = ['Y.YYY.Y', 'YYYYYYY', '.YYYYY.', '..YYY..', '...Y...', '..YYY..', '.NNNNN.']
+const ORAGE = ['..GGG..', '.GGGGG.', 'GGGGGGG', '.GGGGG.', '..Y.B..', '.Y..B..', 'Y.B..B.']
+/** Sa bulle de pensée au-dessus de sa tête, une icône au milieu (comme ses bulles du travail, sans animation : elle fait partie de l'image) */
+function pensee(icone: readonly string[]): string {
+  const w = icone[0]!.length * 3
+  const h = icone.length * 3
+  return A(PENSEE, 14, -36, 3) + A(icone, 14 + Math.round((45 - w) / 2), -33 + Math.round((24 - h) / 2), 3)
+}
+
 /** Les petites réactions qui, au travail, s'affichent en bulle. */
 export type Bulle = keyof typeof ICONES
 export const EN_BULLE = Object.keys(ICONES) as Bulle[]
@@ -3526,7 +3580,7 @@ export const EMOJI: Record<ClawdAnim, string> = {
   tel: '📱', copain: '👾', chef: '📋', sifflet: '📣', fete: '🎉', triste: '🌧', alerte: '❗', surpris: '❓', dodo: '💤',
   fatigue: '😓', vertige: '😵', coeur: '♥', nuit: '🌙', reveil: '🥱', tasse: '🗜', paquet: '✨', attend: '✋',
   question: '❔', deballe: '📥', decourage: '😞', delivrance: '🎆', colis: '🎁', gigogne: '🪆', tambour: '🥁', podium: '🏆',
-  pause: '🥛', rapport: '🤝', bonbon: '🍬', detente: '😎', baille: '😪', cache: '🫣', soulage: '😮‍💨', attendu: '🤗', retrouvailles: '🥰', chat: '🐈', filante: '🌠',
+  pause: '🥛', rapport: '🤝', bonbon: '🍬', detente: '😎', baille: '😪', cache: '🫣', soulage: '😮‍💨', souvenir: '💭', revanche: '💪', attendu: '🤗', retrouvailles: '🥰', chat: '🐈', filante: '🌠',
   floss: '🕺', orange: '🍊', defaut: '🎶', griddy: '🔥', takel: '🫵', sixseven: '6️⃣7️⃣', niveau: '⭐',
 }
 

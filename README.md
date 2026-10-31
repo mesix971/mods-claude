@@ -269,7 +269,9 @@ Quand atelier dessine sa bande, Clawd y joue de temps en temps un numéro :
 - il marche en funambule sur une jauge, ou fait la sieste sur une pastille ;
 - il réagit à ce qui se passe : il tape sur un build raté, retient un quota
   qui passe au rouge, contrôle le travail d'un sous-agent fini et félicite
-  chaque étape faite ;
+  chaque étape faite ; ses yeux se tournent vers ce qui change ;
+- des modifs attendent un commit depuis une demi-heure : il vient se planter
+  à côté du bouton et tape du pied (sans jamais cliquer) ;
 - il fait le tour de la bande ;
 - il échange deux pastilles, qui reprennent leur place toutes seules ;
 - il inspecte les quotas en contremaître ;

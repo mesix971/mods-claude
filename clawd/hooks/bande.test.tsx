@@ -322,9 +322,15 @@ test('il réagit en direct : une étape qui passe à « faite » sur la bande, i
   const { horloge, dernier } = moteur(on, bande)
   const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
   await $.session.start(SESSION)
-  // un premier coup d'œil : il note ce qu'il voit
+  // un premier coup d'œil : il note ce qu'il voit (rien n'a changé : ses yeux ne bougent pas)
   await horloge.advance(4000)
+  expect(dernier('regard')).toBeUndefined()
   bande.elements = bande.elements.map(e => (e.id === 'tache-plan-2' ? { ...e, etat: 'faite' } : e))
+  // au coup d'œil suivant, ses yeux se tournent vers elle (à sa gauche), quoi qu'il fasse, puis reviennent
+  await horloge.advance(4000)
+  expect(dernier('regard')).toMatchObject({ vers: 'gauche' })
+  await horloge.advance(4000)
+  expect(dernier('regard')).toBeNull()
   // il le remarque au coup d'œil suivant, même en pleine activité, et y va dès qu'il est libre (au plus 40 s plus tard)
   let n: { nom: string; vise?: string } | undefined
   for (let i = 0; i < 10 && !n; i++) {
@@ -770,6 +776,30 @@ test('une bande où il n’y a que le bouton 🆕 au repos : rien à animer, pas
   // une heure : au repos, il serait venu plusieurs fois faire le tour de la bande
   for (let i = 0; i < 60; i++) await horloge.advance(60_000)
   expect(ecrits.some(x => x.key === 'numero' && x.value !== null)).toBe(false)
+  await ui.unmount()
+})
+
+test('le coup de pouce : des modifs qui attendent un commit, il vient montrer le bouton en tapant du pied, puis pas avant 20 min ; jamais au repos', { timeoutMs: 30_000 }, async ($, on) => {
+  const commit = (etat: string, ligne = 2): ElementBande => ({ id: 'commit', genre: 'bouton', etat, x: 300, largeur: 96, ligne })
+  // le numéro : il va à côté, ne le cache pas, ne le touche pas, et rentre ; au repos ou trop haut, rien à montrer
+  expect(prepareNumero('presse', [...ELEMENTS, commit('a-montrer')], LARGEUR)!.cibles.map(c => c.id)).toEqual(['commit'])
+  expect(prepareNumero('presse', [...ELEMENTS, commit('a-montrer')], LARGEUR)!.emprunts).toEqual([])
+  expect(prepareNumero('presse', [...ELEMENTS, commit('repos')], LARGEUR)).toBeNull()
+  expect(prepareNumero('presse', [...ELEMENTS, commit('a-montrer', 3)], LARGEUR)).toBeNull()
+  expect(prepareNumero('presse', [...ELEMENTS, commit('a-montrer', 1)], LARGEUR)).not.toBeNull()
+  expect(NUMEROS.presse!.quand).toBe('demande')
+  // de lui-même, quand atelier le dit « à montrer »
+  const { horloge, ecrits } = moteur(on, { elements: [...ELEMENTS, commit('a-montrer')] })
+  await $.session.start({ cwd: '/projet', surface: 'desktop', isInteractive: true })
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  const presses = () => [...new Set(ecrits.filter(x => x.key === 'numero' && (x.value as { nom?: string } | null)?.nom === 'presse').map(x => (x.value as { debut: number }).debut))]
+  for (let i = 0; i < 40 && presses().length === 0; i++) await horloge.advance(5000)
+  expect(presses()).toHaveLength(1)
+  for (let i = 0; i < 40; i++) await horloge.advance(25_000)
+  expect(presses()).toHaveLength(1)
+  for (let i = 0; i < 30 && presses().length === 1; i++) await horloge.advance(25_000)
+  expect(presses()).toHaveLength(2)
+  expect(presses()[1]! - presses()[0]!).toBeGreaterThanOrEqual(20 * 60_000)
   await ui.unmount()
 })
 

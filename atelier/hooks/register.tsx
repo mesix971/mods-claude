@@ -27,7 +27,7 @@ import { COULEURS, jauges, resumeJauges, svgJauges, texteJauges } from './jauges
 import { decrit, estDiscret } from './outils'
 import { svgPastilles } from './pastilles'
 import { aRanger } from './rangement'
-import { CELLULE, DEMANDES_GIT, ECHELLE, HAUTEUR_DESSIN, LIBELLE_INSTALLER, empruntsDe, grandeSceneDe, commandesAPart, libelleCommit, planBandeau, quandDe, quotasCoupes, sceneDuBandeau, textesGit } from './scene'
+import { CELLULE, COMMIT_ATTENTE_MS, DEMANDES_GIT, ECHELLE, HAUTEUR_DESSIN, LIBELLE_INSTALLER, empruntsDe, grandeSceneDe, commandesAPart, libelleCommit, planBandeau, quandDe, quotasCoupes, sceneDuBandeau, textesGit } from './scene'
 import { LIBELLE_NOUVELLE, TAILLE_TEXTE, commandeSuite } from './suite'
 import { ajouteTache, depuisTaskList, depuisTodos, horodate, interrompue, majTache, planFini, resumeTaches, suitPlan, texteTaches, toutFait } from './taches'
 
@@ -327,6 +327,7 @@ async function publieUneFois($: EngineInterface) {
             agents: await read($, agents),
             busy: await read($, busy),
             conseil: conseilAffiche(await read($, conseil), (await read($, reglage)) ?? SANS_REGLAGE),
+            modifsDepuis,
           },
           maintenant,
         )
@@ -633,6 +634,35 @@ async function rafraichirUsage($: EngineInterface) {
 }
 
 let refreshing: Promise<void> | null = null
+/** Depuis quand des modifs attendent un commit (ms ; null : aucune), d'après le dernier rafraîchissement de git */
+let modifsDepuis: number | null = null
+/** Le dossier de ces modifs */
+let modifsDe: string | null = null
+/** La dernière relecture de git par le minuteur (ms) */
+let gitRelu = 0
+
+/**
+ * Ce que git vient de dire : la ligne git, et depuis quand des modifs
+ * attendent un commit dans ce dossier-ci (Clawd vient montrer le bouton quand
+ * ça dure ; un autre dossier repart de zéro).
+ */
+async function noteGit($: EngineInterface, cwd: string, g: AtelierGit | null) {
+  if (modifsDe !== cwd) modifsDepuis = null
+  modifsDe = cwd
+  modifsDepuis = g && g.changed > 0 ? (modifsDepuis ?? (await maintenantOuRien($))) : null
+  await update($, git, () => g)
+}
+
+/** Git seul relu (pas les quotas, pas adb) */
+async function relisGit($: EngineInterface) {
+  try {
+    const cwd = slash(await $.session.cwd())
+    const g = await refreshGit($, cwd)
+    if (g !== undefined) await noteGit($, cwd, g)
+  } catch {
+    // session fermée en route : on laisse tomber
+  }
+}
 
 function refresh($: EngineInterface) {
   // un seul rafraîchissement à la fois : les suivants attendent le même
@@ -643,7 +673,7 @@ function refresh($: EngineInterface) {
       const [a, g] = await Promise.all([refreshAndroid($, cwd), refreshGit($, cwd)])
       await update($, android, () => a)
       // git trop lent ou pas lancé : on garde ce qu'on savait (sinon la ligne git disparaît, et toute la bande bouge)
-      if (g !== undefined) await update($, git, () => g)
+      if (g !== undefined) await noteGit($, cwd, g)
       void publieScene($)
     } catch {
       // module rechargé ou session fermée en plein rafraîchissement : on laisse tomber
@@ -976,6 +1006,15 @@ export const register: Register = (on, options) => {
     // trait du temps avance)
     $.clock.every(60_000, () => {
       void rafraichirUsage($)
+        // des modifs qui attendent depuis longtemps : git relu avant de dire le bouton Commit « à montrer » (un commit fait
+        // ailleurs, dans ton terminal ou ton IDE, ne se voit qu'ainsi : Clawd ne réclame pas un commit déjà fait)
+        .then(async () => {
+          const t = await maintenantOuRien($)
+          if (modifsDepuis === null || t === null || t - modifsDepuis < COMMIT_ATTENTE_MS - 60_000 || t - gitRelu < 5 * 60_000) return
+          // (git seul, au plus toutes les 5 min : pas adb)
+          gitRelu = t
+          await relisGit($)
+        })
         .then(() => rangeLesFinis($))
         .then(() => publieScene($))
         .then(() => update($, minute, n => n + 1))
