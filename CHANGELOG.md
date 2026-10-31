@@ -43,6 +43,18 @@
 
 ## clawd
 
+- **0.10.0** — 2026-10-31 — Plus fluide, plus d'actions.
+  - Fluidité : il prend son élan et freine (sa silhouette de profil, tassée), et
+    fait demi-tour (profil, face, profil) au lieu de se retourner d'un coup ;
+    ses pattes suivent sa vitesse réelle ; chaque numéro tire une variante au
+    lancement (salto simple ou double, ordre du pop-corn, roulades du petit…).
+  - Il réagit à la bande en direct : un build raté (il tape dessus), un quota
+    au rouge (il le retient), un sous-agent fini (il contrôle son travail),
+    une étape faite (il la félicite), au plus une fois toutes les 90 s.
+  - Ses minis jouent entre eux pendant que leurs sous-agents travaillent :
+    saute-mouton, pyramide, passe à deux ; ceux qui ne jouent pas regardent
+    depuis leurs cases au lieu de disparaître le temps d'un numéro.
+  - Quand il s'ennuie : le funambule sur une jauge, la sieste sur une pastille.
 - **0.9.0** — 2026-10-31 — L'équipe : ses minis sortent sur la bande. Chacun
   court à la pastille de son sous-agent, dans la couleur de son modèle, la
   tapote, la soulève au-dessus de sa tête, sautille avec et rentre dans sa

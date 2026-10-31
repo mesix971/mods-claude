@@ -147,7 +147,22 @@ export type SceneBande = { lignes: string[]; elements: ElementBande[] }
  * a vu sur la bande en commençant (le dessin n'en dépend plus ensuite), et
  * quand il commence et finit (ms).
  */
-export type ClawdNumero = { id: number; nom: string; cibles?: ElementBande[]; elements: ElementBande[]; debut: number; fin: number; largeur?: number; depart?: number }
+export type ClawdNumero = {
+  id: number
+  nom: string
+  cibles?: ElementBande[]
+  elements: ElementBande[]
+  debut: number
+  fin: number
+  largeur?: number
+  depart?: number
+  /** Sa variante, tirée au sort au lancement (entre 0 et 1) : ses pas en tirent leurs variations */
+  variante?: number
+  /** Ce qu'il vient voir : l'id d'un élément qui vient de changer (une réaction) */
+  vise?: string
+  /** Ses minis dans le coin quand il a commencé (la couleur de chacun, null : la sienne) : ceux qui ne jouent pas regardent */
+  figurants?: (string | null)[]
+}
 
 declare module 'claude-code' {
   interface PluginState {

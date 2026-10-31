@@ -264,13 +264,19 @@ Quand atelier dessine sa bande, Clawd y joue de temps en temps un numéro :
   sous lui (celui-là revient deux fois plus souvent) ;
 - il grandit, fait trembler les pastilles et en chiquenaude une très haut ;
 - il envoie ses minis : chacun court à la pastille de son sous-agent, la
-  soulève au-dessus de sa tête et sautille avec, avant de rentrer ;
+  soulève au-dessus de sa tête et sautille avec, avant de rentrer ; ils jouent
+  aussi à saute-mouton, font la pyramide ou se font des passes ;
+- il marche en funambule sur une jauge, ou fait la sieste sur une pastille ;
+- il réagit à ce qui se passe : il tape sur un build raté, retient un quota
+  qui passe au rouge, contrôle le travail d'un sous-agent fini et félicite
+  chaque étape faite ;
 - il fait le tour de la bande ;
 - il échange deux pastilles, qui reprennent leur place toutes seules ;
 - il inspecte les quotas en contremaître ;
 - il vient te montrer 🆕 ou Installer quand ça sert.
 
-Il rend toujours tout. `/clawd montre <numéro>` en lance un.
+Il rend toujours tout, et chaque numéro a ses variantes : jamais tout à fait
+le même deux fois. `/clawd montre <numéro>` en lance un.
 
 <p align="center"><img src="promo/vitrine/numero-chipe.gif" width="880" alt="Clawd chipe l'orbe qui tourne sur la bande d'atelier, la casse et la recolle"><br><sub>Il chipe l'orbe</sub></p>
 <p align="center"><img src="promo/vitrine/numero-popcorn.gif" width="880" alt="Les pastilles sautent comme du pop-corn"><br><sub>Le pop-corn</sub></p>

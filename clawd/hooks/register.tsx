@@ -15,7 +15,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, ToolCallResult } from 'claude-code'
 
 import type { ClawdAnim, ClawdCopain, ElementBande } from '../types'
-import { CELLULE, COIN_VIDE, HAUTEUR as HAUTEUR_BANDE, LARGEUR_BANDE, MARGE, MAX_SVG, NUMEROS, RETENUE, departDe, diagnostic, estNumero, numerosJouables, prepareNumero, svgNumero } from './bande'
+import { CELLULE, COIN_VIDE, HAUTEUR as HAUTEUR_BANDE, LARGEUR_BANDE, MARGE, MAX_SVG, NUMEROS, RETENUE, departDe, diagnostic, estNumero, numerosAvecMinis, numerosJouables, prepareNumero, svgNumero } from './bande'
 import { HUMEUR_DEPART, choisit, decrit as decritHumeur, ecartRepos, estHumeur, estNuit, vecu, vit } from './humeur'
 import type { Humeur } from './humeur'
 import { ACTIVITES, BAILLE_S, BONBON_S, CLAWD_TEXTE, DANSES, EMOJI, EN_BULLE, JEUX_CARTONS, RAPPORT_S, SORTIES, TAILLE, avecT0, bulleDedans, dureeBoulot, dureeRetour, dureeScene, estChoregraphie, etatBoulot, etatScene, minisAPart, svgBulle, svgDecor, svgMinis, svgScene, teinte, teinteConnue, tenueDe } from './sprite'
@@ -882,7 +882,7 @@ async function elementsBande($: EngineInterface) {
  * il prend l'original au moment voulu (atelier ne le dessine plus) et le rend
  * toujours. Vrai s'il le joue.
  */
-export async function joueNumero($: EngineInterface, nom: string): Promise<boolean> {
+export async function joueNumero($: EngineInterface, nom: string, vise?: string): Promise<boolean> {
   refus = null
   try {
     // la grande scène ne se voit que sur desktop ; jamais deux numéros à la fois
@@ -893,10 +893,14 @@ export async function joueNumero($: EngineInterface, nom: string): Promise<boole
     if ((enScene && avant < enScene.fin && !sansFin(enScene.ms)) || ((await read($, activite)) !== null && avant < finActivite)) return non('occupe')
     const elements = await elementsBande($)
     const largeur = largeurBande()
+    // sa variante, tirée une fois (ses pas en dépendent, le dessin aussi), et ses minis du coin, qui le regardent
+    const variante = Math.random()
+    const figurants = (await read($, copains)).slice(0, 3).map(c => teinteConnue(c.modele)?.O ?? null)
+    const partie = { variante, ...(vise ? { vise } : {}), ...(figurants.length ? { figurants } : {}) }
     // il est en route d'une scène à l'autre : le numéro attendra qu'il soit arrivé
     if (enRetour(avant)) return non('occupe')
     // (de quoi le jouer d'ici, d'abord)
-    if (!prepareNumero(nom, elements, largeur, departDe((lieuActuel(avant) ?? { x: 0 }).x))) return non('rien')
+    if (!prepareNumero(nom, elements, largeur, departDe((lieuActuel(avant) ?? { x: 0 }).x), partie)) return non('rien')
     // son dessin, une fois pour toutes : atelier le pose par-dessus la bande, et le recale à chaque dessin sur son début
     const couleur = teinte((await read($, modele)) ?? (await $.session.model().catch(() => null)))
     const porte = await tenueSession($)
@@ -908,12 +912,12 @@ export async function joueNumero($: EngineInterface, nom: string): Promise<boole
     if (enRetour(maintenant) || (enScene && maintenant < enScene.fin && !sansFin(enScene.ms))) return non('occupe')
     const ici = lieuActuel(maintenant) ?? { x: 0, decor: '' }
     const depart = departDe(ici.x)
-    const prep = prepareNumero(nom, elements, largeur, depart)
+    const prep = prepareNumero(nom, elements, largeur, depart, partie)
     if (!prep) return non('rien')
     const id = Math.random()
     // son dessin reste un peu après la fin, au repos : l'animation, partie en retard, finit sans être coupée
     const fin = maintenant + (prep.duree + RETENUE) * 1000
-    const n = { id, nom, elements, debut: maintenant, fin, cibles: prep.cibles, ...(largeur ? { largeur } : {}), ...(depart ? { depart } : {}) }
+    const n = { id, nom, elements, debut: maintenant, fin, cibles: prep.cibles, ...(largeur ? { largeur } : {}), ...(depart ? { depart } : {}), ...partie }
     // sa tenue le suit sur la bande : son déguisement du jour (lunettes, cernes, chapeau), sa visière, sa sueur, son insigne
     const svg = svgNumero({ ...n, colonnes }, couleur, tenueDe({ ...porte, deguise: deguisementDu(maintenant) }))
     // trop lourd pour le moteur (les dessins d'atelier qu'il promène) : il ne le joue pas, et n'y repense pas avant le prochain
@@ -1132,8 +1136,81 @@ async function surprise($: EngineInterface, maintenant: number) {
   // rien à animer (atelier masqué ou absent, ou seulement son bouton 🆕 au repos) : il ne se lance pas dans un numéro pour rien
   const els = await elementsBande($)
   const choix = els.some(e => !auRepos(e)) ? numerosJouables(moment, els, largeurBande()) : []
-  // certains reviennent plus souvent (`poids`) : le petit, qui joue avec les pastilles
-  return choix.length > 0 && joueNumero($, pioche(choix.flatMap(nom => Array.from({ length: NUMEROS[nom]?.poids ?? 1 }, () => nom))))
+  return choix.length > 0 && joueNumero($, pondere(choix))
+}
+
+/** Un numéro tiré au sort, certains plus souvent que d'autres (`poids`) : le petit, qui joue avec les pastilles */
+const pondere = (choix: readonly string[]) => pioche(choix.flatMap(nom => Array.from({ length: NUMEROS[nom]?.poids ?? 1 }, () => nom)))
+
+/** Le dernier jeu de ses minis sur la bande (ms) : au plus un toutes les 3 min, pendant que leurs sous-agents travaillent */
+let dernierJeuMinis = 0
+const ECART_MINIS = 3 * 60_000
+
+/**
+ * Pendant que ses sous-agents travaillent, de temps en temps, ses minis
+ * sortent jouer sur la bande (l'équipe, saute-mouton, la pyramide, la passe).
+ * Vrai s'ils en jouent un.
+ */
+async function jeuDeMinis($: EngineInterface, maintenant: number) {
+  if (maintenant - dernierJeuMinis < ECART_MINIS || maintenant < finActivite || Math.random() > 0.15) return false
+  const choix = numerosAvecMinis(await elementsBande($), largeurBande())
+  if (!choix.length) return false
+  const joue = await joueNumero($, pondere(choix))
+  // (trop lourd à dessiner : il n'y repense pas avant le prochain écart, au lieu de le refaire à chaque coup d'œil)
+  if (joue || dernierRefus() === 'lourd') dernierJeuMinis = maintenant
+  return joue
+}
+
+/** Ce qu'il a vu de la bande au dernier coup d'œil : l'état de chaque élément (null : pas encore regardé) */
+let dejaVu: Map<string, string> | null = null
+/** Sa réaction en attente (il la joue dès qu'il est libre, avant qu'elle ne soit plus de saison) */
+let reaction: { nom: string; vise: string; jusqua: number } | null = null
+/** Sa dernière réaction (ms) : au plus une toutes les 90 s, il ne court pas après chaque coche */
+let derniereReaction = 0
+const ECART_REACTION = 90_000
+/** Combien de temps une réaction attend qu'il soit libre (ms) : le rapport d'un mini passe d'abord */
+const ATTENTE_REACTION = 40_000
+
+/**
+ * Son coup d'œil sur la bande, à chaque tic (même en pleine activité) : ce
+ * qui vient de changer, et ce qu'il y fera : un build raté (il va taper
+ * dessus), un quota au rouge (il le retient), un sous-agent fini (il contrôle
+ * son travail), une étape faite (il la félicite), dans cet ordre de priorité.
+ */
+async function remarque($: EngineInterface, maintenant: number) {
+  const els = await elementsBande($)
+  const avant = dejaVu
+  dejaVu = new Map(els.map(e => [e.id, e.etat]))
+  if (avant && !reaction && maintenant - derniereReaction >= ECART_REACTION) {
+    const devient = (e: ElementBande, etat: string) => e.etat === etat && avant.get(e.id) !== undefined && avant.get(e.id) !== etat
+    const vue = (
+      [
+        ['repare', els.find(e => e.genre === 'build' && devient(e, 'echec'))],
+        ['retient', els.find(e => e.genre === 'jauge' && devient(e, 'critique'))],
+        ['controle', els.find(e => e.genre === 'agent' && devient(e, 'faite'))],
+        ['bravo', els.find(e => e.genre === 'tache' && devient(e, 'faite'))],
+      ] as const
+    ).find(([, el]) => el)
+    if (vue) reaction = { nom: vue[0], vise: vue[1]!.id, jusqua: maintenant + ATTENTE_REACTION }
+  }
+}
+
+/** Sa réaction en attente, jouée dès qu'il est libre (avant qu'elle ne soit plus de saison). Vrai s'il la joue. */
+async function reagit($: EngineInterface, maintenant: number) {
+  await remarque($, maintenant)
+  if (!reaction) return false
+  if (maintenant > reaction.jusqua) {
+    reaction = null
+    return false
+  }
+  if (!(await joueNumero($, reaction.nom, reaction.vise))) {
+    // ce qu'il venait voir n'est plus là (ou plus comme ça) : il oublie ; occupé : il réessaiera
+    if (dernierRefus() !== 'occupe') reaction = null
+    return false
+  }
+  reaction = null
+  derniereReaction = maintenant
+  return true
 }
 
 /**
@@ -1400,6 +1477,11 @@ export const register: Register = on => {
     jeuCartonsAvant = null
     derniereSortie = null
     coinVu = null
+    // (de même ses réactions et les jeux de ses minis : la bande d'une autre session ne déclenche rien ici)
+    dejaVu = null
+    reaction = null
+    derniereReaction = 0
+    dernierJeuMinis = 0
     lieuNumero = null
     retourChez = null
     placeDuPassage = null
@@ -1519,7 +1601,10 @@ export const register: Register = on => {
           if (maintenant >= numeroLanceA && maintenant - numeroLanceA < 10_000) return
           numeroLance = false
         } else if (maintenant < finActivite && tic % 8 !== 0) {
-          // une activité se joue, aucun numéro : rien à vérifier (le nettoyage de secours ne passe qu'une fois sur huit)
+          // une activité se joue, aucun numéro : rien à vérifier (le nettoyage de secours ne passe qu'une fois sur huit) ;
+          // il garde quand même un œil sur la bande, pour y réagir après ; en balade (pas une activité), il y va tout de suite
+          if ((await read($, activite)) === null && !(await read($, passage)) && !(await read($, dort))) await reagit($, maintenant)
+          else await remarque($, maintenant)
           return
         }
         // plus de numéro, mais un emprunt ou un dessin resté là : il rend tout (une fois sur huit si rien ne l'a lancé)
@@ -1528,7 +1613,19 @@ export const register: Register = on => {
           if ((await read($, emprunts)).length) await update($, emprunts, l => (numeroLance ? l : []))
           if (await read($, grandeScene)) await update($, grandeScene, g => (numeroLance ? g : null))
         }
-        if ((await read($, dort)) || (await read($, passage)) || (await read($, copains)).length) return
+        if (await read($, dort)) return
+        // une scène passagère (il attend ta permission, une question…) : il note ce qui change, et y réagira après
+        if (await read($, passage)) {
+          await remarque($, maintenant)
+          return
+        }
+        // ce qui vient de changer sur la bande d'abord : il y réagit
+        if (await reagit($, maintenant)) return
+        // ses minis là : ce sont eux qui sortent jouer, de temps en temps
+        if ((await read($, copains)).length) {
+          await jeuDeMinis($, maintenant)
+          return
+        }
         if (await surprise($, maintenant)) return
         if (maintenant < finActivite) return
         // au travail, ses cartons : l'activité finie, il n'en commence pas d'autre… mais de temps en temps, il fait

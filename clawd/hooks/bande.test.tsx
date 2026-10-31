@@ -6,7 +6,7 @@
 import { expect, mock, test } from 'claude-code/testing'
 
 import type { ElementBande } from '../types'
-import { COIN_VIDE, HAUTEUR, MARGE, MAX_DUREE, NUMEROS, RETENUE, numerosJouables, prepareNumero, svgNumero } from './bande'
+import { COIN_VIDE, HAUTEUR, MARGE, MAX_DUREE, MAX_SVG, NUMEROS, RETENUE, numerosAvecMinis, numerosJouables, prepareNumero, svgNumero } from './bande'
 import type { Numero } from './bande'
 import { TEINTES } from './sprite'
 
@@ -81,19 +81,21 @@ const dessinDe = async (ui: { find: (q: { key: string }) => Promise<unknown> }, 
 test('grande scène : il vise l’orbe qui tourne, la tient le temps voulu, et se dessine sans un mot', () => {
   const prep = prepareNumero('chipe', ELEMENTS)!
   expect(prep.cibles.map(c => c.id)).toEqual(['tache-plan-2'])
-  // sur 760 px : 607 px de course (4,05 s), 60 px en catimini (1,2 s), 667 px de retour (4,45 s)
-  expect(prep.duree).toBe(19.1)
-  // il la prend à 7,65 s (après l'approche en catimini) et la rend à 12,85 s (après l'avoir recollée)
-  expect(prep.emprunts).toEqual([{ id: 'tache-plan-2', de: 7.65, a: 12.85 }])
+  // sur 760 px : 607 px de course (4,05 s), 60 px en catimini (1,2 s), 667 px de retour (4,45 s), et à chaque trajet
+  // son élan et son freinage (0,09 s chacun)
+  expect(prep.duree).toBe(19.46)
+  // il la prend à 7,83 s (après l'approche en catimini) et la rend à 13,03 s (après l'avoir recollée)
+  expect(prep.emprunts).toEqual([{ id: 'tache-plan-2', de: 7.83, a: 13.03 }])
   // sur une bande plus large, il court plus longtemps : sa vitesse ne change pas
-  expect(Math.round(prepareNumero('chipe', ELEMENTS, 1520)!.duree * 100)).toBe(Math.round((19.1 + (2 * 760) / 150) * 100))
+  expect(Math.round(prepareNumero('chipe', ELEMENTS, 1520)!.duree * 100)).toBe(Math.round((19.46 + (2 * 760) / 150) * 100))
   // rien à chiper sur la bande : il ne le joue pas
   expect(prepareNumero('chipe', [])).toBeNull()
   expect(numerosJouables('repos', [])).toEqual(['tournee'])
   // pendant que Claude travaille, des intermèdes aussi (et l'inspection, rien qu'au travail)
   expect(numerosJouables('travail', [])).toEqual(['tournee'])
   expect(numerosJouables('travail', ELEMENTS)).toEqual(['chipe', 'tournee', 'bousculade', 'popcorn', 'echange', 'lilliput', 'geant', 'inspection'])
-  expect(numerosJouables('repos', ELEMENTS)).toEqual(['chipe', 'tournee', 'bousculade', 'popcorn', 'echange', 'lilliput', 'geant'])
+  // (au repos, la sieste en plus ; le funambule, lui, n'a pas de jauge assez loin du bord gauche)
+  expect(numerosJouables('repos', ELEMENTS)).toEqual(['chipe', 'tournee', 'bousculade', 'popcorn', 'echange', 'lilliput', 'geant', 'sieste'])
 
   const n = { nom: 'chipe', cibles: prep.cibles, elements: ELEMENTS }
   const svg = svgNumero(n, TEINTES.opus)
@@ -202,6 +204,129 @@ test('le moteur : deux acteurs ne touchent jamais la même pastille, et un mini 
   expect(essai({ ...base, pas: () => [{ duree: 1, images: ['<g/>'] }], copains: () => [{ place: 0, pas: [{ duree: 1, images: ['<g/>'], objet: 'tenu' }] }] })).toBeNull()
 })
 
+test('la fluidité : élan, freinage et demi-tour s’insèrent d’eux-mêmes entre ses trajets ; ses pattes suivent sa vitesse', () => {
+  const essai = (n: Numero, opts?: Parameters<typeof prepareNumero>[4]) => {
+    NUMEROS.essai = n
+    try {
+      return prepareNumero('essai', [], LARGEUR, 0, opts)
+    } finally {
+      delete NUMEROS.essai
+    }
+  }
+  const g = ['<g/>']
+  // aller à gauche puis revenir aussitôt : élan (1 image), demi-tour (3), freinage (1), à 0,09 s l'image
+  const allerRetour = essai({ quand: 'demande', pas: () => [{ duree: 1, images: g, de: { coin: 0 } }, { duree: 2, images: g, a: { x: 100 } }, { duree: 2, images: g, a: { coin: 0 } }, { duree: 1, images: g }] })!
+  expect(allerRetour.duree).toBe(6.45)
+  // un bond n'est pas un trajet à pied : rien d'inséré
+  expect(essai({ quand: 'demande', pas: () => [{ duree: 1, images: g, de: { coin: 0 } }, { duree: 2, images: g, a: { x: 100 }, saut: 10 }, { duree: 2, images: g, a: { coin: 0 }, saut: 10 }] })!.duree).toBe(5)
+  // deux trajets dans le même sens se suivent sans freinage entre eux
+  // (et il revient d'un bond)
+  expect(essai({ quand: 'demande', pas: () => [{ duree: 1, images: g, de: { coin: 0 } }, { duree: 1, images: g, a: { x: 300 } }, { duree: 1, images: g, a: { x: 100 } }, { duree: 1, images: g, a: { coin: 0 }, saut: 10 }] })!.duree).toBe(4.18)
+  // un mini qui trottine lentement sous sa pastille : ses pattes ralentissent (sa propre cadence), pas celles d'office
+  const agents: ElementBande[] = [...ELEMENTS, { id: 'agent-a1', genre: 'agent', etat: 'encours', x: 70, largeur: 17, ligne: 0, teinte: '#9CB86A' }]
+  const svg = svgNumero({ nom: 'equipe', elements: agents, cibles: prepareNumero('equipe', agents, LARGEUR)!.cibles }, TEINTES.opus)
+  expect(/class="vite cad-\d+"/.test(svg)).toBe(true)
+  expect(/\.cad-\d+ \.pA,\.cad-\d+ \.pB\{animation-duration:[\d.]+s\}/.test(svg)).toBe(true)
+})
+
+test('les variantes : tirées au sort au lancement, le même dessin pour la même variante, des pas différents d’une partie à l’autre', () => {
+  const simple = prepareNumero('tournee', [], LARGEUR, 0, { variante: 0 })!
+  const double = prepareNumero('tournee', [], LARGEUR, 0, { variante: 0.5 })!
+  const joie = prepareNumero('tournee', [], LARGEUR, 0, { variante: 0.9 })!
+  expect(new Set([simple.duree, double.duree, joie.duree]).size).toBe(3)
+  const a = svgNumero({ nom: 'tournee', elements: [], variante: 0.5 }, TEINTES.opus)
+  expect(svgNumero({ nom: 'tournee', elements: [], variante: 0.5 }, TEINTES.opus)).toBe(a)
+  expect(a).toContain('rotate(720deg)')
+  expect(svgNumero({ nom: 'tournee', elements: [], variante: 0 }, TEINTES.opus)).not.toContain('rotate(720deg)')
+  // chaque numéro à variantes se joue quelle que soit la variante
+  for (const nom of ['chipe', 'tournee', 'popcorn', 'lilliput', 'geant'])
+    for (const variante of [0, 0.15, 0.35, 0.55, 0.75, 0.95]) expect(prepareNumero(nom, ELEMENTS, LARGEUR, 0, { variante })).not.toBeNull()
+})
+
+test('ses réactions : il vise ce qui vient de changer (une étape faite, un build raté, un quota rouge, un sous-agent fini), et rien d’autre', () => {
+  const bande: ElementBande[] = [
+    { id: 'jauge-5h', genre: 'jauge', etat: 'critique', x: 0, largeur: 108, ligne: 1 },
+    { id: 'build', genre: 'build', etat: 'echec', x: 0, largeur: 17, ligne: 0 },
+    { id: 'tache-plan-1', genre: 'tache', etat: 'faite', x: 27, largeur: 17, ligne: 0 },
+    { id: 'tache-plan-2', genre: 'tache', etat: 'faite', x: 44, largeur: 17, ligne: 0 },
+    { id: 'agent-a1', genre: 'agent', etat: 'faite', x: 70, largeur: 17, ligne: 0, teinte: '#E2604A' },
+  ]
+  expect(prepareNumero('bravo', bande, LARGEUR, 0, { vise: 'tache-plan-2' })!.cibles.map(c => c.id)).toEqual(['tache-plan-2'])
+  // à la demande, sans rien de visé : la première qui convient
+  expect(prepareNumero('bravo', bande, LARGEUR)!.cibles.map(c => c.id)).toEqual(['tache-plan-1'])
+  // ce qu'il venait voir n'est plus comme ça : il n'y va pas
+  expect(prepareNumero('bravo', bande, LARGEUR, 0, { vise: 'build' })).toBeNull()
+  expect(prepareNumero('repare', bande, LARGEUR, 0, { vise: 'build' })!.cibles.map(c => c.id)).toEqual(['build'])
+  expect(prepareNumero('retient', bande, LARGEUR, 0, { vise: 'jauge-5h' })!.cibles.map(c => c.id)).toEqual(['jauge-5h'])
+  const ctl = prepareNumero('controle', bande, LARGEUR, 0, { vise: 'agent-a1' })!
+  expect(ctl.emprunts.map(e => e.id)).toEqual(['agent-a1'])
+  // jamais de lui-même au hasard : ce sont des réactions
+  for (const nom of ['bravo', 'repare', 'retient', 'controle']) expect(NUMEROS[nom]!.quand).toBe('demande')
+})
+
+test('ses minis : les autres le regardent depuis leurs cases ; saute-mouton, pyramide et passe se jouent à plusieurs', () => {
+  // un numéro sans minis, joué pendant que deux sous-agents travaillent : leurs minis restent là, dans leurs couleurs
+  const t = svgNumero({ nom: 'tournee', elements: [], figurants: [TEINTES.haiku.O, null] }, TEINTES.opus)
+  expect(t).toContain('class="pos-tournee-m0"')
+  expect(t).toContain('class="pos-tournee-m1"')
+  expect(t).toContain(TEINTES.haiku.O)
+  const agents = (n: number): ElementBande[] =>
+    Array.from({ length: n }, (_, i) => ({ id: `agent-a${i}`, genre: 'agent', etat: 'encours', x: 30 + 17 * i, largeur: 17, ligne: 0, teinte: [TEINTES.haiku.O, TEINTES.sonnet.O, TEINTES.fable.O][i] }))
+  expect(prepareNumero('mouton', agents(1), LARGEUR)).toBeNull()
+  expect(prepareNumero('mouton', agents(2), LARGEUR)).not.toBeNull()
+  expect(prepareNumero('passe', agents(2), LARGEUR)!.emprunts.map(e => e.id)).toEqual(['agent-a0'])
+  expect(prepareNumero('pyramide', agents(2), LARGEUR)).toBeNull()
+  expect(prepareNumero('pyramide', agents(3), LARGEUR)).not.toBeNull()
+  // la passe à deux pendant qu'un troisième regarde depuis sa case
+  const p = svgNumero({ nom: 'passe', elements: agents(3), cibles: prepareNumero('passe', agents(3), LARGEUR)!.cibles, figurants: [null, null, null] }, TEINTES.opus)
+  expect(p).toContain('class="pos-passe-m2"')
+  // un sous-agent fini n'a plus de mini : pas de jeu pour lui
+  expect(prepareNumero('equipe', agents(1).map(a => ({ ...a, etat: 'faite' })), LARGEUR)).toBeNull()
+  // ils ne sont tirés qu'à part, quand ses minis sont là
+  expect(numerosJouables('travail', agents(3))).not.toContain('mouton')
+  expect(numerosAvecMinis(agents(3), LARGEUR)).toEqual(['equipe', 'mouton', 'pyramide', 'passe'])
+})
+
+test('le poids : avec trois minis, leurs figurants et des dessins d’atelier réalistes, chaque numéro reste sous la limite du moteur', () => {
+  // ~4 Ko par dessin d'atelier, comme une jauge avec son style
+  const dessin = (w: number) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} 18">${'<rect x="1" y="1" width="1" height="1"/>'.repeat(100)}</svg>`
+  const bande: ElementBande[] = [
+    { id: 'jauge-5h', genre: 'jauge', etat: 'critique', x: 0, largeur: 157, ligne: 1 },
+    { id: 'jauge-7j', genre: 'jauge', etat: 'ok', x: 171, largeur: 108, ligne: 1 },
+    { id: 'build', genre: 'build', etat: 'echec', x: 0, largeur: 17, ligne: 0 },
+    { id: 'tache-plan-1', genre: 'tache', etat: 'faite', x: 27, largeur: 17, ligne: 0 },
+    ...[0, 1, 2].map((i): ElementBande => ({ id: `agent-a${i}`, genre: 'agent', etat: 'encours', x: 54 + 17 * i, largeur: 17, ligne: 0, teinte: [TEINTES.haiku.O, TEINTES.sonnet.O, TEINTES.fable.O][i] })),
+  ].map(e => ({ ...e, dessin: dessin(e.largeur) }))
+  const figurants = [TEINTES.haiku.O, TEINTES.sonnet.O, TEINTES.fable.O]
+  for (const nom of Object.keys(NUMEROS).filter(n => n !== 'cadre')) {
+    for (const variante of [0, 0.55, 0.95]) {
+      const prep = prepareNumero(nom, bande, LARGEUR, 0, { variante, figurants })
+      if (!prep) continue
+      const svg = svgNumero({ nom, elements: bande, cibles: prep.cibles, largeur: LARGEUR, variante, figurants }, TEINTES.opus)
+      expect(svg.length).toBeLessThan(MAX_SVG)
+    }
+  }
+})
+
+test('il réagit en direct : une étape qui passe à « faite » sur la bande, il court la féliciter', async ($, on) => {
+  const bande = { elements: ELEMENTS.map(e => ({ ...e })) }
+  const { horloge, dernier } = moteur(on, bande)
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  await $.session.start(SESSION)
+  // un premier coup d'œil : il note ce qu'il voit
+  await horloge.advance(4000)
+  bande.elements = bande.elements.map(e => (e.id === 'tache-plan-2' ? { ...e, etat: 'faite' } : e))
+  // il le remarque au coup d'œil suivant, même en pleine activité, et y va dès qu'il est libre (au plus 40 s plus tard)
+  let n: { nom: string; vise?: string } | undefined
+  for (let i = 0; i < 10 && !n; i++) {
+    await horloge.advance(4000)
+    n = dernier('numero') as typeof n
+  }
+  expect(n?.nom).toBe('bravo')
+  expect(n?.vise).toBe('tache-plan-2')
+  await ui.unmount()
+})
+
 test('/clawd montre bande : il prend l’orbe (atelier ne la dessine plus), la rend, et publie son dessin pour qu’atelier le pose', async ($, on) => {
   const { horloge, dernier, tenus } = moteur(on)
   // la bande se dessine sur desktop : la grande scène peut s'y voir
@@ -216,7 +341,10 @@ test('/clawd montre bande : il prend l’orbe (atelier ne la dessine plus), la r
   expect(gs.hauteur).toBe(HAUTEUR)
   // son début, pour qu'atelier recale son dessin à chaque fois qu'il le pose
   expect(gs.debut).toBe(MAINTENANT)
-  const prep = prepareNumero('chipe', ELEMENTS, LARGEUR)!
+  // (sa variante, tirée au lancement, est gardée avec le numéro : ses pas en dépendent)
+  const { variante } = dernier('numero') as { variante: number }
+  expect(variante).toBeGreaterThanOrEqual(0)
+  const prep = prepareNumero('chipe', ELEMENTS, LARGEUR, 0, { variante })!
   const [e] = prep.emprunts
   // son dessin reste un peu après la fin du numéro, au repos : l'animation, partie en retard, finit sans être coupée
   const fin = MAINTENANT + (prep.duree + RETENUE) * 1000

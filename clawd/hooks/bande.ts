@@ -153,7 +153,20 @@ export type Pas = {
   repere?: boolean
   /** des effets autour de lui, dans sa toile (comme ceux de ses scènes : notes, étincelles…) */
   fx?: string
+  /** (posé par le moteur) la durée d'un cycle de ses pattes pendant ce trajet (s), à sa vitesse réelle : ses pieds ne glissent pas */
+  cadence?: number
 }
+
+/**
+ * Ce qu'un numéro sait de la partie qui se joue : la largeur de la bande
+ * (px), une variante tirée au sort (entre 0 et 1, la même pour tout le
+ * dessin : ses pas en tirent leurs variations), ce qu'il vient voir (l'id
+ * d'un élément, pour une réaction à ce qui vient de changer), et ses minis
+ * dans le coin (la couleur de chacun, null : la sienne) : ceux que le numéro
+ * ne fait pas jouer le regardent depuis leurs cases (sans eux, ils
+ * disparaîtraient le temps du numéro).
+ */
+export type Partie = { largeur: number; variante: number; vise?: string; figurants?: readonly (string | null)[] }
 
 export type Numero = {
   /** Quand il peut le jouer de lui-même : au repos, pendant que Claude travaille, partout, ou seulement sur demande */
@@ -163,10 +176,12 @@ export type Numero = {
   /** Ce qu'il lui faut sur la bande, dit à l'utilisateur quand il ne peut pas le jouer (« une pastille… ») */
   besoin?: string
   /** Ce qu'il vise sur la bande, dans l'ordre de ses pas ; rien de convenable (undefined ou liste vide) : il ne le joue pas */
-  cibles?: (elements: readonly ElementBande[]) => readonly ElementBande[] | undefined
-  pas: (cibles: readonly ElementBande[]) => Pas[]
+  cibles?: (elements: readonly ElementBande[], partie: Partie) => readonly ElementBande[] | undefined
+  pas: (cibles: readonly ElementBande[], partie: Partie) => Pas[]
   /** Ses minis qui jouent avec lui, chacun ses pas (en même temps que les siens) */
-  copains?: (cibles: readonly ElementBande[]) => Copain[]
+  copains?: (cibles: readonly ElementBande[], partie: Partie) => Copain[]
+  /** Il se joue avec ses minis : seulement quand ils sont là (des sous-agents au travail), et tiré à part (register.tsx) */
+  avecMinis?: boolean
 }
 
 /**
@@ -350,6 +365,13 @@ function avecDeguisement<T>(d: Deguisement | Tenue | undefined, dessine: () => T
     }
   })
 }
+/**
+ * Un choix parmi `k`, tiré de la variante de la partie : `rang` en donne un
+ * autre, indépendant (un autre chiffre de la même variante). La variante 0
+ * (celle des tests, de /clawd voit) donne toujours le premier.
+ */
+export const choix = (v: number, k: number, rang = 0) => Math.min(k - 1, Math.floor(((v * 10 ** rang) % 1) * k))
+
 /** Ce qui est sur la ligne du bas (les pastilles), de gauche à droite */
 const duBas = (els: readonly ElementBande[]) => els.filter(e => e.ligne === 0 && (e.genre === 'tache' || e.genre === 'agent' || e.genre === 'build')).sort((a, b) => a.x - b.x)
 /** Ce qui est sur la ligne des quotas (jauges et conso), de gauche à droite */
@@ -371,14 +393,18 @@ const chipe: Numero = {
     const c = bas.find(e => e.etat === 'encours') ?? bas[bas.length - 1]
     return c ? [c] : undefined
   },
-  pas: () => [
+  pas: (_, { variante }) => [
     { duree: 1.6, images: [f({ yeux: 'gauche' }), f({ yeux: 'gauche', d: 'tete' }), f({ yeux: 'clin' })], de: { coin: 0 } },
     // il court jusque près d'elle, puis s'approche en catimini
     { duree: 0.4, images: [court], de: { coin: 0 }, a: { cible: 60 }, vitesse: 'vite', mouvement: 'doux' },
     { duree: 0.4, images: [profil('lent')], a: { cible: 0 }, vitesse: 'lent' },
     { duree: 0.8, images: [f({ yeux: 'bas' }), f({ yeux: 'bas', g: 'tendu' })] },
     { duree: 1, images: [f({ g: 'devant', d: 'devant', yeux: 'heureux' })], objet: 'tenu' },
-    { duree: 1.4, images: [f({ g: 'haut', d: 'haut', yeux: 'grand', dx: -2 }), f({ g: 'haut', d: 'haut', yeux: 'grand', dx: 2 })], tours: 4, objet: 'haut' },
+    // il la secoue plus ou moins longtemps (selon la partie), parfois en sautillant
+    ...(choix(variante, 2, 1)
+      ? [{ duree: 1.6, images: [f({ g: 'haut', d: 'haut', yeux: 'grand', dx: -2 }), f({ g: 'haut', d: 'haut', yeux: 'grand', dx: 2 })], tours: 2, objet: 'haut' as const, saut: 6 }]
+      : []),
+    { duree: [1.4, 1, 2][choix(variante, 3)]!, images: [f({ g: 'haut', d: 'haut', yeux: 'grand', dx: -2 }), f({ g: 'haut', d: 'haut', yeux: 'grand', dx: 2 })], tours: [4, 3, 6][choix(variante, 3)]!, objet: 'haut' },
     { duree: 1.6, images: [f({ g: 'ciel', d: 'ciel', yeux: 'grand', bouche: 'o' })], objet: 'ouvert', fx: effets.sueur() },
     { duree: 1.2, images: [f({ g: 'devant', d: 'devant', yeux: 'croix' }), f({ g: 'devant', d: 'devant', yeux: 'mi' })], tours: 2, objet: 'tenu' },
     { duree: 1, images: [f({ yeux: 'clin' }), f({ yeux: 'heureux' })], fx: effets.notes() },
@@ -387,15 +413,29 @@ const chipe: Numero = {
   ],
 }
 
-/** Il fait le tour de la bande : jusqu'au bout à gauche, un coucou, un salto, et retour au coin. */
+/**
+ * Il fait le tour de la bande : jusqu'au bout à gauche, un coucou, un salto
+ * (selon la partie : un simple, un double, ou deux sauts de joie), et retour
+ * au coin.
+ */
 const tournee: Numero = {
   quand: 'partout',
-  pas: () => [
+  pas: (_, { variante }) => [
     { duree: 1.2, images: [f({ yeux: 'gauche' }), f({ yeux: 'heureux' })], de: { coin: 0 } },
     { duree: 0.4, images: [court], de: { coin: 0 }, a: { x: -30 }, vitesse: 'vite', mouvement: 'doux' },
     { duree: 1.6, images: [f({ g: 'haut', yeux: 'heureux' }), f({ g: 'ciel', yeux: 'heureux' })], tours: 3 },
     { duree: 0.25, images: [f({ jambes: 'replie', dy: 3 })] },
-    { duree: 0.9, images: [bond.part, bond.haut, bond.haut], saut: 30, rot: 360 },
+    ...([
+      [{ duree: 0.9, images: [bond.part, bond.haut, bond.haut], saut: 30, rot: 360 }],
+      // le double : plus haut, plus long
+      [{ duree: 1.2, images: [bond.part, bond.haut, bond.haut], saut: 40, rot: 720 }],
+      // deux sauts de joie, sans tourner
+      [
+        { duree: 0.6, images: [bond.part, bond.haut], saut: 16 },
+        { duree: 0.2, images: [bond.recoit] },
+        { duree: 0.6, images: [bond.part, bond.haut], saut: 22 },
+      ],
+    ][choix(variante, 3)]! satisfies Pas[]),
     { duree: 0.3, images: [bond.recoit] },
     { duree: 0.4, images: [miroir(court)], a: { coin: 0 }, vitesse: 'vite', mouvement: 'doux' },
     { duree: 0.8, images: [f()] },
@@ -522,12 +562,18 @@ const popcorn: Numero = {
     const bas = duBas(els).slice(-6)
     return bas.length >= 2 ? bas : undefined
   },
-  pas: c => {
+  pas: (c, { variante }) => {
     const dernier = c.length - 1
-    const sauts = c.map((_, n): Pas => ({
+    // selon la partie : de gauche à droite (la dernière, la plus proche, saute le plus haut), de droite à gauche (elle
+    // ouvre le bal), ou en désordre ; les hauteurs changent aussi
+    const ordre = c.map((_, n) => n)
+    if (choix(variante, 3) === 1) ordre.reverse()
+    if (choix(variante, 3) === 2) ordre.sort((a, b) => ((a * 7 + 3) % c.length) - ((b * 7 + 3) % c.length))
+    const plus = choix(variante, 3, 1) * 3
+    const sauts = ordre.map((n): Pas => ({
       duree: n === dernier ? 0.9 : 0.55,
       images: [f({ jambes: 'tape', yeux: 'grand' }), f({ yeux: 'grand', bouche: 'o' })],
-      gestes: [{ n, saut: n === dernier ? 26 : 12 + (n % 3) * 3, rot: n % 2 ? -360 : 360, mouvement: 'freine' }],
+      gestes: [{ n, saut: n === dernier ? 26 : 12 + (n % 3) * 3 + plus, rot: n % 2 ? -360 : 360, mouvement: 'freine' }],
     }))
     return [
       { duree: 1.2, images: [f({ yeux: 'gauche' }), f({ yeux: 'clin' })], de: { coin: 0 } },
@@ -590,8 +636,12 @@ const lilliput: Numero = {
     const bas = duBas(els).slice(-3)
     return bas.length >= 2 ? bas : undefined
   },
-  pas: c => {
+  pas: (c, { variante }) => {
     const dernier = c.length - 1
+    // la balle roule d'abord vers la gauche ou vers la droite (selon la partie), parfois une fois de plus
+    const sens = choix(variante, 2) ? -1 : 1
+    const roule = (k: number): Pas => ({ duree: k ? 1.2 : 1.4, images: [k % 2 === (sens < 0 ? 1 : 0) ? pousse : miroir(pousse)], gestes: [{ n: 0, rot: (k % 2 ? 720 : -720) * sens }] })
+    const roulades = Array.from({ length: choix(variante, 2, 1) ? 3 : 2 }, (_, k) => roule(k))
     // où il se pose : sur la pastille, ses pieds sur son dessus (elle s'enfonce de 2 px sous lui)
     const posee = (n: number, avant?: number): Pas[] => [
       { duree: 0.5, images: [bond.part, bond.haut, bond.haut], a: { cible: 0, n, h: dessus(c[n]!) }, saut: 8 },
@@ -607,8 +657,7 @@ const lilliput: Numero = {
       ...posee(dernier),
       ...Array.from({ length: dernier }, (_, k) => posee(dernier - 1 - k, dernier - k)).flat(),
       // sur la dernière : il court sur place, elle roule sous lui, dans un sens puis dans l'autre
-      { duree: 1.4, images: [pousse], gestes: [{ n: 0, rot: -720 }] },
-      { duree: 1.2, images: [miroir(pousse)], gestes: [{ n: 0, rot: 720 }] },
+      ...roulades,
       { duree: 0.7, images: [f({ g: 'ciel', d: 'ciel', yeux: 'heureux' })], fx: effets.notes() },
       ...Array.from({ length: dernier }, (_, k) => posee(1 + k, k)).flat(),
       // il redescend de l'autre côté, loin d'elles, avant de reprendre sa taille
@@ -634,8 +683,10 @@ const geant: Numero = {
     const bas = duBas(els).slice(-5)
     return bas.length >= 2 ? bas : undefined
   },
-  pas: c => {
+  pas: (c, { variante }) => {
     const dernier = c.length - 1
+    // la chiquenaude : la plus proche de lui, ou (selon la partie) la plus loin, du bout du doigt
+    const vole = choix(variante, 2) ? 0 : dernier
     // toutes à la fois, chacune à sa façon : la terre tremble
     const secousse = (haut: number): Geste[] => c.map((_, n) => ({ n, saut: haut + (n % 3), rot: n % 2 ? -360 : 360, mouvement: 'freine' as const }))
     return [
@@ -645,9 +696,8 @@ const geant: Numero = {
       { duree: 0.4, images: [court], a: { cible: 2 * CORPS.demiLargeur + 6, n: dernier }, vitesse: 'vite', mouvement: 'doux' },
       { duree: 0.7, images: [f({ jambes: 'tape', yeux: 'grand' }), f({ yeux: 'grand', bouche: 'o' })], gestes: secousse(6) },
       { duree: 0.7, images: [f({ jambes: 'tape', yeux: 'grand' }), f({ yeux: 'grand', bouche: 'o' })], gestes: secousse(10) },
-      // la chiquenaude : la plus proche de lui s'envole
       { duree: 0.6, images: [f({ g: 'tendu', yeux: 'gauche' })] },
-      { duree: 1, images: [f({ g: 'tendu', yeux: 'heureux' })], gestes: [{ n: dernier, saut: 38, rot: 720, mouvement: 'freine' }] },
+      { duree: 1, images: [f({ g: 'tendu', yeux: 'heureux' })], gestes: [{ n: vole, saut: 38, rot: 720, mouvement: 'freine' }] },
       { duree: 1.2, images: [f({ yeux: 'heureux' }), f({ yeux: 'clin' })], fx: effets.notes() },
       { duree: 0.8, images: [f({ yeux: 'grand' }), f({ yeux: 'heureux' })], echelle: 1, fx: effets.etincelles() },
       { duree: 0.4, images: [miroir(court)], a: { coin: 0 }, vitesse: 'vite', mouvement: 'doux' },
@@ -669,10 +719,10 @@ const LEVE = 10
 const equipe: Numero = {
   quand: 'partout',
   poids: 2,
-  besoin: 'une pastille de sous-agent en bas de la bande (un sous-agent au travail)',
-  // (une par mini, les premières : son coin montre ses trois premiers minis)
+  avecMinis: true,
+  besoin: 'une pastille de sous-agent au travail en bas de la bande',
   cibles: els => {
-    const agents = duBas(els).filter(e => e.genre === 'agent').slice(0, MINIS_MAX)
+    const agents = agentsAuTravail(els)
     return agents.length ? agents : undefined
   },
   pas: () => [
@@ -681,7 +731,7 @@ const equipe: Numero = {
     { duree: 1.6, images: [f({ g: 'haut', d: 'haut', yeux: 'heureux' }), f({ yeux: 'heureux' })], tours: 4, fx: effets.notes() },
   ],
   // à leur taille, sans sa sueur ni son insigne ; la première pastille au mini le plus proche de lui
-  copains: c =>
+  copains: (c, { variante }) =>
     enPetit(() => {
       const court = profil('vite')
       const leve = f({ g: 'ciel', d: 'ciel', yeux: 'heureux' })
@@ -693,18 +743,379 @@ const equipe: Numero = {
           { duree: 0.6 + 0.4 * n, images: [f({ yeux: 'gauche' }), f({ yeux: 'heureux' })], de: { coin: 0 } },
           { duree: 0.4, images: [court], a: { cible: el.largeur / 2 + Math.round(CORPS.demiLargeur * DEMI) + 2, n }, vitesse: 320, mouvement: 'doux' },
           { duree: 0.6, images: [f({ g: 'tendu', yeux: 'gauche' }), f({ yeux: 'gauche' })], gestes: [{ n, secoue: 1.2 }] },
-          { duree: 0.3, images: [court], a: { cible: 0, n } },
-          { duree: 0.5, images: [leve], gestes: [{ n, dy: LEVE, mouvement: 'freine' }] },
-          // elle bondit avec lui
-          { duree: 0.5, images: [leve], saut: 5, gestes: [{ n, saut: 5 }] },
-          { duree: 0.5, images: [leve], saut: 5, gestes: [{ n, saut: 5 }] },
-          { duree: 0.4, images: [f({ g: 'haut', d: 'haut', yeux: 'heureux' })], gestes: [{ n, dy: 0, mouvement: 'elan' }] },
+          // chacun à sa façon (selon la partie) : il la soulève et sautille avec, ou il grimpe dessus et danse
+          ...(choix(variante, 2, n + 1)
+            ? [
+                { duree: 0.5, images: [f({ jambes: 'replie', g: 'haut', d: 'haut' }), f({ g: 'ciel', d: 'ciel', yeux: 'heureux' })], a: { cible: 0, n, h: dessus(el) }, saut: 6 },
+                { duree: 0.2, images: [f({ jambes: 'replie', dy: 3 })], gestes: [{ n, dy: -2 }] },
+                { duree: 1.2, images: [f({ g: 'ciel', yeux: 'heureux' }), f({ d: 'ciel', yeux: 'heureux' })], tours: 3, rot: 360, fx: effets.notes() },
+                { duree: 0.5, images: [f({ jambes: 'replie', g: 'haut', d: 'haut' }), f({ yeux: 'heureux' })], a: { cible: el.largeur / 2 + Math.round(CORPS.demiLargeur * DEMI) + 2, n, h: 0 }, saut: 6, gestes: [{ n, dy: 0 }] },
+              ]
+            : [
+                { duree: 0.3, images: [court], a: { cible: 0, n } },
+                { duree: 0.5, images: [leve], gestes: [{ n, dy: LEVE, mouvement: 'freine' as const }] },
+                // elle bondit avec lui
+                { duree: 0.5, images: [leve], saut: 5, gestes: [{ n, saut: 5 }] },
+                { duree: 0.5, images: [leve], saut: 5, gestes: [{ n, saut: 5 }] },
+                { duree: 0.4, images: [f({ g: 'haut', d: 'haut', yeux: 'heureux' })], gestes: [{ n, dy: 0, mouvement: 'elan' as const }] },
+              ]),
           { duree: 0.4, images: [miroir(court)], a: { coin: 0 }, vitesse: 320, mouvement: 'doux' },
           { duree: 0.4, images: [f({ yeux: 'heureux' })] },
         ],
       }))
     }),
 }
+
+// ------------------------------------------------- ses minis entre eux
+
+/** Le pas (px) entre deux cases de minis dans son coin : ils s'y tiennent déjà en rang */
+const RANG = 19
+/** La hauteur d'un mini debout (px) : celle où le suivant se tient sur sa tête */
+const TETE_MINI = Math.round(CORPS.hauteur * DEMI)
+
+/** Ses minis là, d'après les pastilles de leurs sous-agents au travail : au moins `n`, sinon rien */
+const minisLa = (n: number) => (els: readonly ElementBande[]) => {
+  const a = agentsAuTravail(els)
+  return a.length >= n ? a : undefined
+}
+/** Clawd les regarde jouer depuis son coin (`duree` : le temps de leur jeu, avant qu'ils rentrent), et les encourage à la fin */
+const spectateur = (duree: number): Pas[] => [
+  { duree: 0.8, images: [f({ d: 'tendu', yeux: 'gauche' }), f({ d: 'haut', yeux: 'gauche' })], de: { coin: 0 } },
+  { duree: Math.max(1, duree - 2.4), images: [f({ yeux: 'gauche' }), f({ yeux: 'clin' })], tours: 2 },
+  { duree: 1.6, images: [f({ g: 'haut', d: 'haut', yeux: 'heureux' }), f({ yeux: 'heureux' })], tours: 4, fx: effets.notes() },
+]
+
+/**
+ * Saute-mouton : ses minis, en rang devant leurs cases, sautent l'un
+ * par-dessus les autres (celui de derrière passe devant), deux tours chacun,
+ * puis rentrent en courant. Les autres font le dos rond quand on leur saute
+ * dessus. Il les regarde, ravi.
+ */
+const mouton: Numero = {
+  quand: 'partout',
+  avecMinis: true,
+  besoin: 'au moins deux sous-agents au travail (leurs pastilles en bas de la bande)',
+  cibles: minisLa(2),
+  pas: (c, { variante }) => spectateur(0.8 + toursMouton(variante) * c.length * 0.75),
+  copains: (c, { variante }) =>
+    enPetit(() => {
+      const k = c.length
+      const tours = toursMouton(variante)
+      const dos = f({ jambes: 'replie', dy: 3, yeux: 'haut' })
+      return c.map((el, i): Copain => {
+        const pas: Pas[] = [{ duree: 0.8, images: [f({ yeux: 'gauche' }), f({ yeux: 'heureux' })], de: { coin: 0 } }]
+        let fait = 0
+        for (let t = 0; t < tours * k; t++) {
+          if (t % k === i) {
+            fait++
+            pas.push(
+              { duree: 0.55, images: [f({ jambes: 'replie', masse: 'etire', g: 'haut', d: 'haut' }), f({ g: 'ciel', d: 'ciel', yeux: 'heureux' })], a: { coin: -RANG * k * fait }, saut: 14 },
+              { duree: 0.2, images: [f({ jambes: 'replie', dy: 3, yeux: 'heureux' })] },
+            )
+          } else pas.push({ duree: 0.75, images: [dos] })
+        }
+        pas.push({ duree: 0.4, images: [miroir(profil('vite'))], a: { coin: 0 }, vitesse: 320, mouvement: 'doux' }, { duree: 0.4, images: [f({ yeux: 'heureux' })] })
+        return { place: i, teinte: el.teinte, pas }
+      })
+    }),
+}
+
+/** Combien de sauts chacun fait au saute-mouton : deux ou trois, selon la partie */
+const toursMouton = (variante: number) => 2 + choix(variante, 2)
+
+/**
+ * La pyramide : trois minis. Les deux plus loin de lui se serrent, bras
+ * levés ; le premier saute sur leurs têtes, salue (il tangue un peu), et
+ * redescend d'un bond. Clawd applaudit.
+ */
+const pyramide: Numero = {
+  quand: 'partout',
+  avecMinis: true,
+  besoin: 'trois sous-agents au travail (leurs pastilles en bas de la bande)',
+  cibles: minisLa(3),
+  pas: () => spectateur(6),
+  copains: c =>
+    enPetit(() => {
+      // le sommet : au-dessus du milieu des deux autres (le 1 se rapproche du 2 de 2 px)
+      const sommet = (coinCopain(1) - 2 + coinCopain(2)) / 2 - coinCopain(0)
+      const porte = [f({ g: 'haut', d: 'haut', yeux: 'haut' }), f({ g: 'haut', d: 'haut', yeux: 'mi' })]
+      const base = (i: number, glisse: number): Copain => ({
+        place: i,
+        teinte: c[i]!.teinte,
+        pas: [
+          { duree: 0.8, images: [f({ yeux: 'gauche' })], de: { coin: 0 } },
+          { duree: 0.4, images: [f({ g: 'haut', d: 'haut', yeux: 'heureux' })], a: { coin: glisse } },
+          { duree: 3.6, images: porte, tours: 6 },
+          { duree: 0.4, images: [f({ yeux: 'heureux' })], a: { coin: 0 } },
+          { duree: 0.8, images: [f({ g: 'haut', yeux: 'heureux' }), f({ d: 'haut', yeux: 'heureux' })], tours: 2 },
+        ],
+      })
+      return [
+        {
+          place: 0,
+          teinte: c[0]!.teinte,
+          pas: [
+            { duree: 0.8, images: [f({ yeux: 'gauche' })], de: { coin: 0 } },
+            { duree: 0.4, images: [f({ jambes: 'replie', dy: 3, yeux: 'gauche' })] },
+            { duree: 0.6, images: [f({ jambes: 'replie', masse: 'etire', g: 'haut', d: 'haut' }), f({ g: 'ciel', d: 'ciel', yeux: 'heureux' })], a: { coin: sommet, h: TETE_MINI }, saut: 10 },
+            // tout en haut, il salue, et tangue
+            { duree: 0.8, images: [f({ g: 'ciel', yeux: 'heureux' }), f({ d: 'ciel', yeux: 'heureux' })], tours: 2, rot: 8, fx: effets.etincelles() },
+            { duree: 0.8, images: [f({ g: 'ciel', d: 'ciel', yeux: 'grand', bouche: 'o' })], rot: -8 },
+            { duree: 0.6, images: [f({ g: 'ciel', d: 'ciel', yeux: 'heureux' })], rot: 0 },
+            { duree: 0.6, images: [f({ jambes: 'replie', masse: 'etire', g: 'haut', d: 'haut' }), f({ g: 'ciel', d: 'ciel', yeux: 'heureux' })], a: { coin: 0, h: 0 }, saut: 8 },
+            { duree: 0.2, images: [f({ jambes: 'replie', dy: 3 })] },
+            { duree: 1, images: [f({ yeux: 'heureux' })] },
+          ],
+        },
+        base(1, -2),
+        base(2, 0),
+      ]
+    }),
+}
+
+/**
+ * La passe : deux minis courent à la pastille du premier. Il la soulève et
+ * la lance à l'autre, qui la rattrape bras levés et la renvoie, en cloche,
+ * deux ou trois fois ; puis il la repose et tous deux rentrent. Leurs
+ * trajets ont la même durée : ils arrivent ensemble.
+ */
+const passe: Numero = {
+  quand: 'partout',
+  avecMinis: true,
+  besoin: 'au moins deux sous-agents au travail (leurs pastilles en bas de la bande)',
+  cibles: minisLa(2),
+  pas: (c, partie) => spectateur(jeuDePasse(c, partie).duree),
+  copains: (c, partie) =>
+    enPetit(() => {
+      const { ecart, vers, aller, bouge, lancers } = jeuDePasse(c, partie)
+      const pret = f({ g: 'haut', d: 'haut', yeux: 'gauche' })
+      const leve = f({ g: 'ciel', d: 'ciel', yeux: 'heureux' })
+      const lance = f({ g: 'tendu', d: 'haut', yeux: 'heureux' })
+      // un lancer de 0,7 s, puis 0,4 s où l'autre la tient : qui lance, qui attrape
+      const echange = (moi: number) =>
+        Array.from({ length: lancers }, (_, l): Pas[] => {
+          const deLui = l % 2 === 0
+          const geste = (g: Geste): Geste[] => (moi === 0 ? [g] : [])
+          return [
+            { duree: 0.7, images: [(deLui ? moi === 0 : moi === 1) ? lance : pret], gestes: geste({ n: 0, dx: deLui ? ecart : 0, saut: 14, rot: deLui ? 360 : -360 }) },
+            { duree: 0.4, images: [(deLui ? moi === 1 : moi === 0) ? leve : f({ yeux: 'heureux' })] },
+          ]
+        }).flat()
+      // un nombre impair de lancers la laisse chez l'autre : elle revient d'un dernier lancer
+      const dernier = lancers % 2 ? (moi: number): Pas[] => [{ duree: 0.7, images: [moi === 1 ? lance : pret], gestes: moi === 0 ? [{ n: 0, dx: 0, saut: 14, rot: -360 }] : [] }] : () => []
+      return [0, 1].map(
+        (i): Copain => ({
+          place: i,
+          teinte: c[i]!.teinte,
+          pas: [
+            { duree: 0.6, images: [f({ yeux: 'gauche' }), f({ yeux: 'heureux' })], de: { coin: 0 } },
+            { duree: aller, images: [profil('vite')], a: { x: vers[i]! } },
+            // (celui qui n'a presque pas à marcher n'a ni élan ni freinage : il les attend, pour arriver en même temps)
+            ...(bouge[i] ? [] : [{ duree: 2 * TRANSITION, images: [pret] }]),
+            { duree: 0.5, images: [i === 0 ? leve : pret], gestes: i === 0 ? [{ n: 0, dy: LEVE, mouvement: 'freine' }] : [] },
+            ...echange(i),
+            ...dernier(i),
+            { duree: 0.4, images: [f({ g: 'haut', d: 'haut', yeux: 'heureux' })], gestes: i === 0 ? [{ n: 0, dy: 0, mouvement: 'elan' }] : [] },
+            { duree: 0.4, images: [miroir(profil('vite'))], a: { coin: 0 }, vitesse: 320, mouvement: 'doux' },
+            { duree: 0.4, images: [f({ yeux: 'heureux' })] },
+          ],
+        }),
+      )
+    }),
+}
+
+/**
+ * La passe sur cette bande : l'écart entre les deux minis (px), où chacun se
+ * tient (le bord gauche de sa boîte : le premier sous sa pastille, l'autre à
+ * sa droite), la durée de leur trajet (la même pour les deux), s'il marche
+ * vraiment (assez loin pour son élan et son freinage), le nombre de lancers,
+ * et la durée de leur jeu avant de rentrer.
+ */
+function jeuDePasse(c: readonly ElementBande[], { largeur, variante }: Partie) {
+  const ecart = 34
+  const vers = [centre(c[0]!).x - AXE, centre(c[0]!).x - AXE + ecart]
+  const distances = [0, 1].map(i => Math.abs(vers[i]! - (largeur - TAILLE.largeur + coinCopain(i))))
+  const aller = arrondi(Math.max(0.4, ...distances.map(d => d / 160)), 2)
+  const lancers = 2 + choix(variante, 2)
+  return { ecart, vers, aller, bouge: distances.map(d => d > 3), lancers, duree: 0.6 + aller + 2 * TRANSITION + 0.5 + lancers * 1.1 + (lancers % 2 ? 0.7 : 0) + 0.4 }
+}
+
+// ------------------------------------------------- ses réactions
+
+/** L'élément visé par une réaction (`vise`), s'il est encore comme il faut ; sinon (à la demande) le premier qui convient */
+const vu = (els: readonly ElementBande[], vise: string | undefined, ok: (e: ElementBande) => boolean) => {
+  const el = vise ? els.find(e => e.id === vise) : els.find(ok)
+  return el && ok(el) ? [el] : undefined
+}
+/** Sa place à côté d'un élément de sa hauteur : contre son bord droit */
+const aCote = (el: ElementBande, jeu = 6) => el.largeur / 2 + CORPS.demiLargeur + jeu
+
+/** Une étape vient d'être faite (sa coche verte) : il court la féliciter ; elle saute de joie, il lance des confettis. */
+const bravo: Numero = {
+  quand: 'demande',
+  besoin: 'une étape faite (coche verte) en bas de la bande',
+  cibles: (els, { vise }) => vu(els, vise, e => e.genre === 'tache' && e.etat === 'faite' && e.ligne === 0),
+  pas: ([el], { variante }) => [
+    { duree: 0.6, images: [f({ yeux: 'gauche', bouche: 'o' })], de: { coin: 0 } },
+    { duree: 0.4, images: [court], a: { cible: aCote(el!) }, vitesse: 'vite', mouvement: 'doux' },
+    { duree: 0.6, images: [f({ g: 'tendu', yeux: 'gauche' })], gestes: [{ saut: 14, rot: 360, mouvement: 'freine' }] },
+    ...(choix(variante, 2)
+      ? [
+          { duree: 0.5, images: [bond.part, bond.haut], saut: 12 },
+          { duree: 0.2, images: [bond.recoit] },
+        ]
+      : []),
+    { duree: 1.2, images: [f({ g: 'ciel', d: 'ciel', yeux: 'heureux' }), f({ g: 'haut', d: 'haut', yeux: 'heureux' })], tours: 3, fx: effets.confettis() },
+    { duree: 0.4, images: [miroir(court)], a: { coin: 0 }, vitesse: 'vite', mouvement: 'doux' },
+    { duree: 0.4, images: [f({ yeux: 'heureux' })] },
+  ],
+}
+
+/**
+ * Le build vient d'échouer (sa pastille rouge) : il accourt, la regarde de
+ * près, tape dessus (elle tremble), se gratte la tête, essaie encore (ou lui
+ * donne un coup de pied : elle saute), puis hausse les épaules et rentre.
+ */
+const repare: Numero = {
+  quand: 'demande',
+  besoin: 'un build raté (pastille rouge) en bas de la bande',
+  cibles: (els, { vise }) => vu(els, vise, e => e.genre === 'build' && e.etat === 'echec' && e.ligne === 0),
+  pas: ([el], { variante }) => [
+    { duree: 0.6, images: [f({ yeux: 'gauche', bouche: 'o' })], de: { coin: 0 } },
+    { duree: 0.4, images: [court], a: { cible: aCote(el!, 2) }, vitesse: 'vite', mouvement: 'doux' },
+    { duree: 0.8, images: [f({ yeux: 'bas' }), f({ yeux: 'bas', bouche: 'o' })] },
+    { duree: 0.45, images: [f({ g: 'tendu', yeux: 'gauche' })], gestes: [{ secoue: 2 }] },
+    { duree: 0.45, images: [f({ g: 'tendu', yeux: 'gauche' })], gestes: [{ secoue: 2 }] },
+    { duree: 1, images: [f({ g: 'tete', yeux: 'mi' }), f({ g: 'tete', yeux: 'haut' })], fx: effets.sueur() },
+    choix(variante, 2)
+      ? { duree: 0.7, images: [f({ jambes: 'tape', yeux: 'croix' })], gestes: [{ saut: 10, rot: 360, mouvement: 'freine' }] }
+      : { duree: 0.7, images: [f({ g: 'tendu', yeux: 'grand' })], gestes: [{ secoue: 3 }] },
+    { duree: 1, images: [f({ g: 'haut', d: 'haut', yeux: 'mi' }), f({ g: 'bas', d: 'bas', yeux: 'mi' })], tours: 2 },
+    { duree: 0.4, images: [miroir(court)], a: { coin: 0 }, vitesse: 'vite', mouvement: 'doux' },
+    { duree: 0.4, images: [f({ yeux: 'mi' })] },
+  ],
+}
+
+/**
+ * Un quota vient de passer au rouge : il court dessous (ou contre lui, à sa
+ * hauteur) et s'arc-boute pour le retenir, en sueur ; la jauge tremble et
+ * revient, il s'essuie le front et rentre.
+ */
+const retient: Numero = {
+  quand: 'demande',
+  besoin: 'une jauge de quota au rouge sur la bande, au plus sur la deuxième ligne',
+  cibles: (els, { vise }) => vu(els, vise, e => e.genre === 'jauge' && e.etat === 'critique' && e.ligne <= 1),
+  pas: ([el]) => {
+    const dessous = el!.ligne >= 1
+    const ici: Lieu = dessous ? { cible: Math.min(el!.largeur / 2 - CORPS.demiLargeur, 30) } : { cible: aCote(el!, 0) }
+    return [
+      { duree: 0.6, images: [f({ yeux: 'haut', bouche: 'o' })], de: { coin: 0 } },
+      { duree: 0.4, images: [court], a: ici, vitesse: 'vite', mouvement: 'doux' },
+      dessous
+        ? { duree: 1.6, images: [f({ g: 'ciel', d: 'ciel', yeux: 'croix' }), f({ g: 'ciel', d: 'ciel', yeux: 'mi', bouche: 'o' })], tours: 3, gestes: [{ dy: 3, secoue: 1.5 }], fx: effets.sueur() }
+        : { duree: 1.6, images: [f({ g: 'tendu', d: 'tendu', yeux: 'croix' }), f({ g: 'tendu', d: 'tendu', yeux: 'mi', bouche: 'o' })], tours: 3, gestes: [{ dx: -4, secoue: 1.5 }], fx: effets.sueur() },
+      { duree: 0.5, images: [f({ yeux: 'grand' })], gestes: [{ dx: 0, dy: 0, mouvement: 'doux' }] },
+      { duree: 1, images: [f({ g: 'tete', yeux: 'ferme' }), f({ g: 'tete', yeux: 'mi' })] },
+      { duree: 0.4, images: [miroir(court)], a: { coin: 0 }, vitesse: 'vite', mouvement: 'doux' },
+      { duree: 0.4, images: [f({ yeux: 'mi' })] },
+    ]
+  },
+}
+
+/**
+ * Un sous-agent vient de finir (sa pastille cochée, dans sa couleur) : une
+ * fois que son mini lui a rendu son rapport dans le coin, il va contrôler le
+ * travail sur la bande. Il prend la pastille, l'examine de près, la brandit,
+ * satisfait, la repose et rentre.
+ */
+const controle: Numero = {
+  quand: 'demande',
+  besoin: 'un sous-agent fini (pastille cochée) en bas de la bande',
+  cibles: (els, { vise }) => vu(els, vise, e => e.genre === 'agent' && e.etat === 'faite' && e.ligne === 0),
+  pas: () => [
+    { duree: 0.6, images: [f({ yeux: 'gauche' })], de: { coin: 0 } },
+    { duree: 0.4, images: [court], a: { cible: 0 }, vitesse: 'vite', mouvement: 'doux' },
+    { duree: 0.6, images: [f({ yeux: 'bas', g: 'tendu' })] },
+    { duree: 1.4, images: [f({ g: 'devant', d: 'devant', yeux: 'bas' }), f({ g: 'devant', d: 'devant', yeux: 'mi' })], tours: 2, objet: 'tenu' },
+    { duree: 1.2, images: [f({ g: 'haut', d: 'haut', yeux: 'heureux' })], objet: 'haut', fx: effets.etincelles() },
+    { duree: 0.6, images: [f({ g: 'devant', d: 'devant', yeux: 'heureux' })], objet: 'tenu' },
+    { duree: 0.6, images: [f({ yeux: 'clin' })], fx: effets.notes() },
+    { duree: 0.4, images: [miroir(court)], a: { coin: 0 }, vitesse: 'vite', mouvement: 'doux' },
+    { duree: 0.4, images: [f({ yeux: 'heureux' })] },
+  ],
+}
+
+// ------------------------------------------------- quand il s'ennuie
+
+/**
+ * Le funambule : il grimpe sur le bout d'une jauge et marche dessus, bras en
+ * balancier, en tanguant ; au bout, il saute à terre et rentre.
+ */
+const funambule: Numero = {
+  quand: 'repos',
+  besoin: 'une jauge de quota assez longue, au plus sur la deuxième ligne',
+  cibles: els => {
+    // (assez loin du bord gauche pour sauter à terre de ce côté sans sortir du dessin)
+    const j = els.filter(e => e.genre === 'jauge' && e.ligne <= 1 && e.largeur >= 60 && e.x >= 2 * CORPS.demiLargeur + 6).sort((a, b) => b.x - a.x)[0]
+    return j ? [j] : undefined
+  },
+  pas: ([el]) => {
+    const h = dessus(el!)
+    const bout = el!.largeur / 2 - CORPS.demiLargeur
+    const loin = aCote(el!, 10)
+    return [
+      { duree: 1, images: [f({ yeux: 'gauche' }), f({ yeux: 'haut' })], de: { coin: 0 } },
+      { duree: 0.4, images: [court], a: { cible: loin }, vitesse: 'vite', mouvement: 'doux' },
+      { duree: 0.3, images: [f({ jambes: 'replie', dy: 3, yeux: 'haut' })] },
+      { duree: 0.6, images: [bond.part, bond.haut], a: { cible: bout, h }, saut: 10 },
+      { duree: 0.2, images: [bond.recoit] },
+      // en équilibre : il avance en tanguant d'un côté puis de l'autre
+      { duree: 1, images: [pousse], a: { cible: bout / 3, h }, rot: 7 },
+      { duree: 1, images: [pousse], a: { cible: -bout / 3, h }, rot: -7 },
+      { duree: 1, images: [pousse], a: { cible: -bout, h }, rot: 4 },
+      { duree: 0.6, images: [f({ g: 'tendu', d: 'tendu', yeux: 'grand', bouche: 'o' })], rot: -9 },
+      { duree: 0.5, images: [f({ g: 'ciel', d: 'ciel', yeux: 'heureux' })], rot: 0, fx: effets.etincelles() },
+      { duree: 0.6, images: [bond.part, bond.haut], a: { cible: -aCote(el!, 6), h: 0 }, saut: 8 },
+      { duree: 0.2, images: [bond.recoit] },
+      { duree: 0.4, images: [miroir(court)], a: { coin: 0 }, vitesse: 'vite', mouvement: 'doux' },
+      { duree: 0.4, images: [f({ yeux: 'heureux' })] },
+    ]
+  },
+}
+
+/**
+ * La sieste : il s'assoit sur la pastille la plus proche, balance les
+ * pattes, bâille, pique du nez (quelques z), se réveille en sursaut et rentre
+ * en vitesse.
+ */
+const sieste: Numero = {
+  quand: 'repos',
+  besoin: 'une pastille en bas de la bande',
+  cibles: els => {
+    const p = duBas(els).at(-1)
+    return p ? [p] : undefined
+  },
+  pas: ([el]) => {
+    const h = dessus(el!) - 4
+    return [
+      { duree: 1, images: [f({ yeux: 'gauche' }), f({ yeux: 'mi' })], de: { coin: 0 } },
+      { duree: 0.4, images: [profil('lent')], a: { cible: aCote(el!, 4) }, vitesse: 'lent' },
+      { duree: 0.6, images: [bond.part, bond.haut], a: { cible: 0, h }, saut: 6 },
+      { duree: 0.3, images: [f({ jambes: 'assis', yeux: 'heureux' })], gestes: [{ dy: -2 }] },
+      { duree: 1.6, images: [f({ jambes: 'assis', yeux: 'mi' }), f({ jambes: 'assis2', yeux: 'mi' })], tours: 4 },
+      { duree: 0.8, images: [f({ jambes: 'assis', yeux: 'ferme', bouche: 'grand' })] },
+      { duree: 2.4, images: [f({ jambes: 'assis', yeux: 'ferme', dy: 2 })], fx: effets.zzz() },
+      { duree: 0.4, images: [f({ jambes: 'assis', yeux: 'grand', bouche: 'o' })], saut: 6 },
+      { duree: 0.5, images: [bond.part, bond.haut], a: { cible: aCote(el!, 4), h: 0 }, saut: 8, gestes: [{ dy: 0 }] },
+      { duree: 0.2, images: [bond.recoit] },
+      { duree: 0.4, images: [miroir(court)], a: { coin: 0 }, vitesse: 'vite', mouvement: 'doux' },
+      { duree: 0.4, images: [f({ yeux: 'heureux' })] },
+    ]
+  },
+}
+
+/** Les pastilles de ses sous-agents au travail (une par mini, les premières : son coin montre ses trois premiers minis) */
+const agentsAuTravail = (els: readonly ElementBande[]) => duBas(els).filter(e => e.genre === 'agent' && e.etat === 'encours').slice(0, MINIS_MAX)
 
 /**
  * L'inspection, pendant que Claude travaille : il pose ses cartons et fait le
@@ -852,14 +1263,21 @@ const installe: Numero = {
   },
 }
 
-export const NUMEROS: Record<string, Numero> = { chipe, tournee, bousculade, popcorn, echange, lilliput, geant, equipe, inspection, rappel, installe, cadre }
+export const NUMEROS: Record<string, Numero> = { chipe, tournee, bousculade, popcorn, echange, lilliput, geant, funambule, sieste, equipe, mouton, pyramide, passe, bravo, repare, retient, controle, inspection, rappel, installe, cadre }
 
 export const estNumero = (nom: unknown): nom is string => typeof nom === 'string' && Object.hasOwn(NUMEROS, nom)
+
+/** Les jeux de ses minis qu'ils peuvent jouer maintenant, d'après les pastilles de leurs sous-agents */
+export function numerosAvecMinis(elements: readonly ElementBande[], largeur = LARGEUR_BANDE): string[] {
+  return Object.entries(NUMEROS)
+    .filter(([nom, n]) => n.avecMinis && prepareNumero(nom, elements, largeur) !== null)
+    .map(([nom]) => nom)
+}
 
 /** Les numéros qu'il peut jouer de lui-même maintenant, d'après ce qu'il y a sur la bande */
 export function numerosJouables(moment: 'repos' | 'travail', elements: readonly ElementBande[], largeur = LARGEUR_BANDE): string[] {
   return Object.entries(NUMEROS)
-    .filter(([nom, n]) => (n.quand === 'partout' || n.quand === moment) && prepareNumero(nom, elements, largeur) !== null)
+    .filter(([nom, n]) => (n.quand === 'partout' || n.quand === moment) && !n.avecMinis && prepareNumero(nom, elements, largeur) !== null)
     .map(([nom]) => nom)
 }
 
@@ -1076,7 +1494,7 @@ const pxDe = (x: X, largeur: number) => x.pct * largeur + x.px
  * vient de sa distance sur cette bande, au pas de ses pattes et à sa taille.
  * Null si un pas est mal formé.
  */
-function resous(pas: readonly Pas[], cibles: readonly ElementBande[], largeur: number, depart = 0, s0 = 1): Pas[] | null {
+function resous(pas: readonly Pas[], cibles: readonly ElementBande[], largeur: number, depart = 0, s0 = 1, mini = false): Pas[] | null {
   let ici: X = { pct: 1, px: depart - TAILLE.largeur }
   let s = s0
   const r: Pas[] = []
@@ -1092,11 +1510,77 @@ function resous(pas: readonly Pas[], cibles: readonly ElementBande[], largeur: n
       if (!(v > 0) || !Number.isFinite(v)) return null
       duree = Math.max(duree, Math.abs(pxDe(a, largeur) - pxDe(de, largeur)) / v)
     }
-    r.push({ ...p, duree: arrondi(duree, 3) })
+    // un trajet à pied (pas un bond) : de quel côté il va, et la cadence de ses pattes à sa vitesse réelle
+    const dx = pxDe(a, largeur) - pxDe(de, largeur)
+    const sens = !p.saut && Math.abs(dx) > 3 ? Math.sign(dx) : 0
+    const foulee = sens && cadenceDe(p.images, Math.abs(dx) / duree, Math.min(s, p.echelle ?? s))
+    r.push({ ...p, duree: arrondi(duree, 3), ...(foulee ? { cadence: foulee } : {}) })
+    sensDe.set(r.at(-1)!, sens)
     ici = a
     s = p.echelle ?? s
   }
-  return r
+  return enchaine(r, mini)
+}
+
+/** De quel côté chaque pas résolu le mène (-1 à gauche, 1 à droite, 0 sur place ou en bondissant) */
+const sensDe = new WeakMap<Pas, number>()
+
+/** La longueur d'un cycle de ses pattes (px, à sa taille normale) : course 150 px/s en 0,4 s, marche 50 px/s en 0,6 s */
+const FOULEE = { vite: 60, lent: 30 }
+/** Le cycle de ses pattes (s, au vingtième) pour qu'elles suivent sa vitesse réelle (px/s), s'il marche ou court de profil et que ce n'est pas celui d'office */
+function cadenceDe(images: readonly string[], v: number, s: number): number | undefined {
+  const allure = images.some(i => i.includes('class="vite"')) ? 'vite' : images.some(i => i.includes('class="lent"')) ? 'lent' : null
+  if (!allure || !(v > 0)) return undefined
+  const c = Math.round(Math.min(1.2, Math.max(0.15, (FOULEE[allure] * s) / v)) * 20) / 20
+  return Math.abs(c - (allure === 'vite' ? 0.4 : 0.6)) < 0.01 ? undefined : c
+}
+
+/** La durée d'une image de transition (s) */
+const TRANSITION = 0.09
+/** Le sol de sa toile (y de ses pieds) : il se tasse au-dessus */
+const SOL = PINCEAUX.Y0 + 48
+
+/**
+ * Ses trajets enchaînés sans à-coup : avant de partir, il se tourne de trois
+ * quarts et se ramasse (l'élan) ; à l'arrivée, il freine de trois quarts ;
+ * quand il repart dans l'autre sens, il fait demi-tour (trois quarts, face,
+ * trois quarts) au lieu de se retourner d'un coup. Ces images se jouent sur
+ * place, à sa hauteur, et gardent ce qu'il porte et ce derrière quoi il passe.
+ * Un mini les a à sa taille (sans sueur ni insigne).
+ */
+function enchaine(pas: readonly Pas[], mini: boolean): Pas[] {
+  return (mini ? enPetit : <T,>(d: () => T) => d())(() => {
+    // sa silhouette de course, immobile (de profil, tournée du côté où il va), un peu tassée sur ses pattes : il se ramasse
+    // ou il freine (la vue de côté de son corps de face, toute mince, détonnait entre la face et la course)
+    const arret = (sens: number) => {
+      const p = `<g transform="translate(0 ${arrondi(SOL * 0.1, 1)}) scale(1 .9)">${profil('')}</g>`
+      return sens < 0 ? p : miroir(p)
+    }
+    const r: Pas[] = []
+    // ce qu'il garde pendant une transition : ce qu'il porte, et les cibles devant lui (il reste derrière)
+    const garde = (p: Pas): Partial<Pas> => {
+      const devant = (p.gestes ?? []).filter(g => g.devant).map(g => ({ n: g.n, devant: true }))
+      return { ...(p.objet ? { objet: p.objet, tient: p.tient } : {}), ...(devant.length ? { gestes: devant } : {}) }
+    }
+    const transition = (images: string[], p: Pas, de?: Lieu): Pas => ({ duree: arrondi(TRANSITION * images.length, 3), images, ...(de ? { de } : {}), ...garde(p) })
+    for (const [i, p] of pas.entries()) {
+      const avant = i > 0 ? sensDe.get(pas[i - 1]!)! : 0
+      const sens = sensDe.get(p)!
+      if (sens && sens !== avant) {
+        r.push(
+          avant
+            ? transition([arret(avant), corps({ yeux: sens < 0 ? 'gauche' : 'droite' }), arret(sens)], p, p.de)
+            : transition([arret(sens)], p, p.de),
+        )
+      }
+      r.push(p)
+      const apres = i + 1 < pas.length ? sensDe.get(pas[i + 1]!)! : 0
+      // il freine, sauf s'il continue sur sa lancée, repart aussitôt dans l'autre sens (son demi-tour commence par là),
+      // ou prend son élan pour percuter ce qui l'attend (un coup d'épaule : pas de freinage juste avant le choc)
+      if (sens && apres === 0 && p.mouvement !== 'elan') r.push(transition([arret(sens)], p))
+    }
+    return r
+  })
 }
 
 const somme = (pas: readonly Pas[]) => pas.reduce((s, p) => s + p.duree, 0)
@@ -1107,20 +1591,29 @@ const somme = (pas: readonly Pas[]) => pas.reduce((s, p) => s + p.duree, 0)
  * faire tomber les autres). Le premier rentré attend les autres chez lui, sur
  * sa dernière image.
  */
-function monte(numero: Numero, cibles: readonly ElementBande[], largeur: number, depart = 0) {
+function monte(numero: Numero, cibles: readonly ElementBande[], partie: Partie, depart = 0) {
+  const { largeur } = partie
   try {
-    const pas = resous(numero.pas(cibles), cibles, largeur, depart)
+    const pas = resous(numero.pas(cibles, partie), cibles, largeur, depart)
     if (!pas || !pas.length) return null
     const copains: Copain[] = []
-    for (const c of (numero.copains?.(cibles) ?? []).slice(0, MINIS_MAX)) {
+    for (const c of (numero.copains?.(cibles, partie) ?? []).slice(0, MINIS_MAX)) {
       // une case de son coin, chacun la sienne
       if (!Number.isInteger(c.place) || c.place < 0 || c.place >= MINIS_MAX || copains.some(x => x.place === c.place)) return null
-      const p = resous(c.pas, cibles, largeur, coinCopain(c.place), DEMI)
+      const p = resous(c.pas, cibles, largeur, coinCopain(c.place), DEMI, true)
       if (!p || !p.length) return null
       copains.push({ ...c, pas: p })
     }
     const total = Math.max(somme(pas), ...copains.map(c => somme(c.pas)))
     if (!Number.isFinite(total) || total > MAX_DUREE) return null
+    // ses autres minis le regardent depuis leurs cases
+    enPetit(() => {
+      for (const [place, teinte] of (partie.figurants ?? []).slice(0, MINIS_MAX).entries()) {
+        if (copains.some(c => c.place === place)) continue
+        const images = [corps({ yeux: 'droite' }), corps({ yeux: 'heureux' }), corps({ yeux: 'droite' }), corps({ yeux: 'clin' })]
+        copains.push({ place, ...(teinte ? { teinte } : {}), pas: [{ duree: arrondi(total, 3), images, tours: Math.max(1, Math.round(total / 2.4)) }] })
+      }
+    })
     const cale = (l: Pas[]): Pas[] => {
       const reste = arrondi(total - somme(l), 3)
       return reste > 0 ? [...l, { duree: reste, images: [l.at(-1)!.images.at(-1)!] }] : l
@@ -1138,10 +1631,11 @@ function monte(numero: Numero, cibles: readonly ElementBande[], largeur: number,
 export function diagnostic(nom: string, elements: readonly ElementBande[], largeur = LARGEUR_BANDE): string {
   const n = NUMEROS[nom]
   if (!n) return 'inconnu'
+  const partie: Partie = { largeur, variante: 0 }
   let cibles: readonly ElementBande[] = []
   try {
     if (n.cibles) {
-      const c = n.cibles(elements)
+      const c = n.cibles(elements, partie)
       if (!c || !c.length) return `rien à viser${n.besoin ? ` (il lui faut ${n.besoin})` : ''}`
       cibles = c
     }
@@ -1150,14 +1644,14 @@ export function diagnostic(nom: string, elements: readonly ElementBande[], large
   }
   let pas: Pas[] | null
   try {
-    pas = resous(n.pas(cibles), cibles, largeur)
+    pas = resous(n.pas(cibles, partie), cibles, largeur)
   } catch (e) {
     return `plante en préparant ses pas : ${String(e).slice(0, 80)}`
   }
   if (!pas || !pas.length) return 'un pas mal formé (durée, images, tours, lieu ou vitesse)'
   const total = pas.reduce((s, p) => s + p.duree, 0)
   if (total > MAX_DUREE) return `trop long : ${arrondi(total, 1)} s (au plus ${MAX_DUREE})`
-  const m = monte(n, cibles, largeur)
+  const m = monte(n, cibles, partie)
   if (!m) return 'un trajet impossible (une cible absente, laissée ailleurs qu’à sa place, il ne revient pas à son coin, ou un de ses minis non plus)'
   return `jouable : ${arrondi(m.tj.duree, 1)} s${cibles.length ? `, vise ${cibles.map(c => c.id).join(', ')}` : ''}`
 }
@@ -1166,20 +1660,23 @@ export function diagnostic(nom: string, elements: readonly ElementBande[], large
  * Un numéro prêt à jouer sur une bande de cette largeur (px) : ses cibles, sa
  * durée (s), et quand il emprunte chacune [début, fin] (s). `depart` : là où
  * il le commence et le finit, en px depuis son coin (négatif vers la gauche) :
- * là où il en était de son déménagement.
+ * là où il en était de son déménagement. `variante` et `vise` : voir `Partie`
+ * (le dessin doit les recevoir à l'identique).
  */
 export function prepareNumero(
   nom: string,
   elements: readonly ElementBande[],
   largeur = LARGEUR_BANDE,
   depart = 0,
+  { variante = 0, vise, figurants }: { variante?: number; vise?: string; figurants?: readonly (string | null)[] } = {},
 ): { cibles: ElementBande[]; duree: number; emprunts: { id: string; de: number; a: number }[] } | null {
   const n = NUMEROS[nom]
   if (!n) return null
+  const partie: Partie = { largeur, variante, ...(vise ? { vise } : {}), ...(figurants?.length ? { figurants } : {}) }
   let cibles: readonly ElementBande[] = []
   try {
     if (n.cibles) {
-      const c = n.cibles(elements)
+      const c = n.cibles(elements, partie)
       if (!c || !c.length) return null
       cibles = c
     }
@@ -1188,7 +1685,7 @@ export function prepareNumero(
   }
   // deux fois la même cible : il ne saurait pas laquelle rendre
   if (new Set(cibles.map(c => c.id)).size !== cibles.length) return null
-  const m = monte(n, cibles, largeur, depart)
+  const m = monte(n, cibles, partie, depart)
   if (!m) return null
   return { cibles: [...cibles], duree: arrondi(m.tj.duree, 3), emprunts: m.tj.emprunts.map(e => ({ id: cibles[e.n]!.id, de: e.de, a: e.a })) }
 }
@@ -1285,15 +1782,17 @@ const emboite = (classes: readonly string[], contenu: string) => classes.reduceR
  * portent celui du numéro : plusieurs dessins dans une même page (la
  * planche-contact) ne se marchent pas dessus.
  */
-export function svgNumero(n: Pick<ClawdNumero, 'nom' | 'elements' | 'largeur' | 'depart'> & { cibles?: readonly ElementBande[]; colonnes?: number }, couleur: Teinte, deguise?: Deguisement | Tenue): string {
+type AuDessin = Pick<ClawdNumero, 'nom' | 'elements' | 'largeur' | 'depart' | 'variante' | 'vise' | 'figurants'> & { cibles?: readonly ElementBande[]; colonnes?: number }
+
+export function svgNumero(n: AuDessin, couleur: Teinte, deguise?: Deguisement | Tenue): string {
   return avecDeguisement(deguise, () => dessineNumero(n, couleur))
 }
 
-function dessineNumero(n: Pick<ClawdNumero, 'nom' | 'elements' | 'largeur' | 'depart'> & { cibles?: readonly ElementBande[]; colonnes?: number }, couleur: Teinte): string {
+function dessineNumero(n: AuDessin, couleur: Teinte): string {
   const numero = NUMEROS[n.nom]
   if (!numero) return COIN_VIDE
   const cibles = n.cibles ?? []
-  const m = monte(numero, cibles, n.largeur ?? LARGEUR_BANDE, n.depart ?? 0)
+  const m = monte(numero, cibles, { largeur: n.largeur ?? LARGEUR_BANDE, variante: n.variante ?? 0, ...(n.vise ? { vise: n.vise } : {}), ...(n.figurants?.length ? { figurants: n.figurants } : {}) }, n.depart ?? 0)
   if (!m) return COIN_VIDE
   const { pas, tj } = m
   const T = arrondi(tj.duree, 3)
@@ -1311,6 +1810,8 @@ function dessineNumero(n: Pick<ClawdNumero, 'nom' | 'elements' | 'largeur' | 'de
     return `<g class="${cls}">${contenu}</g>`
   }
 
+  /** Les cadences de pattes employées (leur classe, leur cycle en s) : leur CSS suit celui des allures d'office, qu'il remplace */
+  const cadences = new Map<string, number>()
   // Clawd (ou un mini) à sa taille, dans un SVG imbriqué au cadrage de sa petite scène ; son ombre de même, à part, au sol
   const cadrage = `x="0" y="${BOITE}" width="${TAILLE.largeur}" height="${TAILLE.hauteur}" viewBox="${VUE.x} ${VUE.y} ${VUE.w} ${VUE.h}" overflow="visible" shape-rendering="crispEdges"`
   /**
@@ -1328,9 +1829,13 @@ function dessineNumero(n: Pick<ClawdNumero, 'nom' | 'elements' | 'largeur' | 'de
     let t = 0
     for (const p of sesPas) {
       const k = p.images.length * (p.tours ?? 1)
+      // ses pattes à la cadence de ce trajet
+      const cad = p.cadence ? `cad-${Math.round(p.cadence * 1000)}` : ''
+      if (cad) cadences.set(cad, p.cadence!)
       for (let i = 0; i < k; i++) {
         // son ombre est dessinée à part, au sol
-        const img = p.images[i % p.images.length]!.replace(/<rect class="ombre[^"]*"[^>]*\/>/g, '')
+        let img = p.images[i % p.images.length]!.replace(/<rect class="ombre[^"]*"[^>]*\/>/g, '')
+        if (cad) img = img.replace(/class="(vite|lent)"/g, `class="$1 ${cad}"`)
         const debut = t + (i * p.duree) / k
         vues.set(img, [...(vues.get(img) ?? []), [debut, debut + p.duree / k]])
       }
@@ -1388,6 +1893,7 @@ function dessineNumero(n: Pick<ClawdNumero, 'nom' | 'elements' | 'largeur' | 'de
   const lui = acteur('', pas, tj.lui, couleur, portees)
   const minis = m.copains.map((cp, i) => acteur(`-m${i}`, cp.pas, tj.minis[i]!, teinteDe(cp.teinte) ?? couleur))
   const images = lui.images + minis.map(x => x.images).join('')
+  for (const [cad, c] of cadences) css += `.${cad} .pA,.${cad} .pB{animation-duration:${c}s}.${cad} .pB{animation-delay:${arrondi(c / 2, 3)}s}`
   // (ses minis devant lui : ils sortent de leurs cases, devant la sienne)
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="${HAUTEUR}" style="--t0:0s">` +
