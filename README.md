@@ -272,6 +272,9 @@ Quand atelier dessine sa bande, Clawd y joue de temps en temps un numéro :
   chaque étape faite ; ses yeux se tournent vers ce qui change ;
 - des modifs attendent un commit depuis une demi-heure : il vient se planter
   à côté du bouton et tape du pied (sans jamais cliquer) ;
+- un quota qui repart, il souffle et fait la fête ; une conversation qui
+  coûte cher, il retourne ses poches ; un sous-agent interrompu, il le
+  console ;
 - il fait le tour de la bande ;
 - il échange deux pastilles, qui reprennent leur place toutes seules ;
 - il inspecte les quotas en contremaître ;

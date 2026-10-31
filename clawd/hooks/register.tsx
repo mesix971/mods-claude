@@ -15,7 +15,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, ToolCallResult } from 'claude-code'
 
 import type { ClawdAnim, ClawdCopain, ElementBande } from '../types'
-import { CELLULE, COIN_VIDE, HAUTEUR as HAUTEUR_BANDE, LARGEUR_BANDE, MARGE, MAX_SVG, NUMEROS, RETENUE, departDe, diagnostic, estNumero, numerosAvecMinis, numerosJouables, prepareNumero, svgNumero } from './bande'
+import { CELLULE, COIN_VIDE, HAUTEUR as HAUTEUR_BANDE, LARGEUR_BANDE, MARGE, MAX_SVG, NUMEROS, RETENUE, departDe, diagnostic, estNumero, numerosAvecMinis, numerosJouables, prepareNumero, reactionA, svgNumero } from './bande'
 import { HUMEUR_DEPART, choisit, decrit as decritHumeur, ecartRepos, estHumeur, estNuit, vecu, vit } from './humeur'
 import type { Humeur } from './humeur'
 import { ACTIVITES, BAILLE_S, BONBON_S, CLAWD_TEXTE, DANSES, EMOJI, EN_BULLE, JEUX_CARTONS, RAPPORT_S, SORTIES, TAILLE, avecT0, bulleDedans, dureeBoulot, dureeRetour, dureeScene, estChoregraphie, etatBoulot, etatScene, minisAPart, svgBulle, svgDecor, svgMinis, svgScene, teinte, teinteConnue, tenueDe } from './sprite'
@@ -216,7 +216,7 @@ function dejaDit(anim: ClawdAnim, p: { anim: ClawdAnim } | null) {
 export function priorite(anim: ClawdAnim): number {
   if (anim === 'alerte' || anim === 'question') return 4
   // (le rapport d'un mini aussi : son mini a déjà quitté l'équipe, une loupe ne doit pas le remplacer)
-  if (['fete', 'triste', 'delivrance', 'decourage', 'gratte', 'paquet', 'pause', 'rapport', 'vertige', 'soulage', 'attendu', 'retrouvailles', 'niveau', 'souvenir', 'revanche'].includes(anim)) return 3
+  if (['fete', 'triste', 'delivrance', 'decourage', 'gratte', 'paquet', 'pause', 'rapport', 'vertige', 'soulage', 'attendu', 'retrouvailles', 'niveau', 'souvenir', 'revanche', 'livraison', 'drapeau'].includes(anim)) return 3
   if (LONGUES.includes(anim) || anim === 'tasse' || anim === 'attend' || anim === 'nuit' || anim === 'cache') return 2
   return anim === 'coucou' ? 0 : 1
 }
@@ -277,8 +277,10 @@ export async function scene($: EngineInterface, anim: ClawdAnim, ms = 4000, urge
 
 async function joueScene($: EngineInterface, anim: ClawdAnim, ms: number, maintenant: number) {
   // ce qui réussit le rend heureux (et lui rapporte de l'expérience, comme un mini qui lui rend son travail)
-  if (anim === 'fete' || anim === 'delivrance') humeur = vecu(humeur, 'reussite')
-  if (anim === 'fete' || anim === 'delivrance' || anim === 'rapport') void gagne($, anim === 'rapport' ? XP_RAPPORT : XP_REUSSITE).catch(() => {})
+  // (un pull qui arrive en colis : une réussite comme une fête)
+  const reussite = anim === 'fete' || anim === 'delivrance' || anim === 'livraison'
+  if (reussite) humeur = vecu(humeur, 'reussite')
+  if (reussite || anim === 'rapport') void gagne($, anim === 'rapport' ? XP_RAPPORT : XP_REUSSITE).catch(() => {})
   // le mini qui rend son travail : le dernier fini ; il s'en va autrement que le précédent qu'on a vu partir (tiré ici,
   // quand il se joue : un fini qui en remplace un autre en attente ne compte pas)
   if (anim === 'rapport' && rapportSuivant) {
@@ -1193,10 +1195,9 @@ const ECART_REACTION = 90_000
 const ATTENTE_REACTION = 40_000
 
 /**
- * Son coup d'œil sur la bande, à chaque tic (même en pleine activité) : ce
- * qui vient de changer, et ce qu'il y fera : un build raté (il va taper
- * dessus), un quota au rouge (il le retient), un sous-agent fini (il contrôle
- * son travail), une étape faite (il la félicite), dans cet ordre de priorité.
+ * Son coup d'œil sur la bande, à chaque tic (même en pleine activité) : ses
+ * yeux se tournent vers ce qui vient de changer, et il note ce qu'il y fera
+ * (la table des réactions, rangée par importance : `REACTIONS`, bande.ts).
  */
 async function remarque($: EngineInterface, maintenant: number) {
   const els = await elementsBande($)
@@ -1207,16 +1208,9 @@ async function remarque($: EngineInterface, maintenant: number) {
   // (son coup d'œil raté ne lui fait pas manquer la réaction qui suit)
   if (change) await jetteUnOeil($, change, maintenant).catch(() => {})
   if (avant && !reaction && maintenant - derniereReaction >= ECART_REACTION) {
-    const devient = (el: ElementBande, etat: string) => el.etat === etat && avant.get(el.id) !== undefined && avant.get(el.id) !== etat
-    const vue = (
-      [
-        ['repare', els.find(el => el.genre === 'build' && devient(el, 'echec'))],
-        ['retient', els.find(el => el.genre === 'jauge' && devient(el, 'critique'))],
-        ['controle', els.find(el => el.genre === 'agent' && devient(el, 'faite'))],
-        ['bravo', els.find(el => el.genre === 'tache' && devient(el, 'faite'))],
-      ] as const
-    ).find(([, el]) => el)
-    if (vue) reaction = { nom: vue[0], vise: vue[1]!.id, jusqua: maintenant + ATTENTE_REACTION }
+    // (la table des réactions, rangée par importance : bande.ts, `REACTIONS`)
+    const vue = reactionA(avant, els)
+    if (vue) reaction = { nom: vue.numero, vise: vue.vise, jusqua: maintenant + ATTENTE_REACTION }
   }
 }
 
@@ -1303,6 +1297,10 @@ const lance = (re: RegExp, cmd: string) => morceaux(cmd).some(m => re.test(m))
 const PUSH = /^git(\s+-C\s+("[^"]*"|\S+))?\s+push\b/i
 const PULL = /^git(\s+-C\s+("[^"]*"|\S+))?\s+pull\b/i
 const COMMIT = /^git(\s+-C\s+("[^"]*"|\S+))?\s+commit\b/i
+/** Une branche nouvelle : `git checkout -b`, `git switch -c` (ou leurs majuscules, d'autres options avant), `git branch <nom>` seul n'y bascule pas */
+const BRANCHE = /^git(\s+-C\s+("[^"]*"|\S+)|\s+-c\s+\S+)*\s+(checkout(\s+-[a-zA-Z]+)*\s+-[bB]|switch(\s+-[a-zA-Z]+)*\s+(-[cC]|--create|--force-create))/
+/** Un pull a ramené quelque chose (avance rapide, fusion, rebase) : ce que git en dit */
+const ARRIVEE = /Fast-forward|Updating [0-9a-f]{7,}\.\.[0-9a-f]{7,}|Merge made by|Successfully rebased|\d+ files? changed/
 const INSTALL_TEL = /^\S*adb(\.exe)?\b.*\sinstall(-multiple)?\b/i
 /** Une commande git qui fusionne (merge, rebase, pull, cherry-pick, revert, am, stash pop ou apply) : elle peut tomber sur un conflit */
 const FUSION = /^git(\s+-C\s+("[^"]*"|\S+))?\s+(merge|rebase|pull|cherry-pick|revert|am|stash\s+(pop|apply))\b/i
@@ -1398,7 +1396,7 @@ async function seSouvient($: EngineInterface, maintenant: number) {
   if (maintenant - s.quand > OUBLI_MS) return
   const anim = s.quoi === 'galere' ? 'revanche' : 'souvenir'
   // (il attend la fin de son réveil, plus long que la patience d'une scène ordinaire)
-  await scene($, anim, dureeScene(anim) * 1000, false, 60_000)
+  await scene($, anim, 5000, false, 60_000)
 }
 
 /** Une petite réaction (loupe, crayon), sauf s'il vit un grand moment. */
@@ -1483,15 +1481,21 @@ async function verdictDe($: EngineInterface, cmd: string, r: ToolCallResult) {
   }
   // passée dans un `| tail`, une commande ratée sort en 0 : sa sortie le dit
   if (lance(BUILD, cmd) || lance(TESTS, cmd)) return verdict($, ok && !SORTIE_ECHEC.test(r.text ?? ''))
+  // un push réussi (son avion en papier est parti pendant le push : sa scène `push`) : la fête
   if (lance(PUSH, cmd)) {
-    if (ok) await retiens($, 'push')
-    return scene($, ok ? 'fete' : 'triste', ok ? 6000 : 7000)
+    if (!ok) return scene($, 'triste', 7000)
+    await retiens($, 'push')
+    return scene($, 'fete', 6000)
   }
-  // un pull réussi (sans conflit : vu plus haut) : les nouveautés de GitHub sont là, une petite fête ; rien de neuf, rien
+  // un pull réussi (sans conflit : vu plus haut) : les nouveautés de GitHub arrivent en colis, il l'ouvre ; rien de neuf, rien
   if (lance(PULL, cmd)) {
     if (!ok) return scene($, 'triste', 6000)
-    return /Already up.to.date|Déjà à jour/i.test(r.text ?? '') ? undefined : scene($, 'fete', 4000)
+    // (seulement quand git dit que quelque chose est arrivé : un pull silencieux, déjà à jour ou raté derrière un `| tail`
+    // n'apporte pas de colis)
+    return ARRIVEE.test(r.text ?? '') ? scene($, 'livraison', 4400) : undefined
   }
+  // une branche nouvelle : il plante son drapeau
+  if (lance(BRANCHE, cmd) && ok) return scene($, 'drapeau', 4200)
   if (lance(INSTALL_TEL, cmd)) {
     return ok && /Success/.test(r.text ?? '') ? scene($, 'fete', 5000) : scene($, 'triste', 6000)
   }
@@ -1886,7 +1890,7 @@ export const register: Register = on => {
       } else if (e.reason === 'refusal') await scene($, 'surpris', 3000)
       else if (e.durationMs > LONG_TOUR_MS) {
         // pas de fête sur un échec qui vient d'être dit (tests rouges, découragement), ni par-dessus une autre
-        if (echecsDaffilee === 0 && !(['fete', 'delivrance', 'triste', 'gratte', 'decourage'] as ClawdAnim[]).some(a => dejaDit(a, p))) await scene($, 'fete', 6000)
+        if (echecsDaffilee === 0 && !(['fete', 'delivrance', 'triste', 'gratte', 'decourage', 'livraison', 'drapeau'] as ClawdAnim[]).some(a => dejaDit(a, p))) await scene($, 'fete', 6000)
       }
       else {
         // ne pas écraser une fête de build/push qui vient d'arriver

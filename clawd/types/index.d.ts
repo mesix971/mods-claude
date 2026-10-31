@@ -88,6 +88,9 @@ export type ClawdAnim =
   // le matin, il se souvient du moment fort de la veille : une victoire (souvenir), une galère pas finie (revanche)
   | 'souvenir'
   | 'revanche'
+  // git : un pull qui ramène des nouveautés (un colis), une branche nouvelle (son drapeau)
+  | 'livraison'
+  | 'drapeau'
   // tu reviens après une longue absence : il t'a attendu (8 h), il saute de joie (un jour et demi)
   | 'attendu'
   | 'retrouvailles'

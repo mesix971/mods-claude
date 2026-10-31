@@ -6,7 +6,7 @@
 import { expect, mock, test } from 'claude-code/testing'
 
 import type { ElementBande } from '../types'
-import { COIN_VIDE, HAUTEUR, MARGE, MAX_DUREE, MAX_SVG, NUMEROS, RETENUE, numerosAvecMinis, numerosJouables, prepareNumero, svgNumero } from './bande'
+import { COIN_VIDE, HAUTEUR, MARGE, MAX_DUREE, MAX_SVG, NUMEROS, REACTIONS, RETENUE, numerosAvecMinis, numerosJouables, prepareNumero, reactionA, svgNumero } from './bande'
 import type { Numero } from './bande'
 import { TEINTES } from './sprite'
 
@@ -262,6 +262,37 @@ test('ses réactions : il vise ce qui vient de changer (une étape faite, un bui
   expect(ctl.emprunts.map(e => e.id)).toEqual(['agent-a1'])
   // jamais de lui-même au hasard : ce sont des réactions
   for (const nom of ['bravo', 'repare', 'retient', 'controle']) expect(NUMEROS[nom]!.quand).toBe('demande')
+})
+
+test('la table des réactions : ce qui vient de changer décide (la plus importante d’abord), jamais une apparition ; ouf, poches, console', () => {
+  const avant = new Map([
+    ['jauge-5h', 'critique'],
+    ['conso', 'ok'],
+    ['agent-a1', 'encours'],
+    ['tache-plan-1', 'encours'],
+  ])
+  const bande: ElementBande[] = [
+    { id: 'jauge-5h', genre: 'jauge', etat: 'ok', x: 0, largeur: 157, ligne: 1 },
+    { id: 'conso', genre: 'conso', etat: 'lourde', x: 171, largeur: 92, ligne: 1 },
+    { id: 'agent-a1', genre: 'agent', etat: 'attente', x: 30, largeur: 17, ligne: 0 },
+    { id: 'tache-plan-1', genre: 'tache', etat: 'faite', x: 0, largeur: 17, ligne: 0 },
+    // apparue déjà faite : pas une réaction
+    { id: 'tache-plan-2', genre: 'tache', etat: 'faite', x: 50, largeur: 17, ligne: 0 },
+  ]
+  // un sous-agent interrompu passe avant le quota qui repart, la conso et l'étape faite
+  expect(reactionA(avant, bande)).toEqual({ numero: 'console', vise: 'agent-a1' })
+  expect(reactionA(new Map([...avant, ['agent-a1', 'attente']]), bande)).toEqual({ numero: 'ouf', vise: 'jauge-5h' })
+  expect(reactionA(new Map([...avant, ['agent-a1', 'attente'], ['jauge-5h', 'ok']]), bande)).toEqual({ numero: 'poches', vise: 'conso' })
+  expect(reactionA(new Map([...avant, ['agent-a1', 'attente'], ['jauge-5h', 'ok'], ['conso', 'lourde']]), bande)).toEqual({ numero: 'bravo', vise: 'tache-plan-1' })
+  // un contexte qui redescend n'est pas un quota qui repart
+  expect(reactionA(new Map([['jauge-contexte', 'critique']]), [{ id: 'jauge-contexte', genre: 'jauge', etat: 'ok', x: 0, largeur: 108, ligne: 1 }])).toBeNull()
+  // chaque numéro de la table existe, et vise ce qu'on lui dit
+  for (const r of REACTIONS) expect(NUMEROS[r.numero]?.quand).toBe('demande')
+  for (const [nom, vise] of [['ouf', 'jauge-5h'], ['poches', 'conso'], ['console', 'agent-a1']] as const) {
+    const prep = prepareNumero(nom, bande, LARGEUR, 0, { vise })
+    expect(prep!.cibles.map(c => c.id)).toEqual([vise])
+    expect(svgNumero({ nom, elements: bande, cibles: prep!.cibles, vise }, TEINTES.opus)).not.toContain('<text')
+  }
 })
 
 test('ses minis : les autres le regardent depuis leurs cases ; saute-mouton, pyramide et passe se jouent à plusieurs', () => {

@@ -1886,6 +1886,34 @@ const SCENES: Record<ClawdAnim, () => Scene> = {
       corps({ dy: 1, g: 'bas', d: 'ciel', yeux: 'heureux' }),
     ],
   }),
+  // Un pull qui ramène des nouveautés : un colis tombe du ciel, il l'attrape, l'ouvre, et ça brille
+  livraison: () => ({
+    duree: 4.4,
+    fx: effets.etincelles(),
+    images: [
+      corps({ yeux: 'haut', bouche: 'o' }) + A(COLIS, 26, -40, 3),
+      corps({ g: 'haut', d: 'haut', yeux: 'haut' }) + A(COLIS, 26, -28, 3),
+      corps({ g: 'ciel', d: 'ciel', yeux: 'grand' }) + A(COLIS, 26, -30, 3),
+      corps({ g: 'devant', d: 'devant', yeux: 'heureux' }) + A(COLIS, 26, 24, 3),
+      corps({ g: 'devant', d: 'devant', yeux: 'grand', bouche: 'o' }) + A(COLIS_OUVERT, 26, 24, 3),
+      corps({ g: 'devant', d: 'devant', yeux: 'etoile' }) + A(COLIS_OUVERT, 26, 24, 3),
+      corps({ g: 'ciel', d: 'ciel', yeux: 'heureux' }),
+      corps({ yeux: 'heureux' }),
+    ],
+  }),
+  // Une branche nouvelle : il brandit son drapeau, le plante à côté de lui et le salue, fier
+  drapeau: () => ({
+    duree: 4.2,
+    images: [
+      corps({ d: 'haut', yeux: 'droite' }) + A(DRAPEAU, 64, -14, 3),
+      corps({ d: 'ciel', yeux: 'haut' }) + A(DRAPEAU_VENT, 64, -24, 3),
+      corps({ d: 'tendu', jambes: 'replie', dy: 3, yeux: 'droite' }) + A(DRAPEAU, 78, 22, 3),
+      corps({ yeux: 'heureux' }) + A(DRAPEAU_VENT, 78, 22, 3),
+      corps({ d: 'tete', yeux: 'heureux' }) + A(DRAPEAU, 78, 22, 3),
+      corps({ d: 'tete', yeux: 'clin' }) + A(DRAPEAU_VENT, 78, 22, 3),
+      corps({ g: 'haut', d: 'haut', yeux: 'heureux' }) + A(DRAPEAU, 78, 22, 3),
+    ],
+  }),
   // Le matin, il se souvient du moment fort de la veille (sa mémoire, register.tsx) : une bulle de pensée au-dessus de
   // lui, et dedans le trophée de sa délivrance ou de son push ; il sourit, puis saute de joie
   souvenir: () => {
@@ -2937,7 +2965,20 @@ const MINIS_MAX = 3
  * que fait son sous-agent : il porte un carton, sort la loupe, écrit ou tape
  * au marteau. Il réutilise les images des grandes scènes, réduites de moitié.
  */
-function mini(i: number, fait: MiniFait, place = i): { css: string; svg: string } {
+/**
+ * Le caractère d'un mini, d'après le modèle de son sous-agent (sa teinte) :
+ * Haiku est pressé (il mime plus vite), Opus posé (plus lentement), Fable
+ * flamboyant (il scintille) ; Sonnet, ou un modèle inconnu, comme Clawd.
+ */
+export function caractere(t: Teinte | undefined): { allure: number; brille: boolean } {
+  if (t === TEINTES.haiku) return { allure: 0.7, brille: false }
+  if (t === TEINTES.opus) return { allure: 1.35, brille: false }
+  if (t === TEINTES.fable) return { allure: 1, brille: true }
+  return { allure: 1, brille: false }
+}
+
+function mini(i: number, fait: MiniFait, place = i, sienne?: Teinte): { css: string; svg: string } {
+  const { allure, brille } = caractere(sienne)
   // (ni la sueur ni l'insigne de Clawd sur lui)
   const scene: Pick<Scene, 'images' | 'duree'> = enPetit(() =>
     fait === 'marche'
@@ -2952,16 +2993,19 @@ function mini(i: number, fait: MiniFait, place = i): { css: string; svg: string 
   )
   const id = `fbm-${i}`
   const n = scene.images.length
-  const css = `.${id}{opacity:0;animation:${id} ${scene.duree}s infinite steps(1,end)}@keyframes ${id}{0%{opacity:1}${(100 / n).toFixed(3)}%{opacity:0}100%{opacity:0}}`
+  // son allure : un Haiku mime plus vite, un Opus plus lentement
+  const duree = +(scene.duree * allure).toFixed(3)
+  const css = `.${id}{opacity:0;animation:${id} ${duree}s infinite steps(1,end)}@keyframes ${id}{0%{opacity:1}${(100 / n).toFixed(3)}%{opacity:0}100%{opacity:0}}`
   // (chaque pose dans sa tranche de son petit cycle, sans `--t0` : une boucle d'une demi-seconde qui repart ne se voit
   // pas, et le sifflet, le plus chargé, tient ainsi sous 40 Ko)
   const images = scene.images
     .map((img, k) => {
-      const d = k === 0 ? 0 : -(scene.duree - (k * scene.duree) / n)
+      const d = k === 0 ? 0 : -(duree - (k * duree) / n)
       return `<g class="${id}" style="animation-delay:${d.toFixed(3)}s">${img}</g>`
     })
     .join('')
-  return { css, svg: petit(images, X0 - 24 - place * 40) }
+  // un Fable scintille autour de lui
+  return { css, svg: petit(images + (brille ? effets.etincelles() : ''), X0 - 24 - place * 40) }
 }
 
 /** Un dessin de Clawd réduit de moitié autour du sol, son axe en `centre` : un mini-Clawd */
@@ -3211,7 +3255,7 @@ export type Mini = MiniFait | { fait: MiniFait; couleur?: Teinte; sortie?: Sorti
 function equipe(copains: readonly Mini[], couleur: Teinte, decale = 0): { css: string; svg: string } {
   const visibles = copains.slice(0, MINIS_MAX - decale).map((c, i) => {
     const { fait, couleur: sienne } = typeof c === 'string' ? { fait: c, couleur: undefined } : c
-    const m = mini(i, fait, i + decale)
+    const m = mini(i, fait, i + decale, sienne)
     return { css: m.css, svg: recolore(m.svg, sienne ?? couleur) }
   })
   const reste = copains.length - visibles.length
@@ -3505,6 +3549,12 @@ const ICONES = {
   coeur: COEUR,
 }
 
+// Ce que lui inspire git : le colis d'un pull, le drapeau d'une branche (l'avion en papier d'un push est `AVION`)
+const COLIS = ['HHHHHHH', 'HHHSHHH', 'CCCSCCc', 'CCCSCCc', 'CCCSCCc', 'DDDDDDD']
+const COLIS_OUVERT = ['H.....H', '.H...H.', 'CCCCCCc', 'CCCCCCc', 'CCCCCCc', 'DDDDDDD']
+const DRAPEAU = ['GVVVV', 'GVvVV', 'GVVVV', 'G....', 'G....', 'G....', 'G....', 'G....', 'G....']
+const DRAPEAU_VENT = ['GVVVV.', 'GVvVVV', 'GVVV..', 'G.....', 'G.....', 'G.....', 'G.....', 'G.....', 'G.....']
+
 // Ses souvenirs de la veille, dans sa bulle de pensée : le trophée d'une victoire, l'orage d'une galère
 const TROPHEE = ['Y.YYY.Y', 'YYYYYYY', '.YYYYY.', '..YYY..', '...Y...', '..YYY..', '.NNNNN.']
 const ORAGE = ['..GGG..', '.GGGGG.', 'GGGGGGG', '.GGGGG.', '..Y.B..', '.Y..B..', 'Y.B..B.']
@@ -3580,7 +3630,8 @@ export const EMOJI: Record<ClawdAnim, string> = {
   tel: '📱', copain: '👾', chef: '📋', sifflet: '📣', fete: '🎉', triste: '🌧', alerte: '❗', surpris: '❓', dodo: '💤',
   fatigue: '😓', vertige: '😵', coeur: '♥', nuit: '🌙', reveil: '🥱', tasse: '🗜', paquet: '✨', attend: '✋',
   question: '❔', deballe: '📥', decourage: '😞', delivrance: '🎆', colis: '🎁', gigogne: '🪆', tambour: '🥁', podium: '🏆',
-  pause: '🥛', rapport: '🤝', bonbon: '🍬', detente: '😎', baille: '😪', cache: '🫣', soulage: '😮‍💨', souvenir: '💭', revanche: '💪', attendu: '🤗', retrouvailles: '🥰', chat: '🐈', filante: '🌠',
+  pause: '🥛', rapport: '🤝', bonbon: '🍬', detente: '😎', baille: '😪', cache: '🫣', soulage: '😮‍💨', souvenir: '💭', revanche: '💪', attendu: '🤗',
+  livraison: '📦', drapeau: '🚩', retrouvailles: '🥰', chat: '🐈', filante: '🌠',
   floss: '🕺', orange: '🍊', defaut: '🎶', griddy: '🔥', takel: '🫵', sixseven: '6️⃣7️⃣', niveau: '⭐',
 }
 
@@ -3600,4 +3651,4 @@ export const ACTIVITES: readonly ClawdAnim[] = [
  * Ses pinceaux, pour la grande scène (bande.ts) : son corps, son profil, ses
  * accessoires et ses effets, et de quoi les animer image par image.
  */
-export const PINCEAUX = { PAL, X0, Y0, VUE, CSS, vit, THEME, FILTRE, OMBRE, corps, profil, miroir, A, art, effets, fenetres, reutilises, recolore, deguiseEn, enPetit }
+export const PINCEAUX = { PAL, X0, Y0, VUE, CSS, vit, THEME, FILTRE, OMBRE, corps, profil, miroir, A, art, effets, fenetres, reutilises, recolore, deguiseEn, enPetit, caractere }

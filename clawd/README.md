@@ -35,7 +35,12 @@ Anthropic.
   bangs on a failed build, holds back a quota turning red, checks a finished
   subagent's work, cheers each completed step, and when changes have waited
   half an hour for a commit he stands by the Commit button tapping his foot
-  (he never clicks it).
+  (he never clicks it). A quota that resets makes him sigh with relief, an
+  expensive conversation makes him turn out his pockets, and he comforts an
+  interrupted subagent.
+- A pull that brings news drops a parcel he opens; a new branch gets his
+  flag. His minis have their model's temper: Haiku hurries, Opus takes its
+  time, Fable sparkles.
 - He remembers the high point of his day (a fix after a run of failures, a
   rough patch, a push) and recalls it the next morning, in a thought bubble.
 

@@ -739,14 +739,18 @@ const equipe: Numero = {
       const { variante } = partie
       const court = profil('vite')
       const leve = f({ g: 'ciel', d: 'ciel', yeux: 'heureux' })
-      return c.map((el, n): Copain => ({
+      return c.map((el, n): Copain => {
+        // son caractère, d'après son modèle : un Haiku file, un Opus prend son temps, un Fable scintille
+        const { allure, brille } = PINCEAUX.caractere(teinteDe(el.teinte))
+        const vite = Math.round(320 / allure)
+        return {
         place: placeDe(el, n, partie),
         teinte: el.teinte,
         pas: [
           // chacun son tour
           { duree: 0.6 + 0.4 * n, images: [f({ yeux: 'gauche' }), f({ yeux: 'heureux' })], de: { coin: 0 } },
-          { duree: 0.4, images: [court], a: { cible: el.largeur / 2 + Math.round(CORPS.demiLargeur * DEMI) + 2, n }, vitesse: 320, mouvement: 'doux' },
-          { duree: 0.6, images: [f({ g: 'tendu', yeux: 'gauche' }), f({ yeux: 'gauche' })], gestes: [{ n, secoue: 1.2 }] },
+          { duree: 0.4, images: [court], a: { cible: el.largeur / 2 + Math.round(CORPS.demiLargeur * DEMI) + 2, n }, vitesse: vite, mouvement: 'doux' },
+          { duree: 0.6, images: [f({ g: 'tendu', yeux: 'gauche' }), f({ yeux: 'gauche' })], gestes: [{ n, secoue: 1.2 }], ...(brille ? { fx: effets.etincelles() } : {}) },
           // chacun à sa façon (selon la partie) : il la soulève et sautille avec, ou il grimpe dessus et danse
           ...(choix(variante, 2, n + 1)
             ? [
@@ -763,10 +767,11 @@ const equipe: Numero = {
                 { duree: 0.5, images: [leve], saut: 5, gestes: [{ n, saut: 5 }] },
                 { duree: 0.4, images: [f({ g: 'haut', d: 'haut', yeux: 'heureux' })], gestes: [{ n, dy: 0, mouvement: 'elan' as const }] },
               ]),
-          { duree: 0.4, images: [miroir(court)], a: { coin: 0 }, vitesse: 320, mouvement: 'doux' },
+          { duree: 0.4, images: [miroir(court)], a: { coin: 0 }, vitesse: vite, mouvement: 'doux' },
           { duree: 0.4, images: [f({ yeux: 'heureux' })] },
         ],
-      }))
+        }
+      })
     }),
 }
 
@@ -1052,6 +1057,112 @@ const controle: Numero = {
   ],
 }
 
+/** Un quota qui repart (sa fenêtre se réinitialise, la jauge redevient verte) : il court dessous, souffle un grand coup, s'essuie le front, et fait la fête. */
+const ouf: Numero = {
+  quand: 'demande',
+  besoin: 'une jauge de quota redevenue verte, au plus sur la deuxième ligne',
+  cibles: (els, { vise }) => vu(els, vise, e => e.genre === 'jauge' && e.etat === 'ok' && e.ligne <= 1),
+  pas: ([el]) => {
+    const ici: Lieu = el!.ligne >= 1 ? { cible: Math.min(el!.largeur / 2 - CORPS.demiLargeur, 30) } : { cible: aCote(el!, 0) }
+    return [
+      { duree: 0.6, images: [f({ yeux: 'haut', bouche: 'o' })], de: { coin: 0 } },
+      { duree: 0.4, images: [court], a: ici, vitesse: 'vite', mouvement: 'doux' },
+      { duree: 0.9, images: [f({ yeux: 'haut' }), f({ yeux: 'grand', bouche: 'o' })] },
+      { duree: 1, images: [f({ g: 'tete', yeux: 'ferme' }), f({ g: 'tete', yeux: 'heureux' })] },
+      { duree: 0.5, images: [bond.part, bond.haut], saut: 12, gestes: [{ saut: 4 }] },
+      { duree: 0.2, images: [bond.recoit] },
+      { duree: 1.4, images: [f({ g: 'ciel', d: 'ciel', yeux: 'heureux' }), f({ g: 'haut', d: 'haut', yeux: 'heureux' })], tours: 3, fx: effets.confettis() },
+      { duree: 0.4, images: [miroir(court)], a: { coin: 0 }, vitesse: 'vite', mouvement: 'doux' },
+      { duree: 0.4, images: [f({ yeux: 'heureux' })] },
+    ]
+  },
+}
+
+/** Des pièces qui tombent de ses poches (dans sa toile) */
+const pieces = () =>
+  [[22, 30], [44, 34], [30, 38]].map(([x, y], i) => `<g class="tombe" style="animation-delay:${(i * 0.3).toFixed(1)}s">${PINCEAUX.A(['.Y.', 'YyY', '.Y.'], x!, y!, 2)}</g>`).join('')
+
+/**
+ * La conversation coûte cher (atelier passe la conso à l'ambre : chaque
+ * réponse relit beaucoup) : il court sous la conso, la regarde, retourne ses
+ * poches (quelques pièces tombent), les secoue… vides. Il hausse les épaules
+ * et rentre.
+ */
+const poches: Numero = {
+  quand: 'demande',
+  besoin: 'la conso du tour à l’ambre (chaque réponse relit beaucoup), au plus sur la deuxième ligne',
+  cibles: (els, { vise }) => vu(els, vise, e => e.genre === 'conso' && e.etat === 'lourde' && e.ligne <= 1),
+  pas: ([el]) => {
+    const ici: Lieu = el!.ligne >= 1 ? { cible: 0 } : { cible: aCote(el!, 2) }
+    return [
+      { duree: 0.6, images: [f({ yeux: 'gauche', bouche: 'o' })], de: { coin: 0 } },
+      { duree: 0.4, images: [court], a: ici, vitesse: 'vite', mouvement: 'doux' },
+      { duree: 1, images: [f({ yeux: 'haut' }), f({ yeux: 'haut', bouche: 'o' })], gestes: [{ secoue: 1 }] },
+      // il retourne ses poches : quelques pièces tombent
+      { duree: 1.2, images: [f({ g: 'pend', d: 'pend', yeux: 'bas' }), f({ g: 'pend', d: 'pend', yeux: 'bas', dx: 2 })], tours: 2, fx: pieces() },
+      // il les secoue : plus rien
+      { duree: 0.9, images: [f({ g: 'pend', d: 'pend', yeux: 'mi', dx: -2 }), f({ g: 'pend', d: 'pend', yeux: 'mi', dx: 2 })], tours: 3 },
+      { duree: 0.9, images: [f({ g: 'haut', d: 'haut', yeux: 'mi' }), f({ g: 'bas', d: 'bas', yeux: 'mi' })] },
+      { duree: 0.4, images: [miroir(court)], a: { coin: 0 }, vitesse: 'vite', mouvement: 'doux' },
+      { duree: 0.4, images: [f({ yeux: 'mi' })] },
+    ]
+  },
+}
+
+/**
+ * Un sous-agent interrompu (sa pastille éteinte, son travail arrêté en
+ * route) : il accourt, s'accroupit près d'elle, la tapote doucement, la
+ * serre contre lui (des cœurs), et rentre.
+ */
+const consolation: Numero = {
+  quand: 'demande',
+  besoin: 'un sous-agent interrompu (pastille éteinte) en bas de la bande',
+  cibles: (els, { vise }) => vu(els, vise, e => e.genre === 'agent' && e.etat === 'attente' && e.ligne === 0),
+  pas: ([el]) => [
+    { duree: 0.6, images: [f({ yeux: 'gauche', bouche: 'o' })], de: { coin: 0 } },
+    { duree: 0.4, images: [court], a: { cible: aCote(el!, 2) }, vitesse: 'vite', mouvement: 'doux' },
+    { duree: 0.8, images: [f({ jambes: 'replie', dy: 3, yeux: 'bas' }), f({ jambes: 'replie', dy: 3, yeux: 'mi' })] },
+    { duree: 1.2, images: [f({ jambes: 'replie', dy: 3, g: 'tendu', yeux: 'mi' }), f({ jambes: 'replie', dy: 3, yeux: 'mi' })], tours: 2, gestes: [{ secoue: 0.8 }] },
+    { duree: 1.6, images: [f({ g: 'devant', d: 'devant', yeux: 'ferme' })], fx: effets.coeurs(), gestes: [{ dx: 4, mouvement: 'doux' }] },
+    { duree: 0.5, images: [f({ yeux: 'heureux' })], gestes: [{ dx: 0, mouvement: 'doux' }] },
+    { duree: 0.4, images: [miroir(court)], a: { coin: 0 }, vitesse: 'vite', mouvement: 'doux' },
+    { duree: 0.4, images: [f({ yeux: 'heureux' })] },
+  ],
+}
+
+/**
+ * Ses réactions à ce qui change sur la bande : quand un élément de ce
+ * `genre` (et de cet `id`, s'il est dit) passe à l'état `vers` (depuis un des
+ * états `de`, s'ils sont dits ; jamais à son apparition), il vient jouer le
+ * numéro `numero` sur lui. Rangées par importance : la première qui convient
+ * passe (register.tsx les lit à chaque coup d'œil, au plus une toutes les
+ * 90 s). Une réaction nouvelle : une ligne ici, et son numéro (`quand:
+ * 'demande'`, qui trouve sa cible par `vise`).
+ */
+export type Reaction = { genre: ElementBande['genre']; vers: string; de?: readonly string[]; id?: RegExp; numero: string }
+export const REACTIONS: Reaction[] = [
+  { genre: 'build', vers: 'echec', numero: 'repare' },
+  { genre: 'jauge', vers: 'critique', numero: 'retient' },
+  { genre: 'agent', vers: 'attente', de: ['encours'], numero: 'console' },
+  { genre: 'agent', vers: 'faite', numero: 'controle' },
+  // (depuis le rouge seulement : une jauge « attention » redevient verte d'elle-même quand le temps passe sans usage)
+  { genre: 'jauge', vers: 'ok', de: ['critique'], id: /^jauge-(5h|7j)$/, numero: 'ouf' },
+  { genre: 'conso', vers: 'lourde', numero: 'poches' },
+  { genre: 'tache', vers: 'faite', numero: 'bravo' },
+]
+
+/** La réaction à jouer d'après ce qui a changé depuis le dernier coup d'œil (`avant` : l'état de chaque élément), ou null */
+export function reactionA(avant: ReadonlyMap<string, string>, els: readonly ElementBande[]): { numero: string; vise: string } | null {
+  for (const r of REACTIONS) {
+    const el = els.find(e => {
+      const etait = avant.get(e.id)
+      return e.genre === r.genre && e.etat === r.vers && etait !== undefined && etait !== r.vers && (!r.de || r.de.includes(etait)) && (!r.id || r.id.test(e.id))
+    })
+    if (el && Object.hasOwn(NUMEROS, r.numero)) return { numero: r.numero, vise: el.id }
+  }
+  return null
+}
+
 // ------------------------------------------------- quand il s'ennuie
 
 /**
@@ -1329,7 +1440,7 @@ const installe: Numero = {
   },
 }
 
-export const NUMEROS: Record<string, Numero> = { chipe, tournee, bousculade, popcorn, echange, lilliput, geant, funambule, sieste, equipe, mouton, pyramide, passe, bravo, repare, retient, controle, inspection, rappel, installe, presse, cadre }
+export const NUMEROS: Record<string, Numero> = { chipe, tournee, bousculade, popcorn, echange, lilliput, geant, funambule, sieste, equipe, mouton, pyramide, passe, bravo, repare, retient, controle, ouf, poches, console: consolation, inspection, rappel, installe, presse, cadre }
 
 export const estNumero = (nom: unknown): nom is string => typeof nom === 'string' && Object.hasOwn(NUMEROS, nom)
 

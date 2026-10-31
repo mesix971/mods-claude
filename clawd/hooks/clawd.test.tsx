@@ -1401,7 +1401,7 @@ test('une action ne se coupe pas par un verdict ; ton ♥ et ton 🕺, eux, pass
   await ui.unmount()
 })
 
-test('un git pull réussi : une petite fête ; rien de neuf, rien ; refusé, triste', async ($, on) => {
+test('un git pull réussi : les nouveautés arrivent en colis ; rien de neuf, rien ; refusé, triste ; une branche nouvelle, son drapeau', async ($, on) => {
   const { horloge } = moteur(on, {
     isError: false,
     text: 'ok',
@@ -1409,20 +1409,50 @@ test('un git pull réussi : une petite fête ; rien de neuf, rien ; refusé, tri
       cmd === 'git pull'
         ? { isError: false, text: 'Updating 1a2b3c4..5d6e7f8\nFast-forward\n' }
         : cmd.includes('-C a')
-          ? { isError: false, text: 'Already up to date.\n' }
+          ? { isError: false, text: 'Current branch main is up to date.\n' }
           : cmd.includes('-C b')
             ? { isError: true, text: 'fatal: Not possible to fast-forward, aborting.\n' }
             : undefined,
   })
   const ui = await $.ui.mount({ ...BAND(), surface: 'desktop' })
   await $.tool.call({ tool: 'Bash', command: 'git pull' })
-  expect(await scene(ui as never)).toContain('fete')
+  expect(await scene(ui as never)).toContain('livraison')
   await horloge.advance(5000)
   await $.tool.call({ tool: 'Bash', command: 'git -C a pull' })
-  expect(await scene(ui as never)).not.toContain('fete')
+  expect(await scene(ui as never)).not.toContain('livraison')
   await $.tool.call({ tool: 'Bash', command: 'git -C b pull --ff-only' })
   expect(await scene(ui as never)).toContain('triste')
+  await horloge.advance(8000)
+  await $.tool.call({ tool: 'Bash', command: 'git switch -c fix/menu' })
+  expect(await scene(ui as never)).toContain('drapeau')
+  await horloge.advance(5000)
+  // d'autres options avant `-b` : son drapeau aussi
+  await $.tool.call({ tool: 'Bash', command: 'git checkout -q -b essai' })
+  expect(await scene(ui as never)).toContain('drapeau')
+  await horloge.advance(5000)
+  // basculer sur une branche existante, ou restaurer un fichier, n'en crée pas : pas de drapeau
+  for (const cmd of ['git checkout main', 'git checkout -- a.ts', 'git switch -']) {
+    await $.tool.call({ tool: 'Bash', command: cmd })
+    expect(await scene(ui as never)).not.toContain('drapeau')
+  }
   await ui.unmount()
+})
+
+test('📦🚩 le colis et le drapeau : sans texte, légers, pareils d’un rendu à l’autre', () => {
+  for (const anim of ['livraison', 'drapeau'] as const) {
+    const dessin = svgScene(anim)
+    expect(dessin).not.toContain('<text')
+    expect(dessin.length).toBeLessThan(40 * 1024)
+    expect(svgScene(anim)).toBe(dessin)
+  }
+})
+
+test('le caractère des minis : un Haiku mime plus vite, un Opus plus lentement, un Fable scintille', () => {
+  const cycle = (couleur: (typeof TEINTES)[keyof typeof TEINTES]) => Number(/\.fbm-0\{opacity:0;animation:fbm-0 ([\d.]+)s/.exec(svgMinis('chef', [{ fait: 'cherche', couleur }])!)![1])
+  expect(cycle(TEINTES.haiku)).toBeLessThan(cycle(TEINTES.sonnet))
+  expect(cycle(TEINTES.opus)).toBeGreaterThan(cycle(TEINTES.sonnet))
+  expect(svgMinis('chef', [{ fait: 'cherche', couleur: TEINTES.fable }])).toContain('class="scintille"')
+  expect(svgMinis('chef', [{ fait: 'cherche', couleur: TEINTES.sonnet }])).not.toContain('class="scintille"')
 })
 
 test('deux clics sur 🕺 : la deuxième danse part tout de suite, sans attendre la fin de la première', async ($, on) => {

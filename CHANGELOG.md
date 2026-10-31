@@ -43,6 +43,17 @@
 
 ## clawd
 
+- **0.12.0** — 2026-10-31 — Il réagit à plus de choses, et ses minis ont du
+  caractère.
+  - Git : un pull qui ramène des nouveautés, un colis tombe du ciel et il
+    l'ouvre (une réussite comme une fête : humeur, expérience) ; une branche
+    nouvelle, il plante son drapeau.
+  - Sur la bande : un quota qui repart (il souffle et fait la fête), une
+    conversation qui coûte cher (il retourne ses poches), un sous-agent
+    interrompu (il le console). Ses réactions sont une table (`REACTIONS`,
+    bande.ts) : une ligne et un numéro en ajoutent une.
+  - Ses minis selon leur modèle : Haiku est pressé, Opus posé, Fable
+    scintille (dans son coin comme sur la bande).
 - **0.11.0** — 2026-10-31 — Il a l'air de comprendre ce que tu fais.
   - Son regard : quand quelque chose change sur la bande d'atelier, ses yeux
     s'y tournent quelques secondes, quoi qu'il fasse (ses minis aussi).
