@@ -164,9 +164,12 @@ export type Pas = {
  * d'un élément, pour une réaction à ce qui vient de changer), et ses minis
  * dans le coin (la couleur de chacun, null : la sienne) : ceux que le numéro
  * ne fait pas jouer le regardent depuis leurs cases (sans eux, ils
- * disparaîtraient le temps du numéro).
+ * disparaîtraient le temps du numéro). `minis` : l'id du sous-agent de chaque
+ * case, dans le même ordre : chaque mini va à SA pastille (`agent-<id>`) ;
+ * sans eux (à la demande, sans sous-agent connu), les pastilles se rangent
+ * dans l'ordre des cases.
  */
-export type Partie = { largeur: number; variante: number; vise?: string; figurants?: readonly (string | null)[] }
+export type Partie = { largeur: number; variante: number; vise?: string; figurants?: readonly (string | null)[]; minis?: readonly string[] }
 
 export type Numero = {
   /** Quand il peut le jouer de lui-même : au repos, pendant que Claude travaille, partout, ou seulement sur demande */
@@ -721,8 +724,8 @@ const equipe: Numero = {
   poids: 2,
   avecMinis: true,
   besoin: 'une pastille de sous-agent au travail en bas de la bande',
-  cibles: els => {
-    const agents = agentsAuTravail(els)
+  cibles: (els, partie) => {
+    const agents = agentsAuTravail(els, partie)
     return agents.length ? agents : undefined
   },
   pas: () => [
@@ -731,12 +734,13 @@ const equipe: Numero = {
     { duree: 1.6, images: [f({ g: 'haut', d: 'haut', yeux: 'heureux' }), f({ yeux: 'heureux' })], tours: 4, fx: effets.notes() },
   ],
   // à leur taille, sans sa sueur ni son insigne ; la première pastille au mini le plus proche de lui
-  copains: (c, { variante }) =>
+  copains: (c, partie) =>
     enPetit(() => {
+      const { variante } = partie
       const court = profil('vite')
       const leve = f({ g: 'ciel', d: 'ciel', yeux: 'heureux' })
       return c.map((el, n): Copain => ({
-        place: n,
+        place: placeDe(el, n, partie),
         teinte: el.teinte,
         pas: [
           // chacun son tour
@@ -774,8 +778,8 @@ const RANG = 19
 const TETE_MINI = Math.round(CORPS.hauteur * DEMI)
 
 /** Ses minis là, d'après les pastilles de leurs sous-agents au travail : au moins `n`, sinon rien */
-const minisLa = (n: number) => (els: readonly ElementBande[]) => {
-  const a = agentsAuTravail(els)
+const minisLa = (n: number) => (els: readonly ElementBande[], partie: Partie) => {
+  const a = agentsAuTravail(els, partie)
   return a.length >= n ? a : undefined
 }
 /** Clawd les regarde jouer depuis son coin (`duree` : le temps de leur jeu, avant qu'ils rentrent), et les encourage à la fin */
@@ -797,10 +801,10 @@ const mouton: Numero = {
   besoin: 'au moins deux sous-agents au travail (leurs pastilles en bas de la bande)',
   cibles: minisLa(2),
   pas: (c, { variante }) => spectateur(0.8 + toursMouton(variante) * c.length * 0.75),
-  copains: (c, { variante }) =>
+  copains: (c, partie) =>
     enPetit(() => {
       const k = c.length
-      const tours = toursMouton(variante)
+      const tours = toursMouton(partie.variante)
       const dos = f({ jambes: 'replie', dy: 3, yeux: 'haut' })
       return c.map((el, i): Copain => {
         const pas: Pas[] = [{ duree: 0.8, images: [f({ yeux: 'gauche' }), f({ yeux: 'heureux' })], de: { coin: 0 } }]
@@ -815,7 +819,7 @@ const mouton: Numero = {
           } else pas.push({ duree: 0.75, images: [dos] })
         }
         pas.push({ duree: 0.4, images: [miroir(profil('vite'))], a: { coin: 0 }, vitesse: 320, mouvement: 'doux' }, { duree: 0.4, images: [f({ yeux: 'heureux' })] })
-        return { place: i, teinte: el.teinte, pas }
+        return { place: placeDe(el, i, partie), teinte: el.teinte, pas }
       })
     }),
 }
@@ -887,7 +891,7 @@ const passe: Numero = {
   pas: (c, partie) => spectateur(jeuDePasse(c, partie).duree),
   copains: (c, partie) =>
     enPetit(() => {
-      const { ecart, vers, aller, bouge, lancers } = jeuDePasse(c, partie)
+      const { ecart, places, vers, aller, bouge, lancers } = jeuDePasse(c, partie)
       const pret = f({ g: 'haut', d: 'haut', yeux: 'gauche' })
       const leve = f({ g: 'ciel', d: 'ciel', yeux: 'heureux' })
       const lance = f({ g: 'tendu', d: 'haut', yeux: 'heureux' })
@@ -905,7 +909,7 @@ const passe: Numero = {
       const dernier = lancers % 2 ? (moi: number): Pas[] => [{ duree: 0.7, images: [moi === 1 ? lance : pret], gestes: moi === 0 ? [{ n: 0, dx: 0, saut: 14, rot: -360 }] : [] }] : () => []
       return [0, 1].map(
         (i): Copain => ({
-          place: i,
+          place: places[i]!,
           teinte: c[i]!.teinte,
           pas: [
             { duree: 0.6, images: [f({ yeux: 'gauche' }), f({ yeux: 'heureux' })], de: { coin: 0 } },
@@ -931,13 +935,16 @@ const passe: Numero = {
  * vraiment (assez loin pour son élan et son freinage), le nombre de lancers,
  * et la durée de leur jeu avant de rentrer.
  */
-function jeuDePasse(c: readonly ElementBande[], { largeur, variante }: Partie) {
+function jeuDePasse(c: readonly ElementBande[], partie: Partie) {
+  const { largeur, variante } = partie
   const ecart = 34
+  // (les cases des deux joueurs : celles de leurs sous-agents)
+  const places = [0, 1].map(i => placeDe(c[i]!, i, partie))
   const vers = [centre(c[0]!).x - AXE, centre(c[0]!).x - AXE + ecart]
-  const distances = [0, 1].map(i => Math.abs(vers[i]! - (largeur - TAILLE.largeur + coinCopain(i))))
+  const distances = [0, 1].map(i => Math.abs(vers[i]! - (largeur - TAILLE.largeur + coinCopain(places[i]!))))
   const aller = arrondi(Math.max(0.4, ...distances.map(d => d / 160)), 2)
   const lancers = 2 + choix(variante, 2)
-  return { ecart, vers, aller, bouge: distances.map(d => d > 3), lancers, duree: 0.6 + aller + 2 * TRANSITION + 0.5 + lancers * 1.1 + (lancers % 2 ? 0.7 : 0) + 0.4 }
+  return { ecart, places, vers, aller, bouge: distances.map(d => d > 3), lancers, duree: 0.6 + aller + 2 * TRANSITION + 0.5 + lancers * 1.1 + (lancers % 2 ? 0.7 : 0) + 0.4 }
 }
 
 // ------------------------------------------------- ses réactions
@@ -1115,8 +1122,21 @@ const sieste: Numero = {
   },
 }
 
-/** Les pastilles de ses sous-agents au travail (une par mini, les premières : son coin montre ses trois premiers minis) */
-const agentsAuTravail = (els: readonly ElementBande[]) => duBas(els).filter(e => e.genre === 'agent' && e.etat === 'encours').slice(0, MINIS_MAX)
+/**
+ * Les pastilles de ses sous-agents au travail, une par mini de son coin (il
+ * en montre trois au plus), dans l'ordre de leurs cases : celle de chaque mini
+ * d'après l'id de son sous-agent quand on le connaît, sinon les premières.
+ */
+const agentsAuTravail = (els: readonly ElementBande[], partie?: Partie) => {
+  const auTravail = (el: ElementBande | undefined): el is ElementBande => el?.genre === 'agent' && el.etat === 'encours'
+  if (partie?.minis?.length) return partie.minis.slice(0, MINIS_MAX).map(id => els.find(el => el.id === `agent-${id}`)).filter(auTravail)
+  return duBas(els).filter(auTravail).slice(0, MINIS_MAX)
+}
+/** La case du mini d'une pastille de sous-agent : celle de son sous-agent, sinon son rang (`n`) */
+const placeDe = (el: ElementBande, n: number, partie: Partie) => {
+  const i = partie.minis?.indexOf(el.id.replace(/^agent-/, '')) ?? -1
+  return i >= 0 && i < MINIS_MAX ? i : n
+}
 
 /**
  * L'inspection, pendant que Claude travaille : il pose ses cartons et fait le
@@ -1269,9 +1289,9 @@ export const NUMEROS: Record<string, Numero> = { chipe, tournee, bousculade, pop
 export const estNumero = (nom: unknown): nom is string => typeof nom === 'string' && Object.hasOwn(NUMEROS, nom)
 
 /** Les jeux de ses minis qu'ils peuvent jouer maintenant, d'après les pastilles de leurs sous-agents */
-export function numerosAvecMinis(elements: readonly ElementBande[], largeur = LARGEUR_BANDE): string[] {
+export function numerosAvecMinis(elements: readonly ElementBande[], largeur = LARGEUR_BANDE, minis?: readonly string[]): string[] {
   return Object.entries(NUMEROS)
-    .filter(([nom, n]) => n.avecMinis && prepareNumero(nom, elements, largeur) !== null)
+    .filter(([nom, n]) => n.avecMinis && prepareNumero(nom, elements, largeur, 0, minis?.length ? { minis } : {}) !== null)
     .map(([nom]) => nom)
 }
 
@@ -1669,11 +1689,11 @@ export function prepareNumero(
   elements: readonly ElementBande[],
   largeur = LARGEUR_BANDE,
   depart = 0,
-  { variante = 0, vise, figurants }: { variante?: number; vise?: string; figurants?: readonly (string | null)[] } = {},
+  { variante = 0, vise, figurants, minis }: { variante?: number; vise?: string; figurants?: readonly (string | null)[]; minis?: readonly string[] } = {},
 ): { cibles: ElementBande[]; duree: number; emprunts: { id: string; de: number; a: number }[] } | null {
   const n = NUMEROS[nom]
   if (!n) return null
-  const partie: Partie = { largeur, variante, ...(vise ? { vise } : {}), ...(figurants?.length ? { figurants } : {}) }
+  const partie: Partie = { largeur, variante, ...(vise ? { vise } : {}), ...(figurants?.length ? { figurants } : {}), ...(minis?.length ? { minis } : {}) }
   let cibles: readonly ElementBande[] = []
   try {
     if (n.cibles) {
@@ -1783,7 +1803,7 @@ const emboite = (classes: readonly string[], contenu: string) => classes.reduceR
  * portent celui du numéro : plusieurs dessins dans une même page (la
  * planche-contact) ne se marchent pas dessus.
  */
-type AuDessin = Pick<ClawdNumero, 'nom' | 'elements' | 'largeur' | 'depart' | 'variante' | 'vise' | 'figurants'> & { cibles?: readonly ElementBande[]; colonnes?: number }
+type AuDessin = Pick<ClawdNumero, 'nom' | 'elements' | 'largeur' | 'depart' | 'variante' | 'vise' | 'figurants' | 'minis'> & { cibles?: readonly ElementBande[]; colonnes?: number }
 
 export function svgNumero(n: AuDessin, couleur: Teinte, deguise?: Deguisement | Tenue): string {
   return avecDeguisement(deguise, () => dessineNumero(n, couleur))
@@ -1793,7 +1813,7 @@ function dessineNumero(n: AuDessin, couleur: Teinte): string {
   const numero = NUMEROS[n.nom]
   if (!numero) return COIN_VIDE
   const cibles = n.cibles ?? []
-  const m = monte(numero, cibles, { largeur: n.largeur ?? LARGEUR_BANDE, variante: n.variante ?? 0, ...(n.vise ? { vise: n.vise } : {}), ...(n.figurants?.length ? { figurants: n.figurants } : {}) }, n.depart ?? 0)
+  const m = monte(numero, cibles, { largeur: n.largeur ?? LARGEUR_BANDE, variante: n.variante ?? 0, ...(n.vise ? { vise: n.vise } : {}), ...(n.figurants?.length ? { figurants: n.figurants } : {}), ...(n.minis?.length ? { minis: n.minis } : {}) }, n.depart ?? 0)
   if (!m) return COIN_VIDE
   const { pas, tj } = m
   const T = arrondi(tj.duree, 3)

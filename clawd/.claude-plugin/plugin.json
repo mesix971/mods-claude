@@ -1,6 +1,6 @@
 {
   "name": "clawd",
-  "version": "0.10.1",
+  "version": "0.10.2",
   "description": "A tiny pixel-art Claude who lives above your prompt and silently acts out your session: 73 animated scenes, no text. Unofficial and fan-made.",
   "author": {
     "name": "mesix971"

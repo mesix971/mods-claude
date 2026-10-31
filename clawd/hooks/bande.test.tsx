@@ -280,6 +280,13 @@ test('ses minis : les autres le regardent depuis leurs cases ; saute-mouton, pyr
   // la passe à deux pendant qu'un troisième regarde depuis sa case
   const p = svgNumero({ nom: 'passe', elements: agents(3), cibles: prepareNumero('passe', agents(3), LARGEUR)!.cibles, figurants: [null, null, null] }, TEINTES.opus)
   expect(p).toContain('class="pos-passe-m2"')
+  // chaque mini va à SA pastille : ici, le mini de la première case est celui du sous-agent a1 (la 2e pastille)
+  const croise = svgNumero({ nom: 'equipe', elements: agents(2), cibles: prepareNumero('equipe', agents(2), LARGEUR, 0, { minis: ['a1', 'a0'] })!.cibles, minis: ['a1', 'a0'] }, TEINTES.opus)
+  const corpsDe = (cls: string) => croise.slice(croise.indexOf(`<g class="${cls}">`), croise.indexOf('</svg>', croise.indexOf(`<g class="${cls}">`)))
+  expect(corpsDe('arc-equipe-m0')).toContain(TEINTES.sonnet.O)
+  expect(corpsDe('arc-equipe-m1')).toContain(TEINTES.haiku.O)
+  // un mini sans pastille au travail (son sous-agent pas encore publié par atelier) : on ne joue qu'avec les autres
+  expect(prepareNumero('equipe', agents(2), LARGEUR, 0, { minis: ['zz', 'a1'] })!.cibles.map(c => c.id)).toEqual(['agent-a1'])
   // un sous-agent fini n'a plus de mini : pas de jeu pour lui
   expect(prepareNumero('equipe', agents(1).map(a => ({ ...a, etat: 'faite' })), LARGEUR)).toBeNull()
   // ils ne sont tirés qu'à part, quand ses minis sont là

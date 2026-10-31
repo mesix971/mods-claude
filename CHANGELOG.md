@@ -43,6 +43,9 @@
 
 ## clawd
 
+- **0.10.2** — 2026-10-31 — Chaque mini va à la pastille de SON sous-agent
+  (d'après son identifiant), depuis sa vraie case : plus de supposition sur
+  l'ordre des pastilles d'atelier.
 - **0.10.1** — 2026-10-31 — La sieste sur une pastille souffle des bulles en
   pixels au lieu de « zzz » écrits : sur la bande, pas un mot (vérifié par un
   test sur tous les numéros).

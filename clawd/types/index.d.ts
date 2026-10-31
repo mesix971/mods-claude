@@ -162,6 +162,8 @@ export type ClawdNumero = {
   vise?: string
   /** Ses minis dans le coin quand il a commencé (la couleur de chacun, null : la sienne) : ceux qui ne jouent pas regardent */
   figurants?: (string | null)[]
+  /** L'id du sous-agent de chacun de ces minis, dans le même ordre : chacun va à SA pastille */
+  minis?: string[]
 }
 
 declare module 'claude-code' {

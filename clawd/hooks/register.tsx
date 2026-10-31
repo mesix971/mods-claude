@@ -895,8 +895,11 @@ export async function joueNumero($: EngineInterface, nom: string, vise?: string)
     const largeur = largeurBande()
     // sa variante, tirée une fois (ses pas en dépendent, le dessin aussi), et ses minis du coin, qui le regardent
     const variante = Math.random()
-    const figurants = (await read($, copains)).slice(0, 3).map(c => teinteConnue(c.modele)?.O ?? null)
-    const partie = { variante, ...(vise ? { vise } : {}), ...(figurants.length ? { figurants } : {}) }
+    const coin = (await read($, copains)).slice(0, 3)
+    const figurants = coin.map(c => teinteConnue(c.modele)?.O ?? null)
+    // (l'id du sous-agent de chacun : il va à sa pastille, `agent-<id>`)
+    const minis = coin.map(c => c.id)
+    const partie = { variante, ...(vise ? { vise } : {}), ...(figurants.length ? { figurants, minis } : {}) }
     // il est en route d'une scène à l'autre : le numéro attendra qu'il soit arrivé
     if (enRetour(avant)) return non('occupe')
     // (de quoi le jouer d'ici, d'abord)
@@ -1153,7 +1156,7 @@ const ECART_MINIS = 3 * 60_000
  */
 async function jeuDeMinis($: EngineInterface, maintenant: number) {
   if (maintenant - dernierJeuMinis < ECART_MINIS || maintenant < finActivite || Math.random() > 0.15) return false
-  const choix = numerosAvecMinis(await elementsBande($), largeurBande())
+  const choix = numerosAvecMinis(await elementsBande($), largeurBande(), (await read($, copains)).slice(0, 3).map(c => c.id))
   if (!choix.length) return false
   const joue = await joueNumero($, pondere(choix))
   // (trop lourd à dessiner : il n'y repense pas avant le prochain écart, au lieu de le refaire à chaque coup d'œil)
@@ -1180,15 +1183,15 @@ const ATTENTE_REACTION = 40_000
 async function remarque($: EngineInterface, maintenant: number) {
   const els = await elementsBande($)
   const avant = dejaVu
-  dejaVu = new Map(els.map(e => [e.id, e.etat]))
+  dejaVu = new Map(els.map(el => [el.id, el.etat]))
   if (avant && !reaction && maintenant - derniereReaction >= ECART_REACTION) {
-    const devient = (e: ElementBande, etat: string) => e.etat === etat && avant.get(e.id) !== undefined && avant.get(e.id) !== etat
+    const devient = (el: ElementBande, etat: string) => el.etat === etat && avant.get(el.id) !== undefined && avant.get(el.id) !== etat
     const vue = (
       [
-        ['repare', els.find(e => e.genre === 'build' && devient(e, 'echec'))],
-        ['retient', els.find(e => e.genre === 'jauge' && devient(e, 'critique'))],
-        ['controle', els.find(e => e.genre === 'agent' && devient(e, 'faite'))],
-        ['bravo', els.find(e => e.genre === 'tache' && devient(e, 'faite'))],
+        ['repare', els.find(el => el.genre === 'build' && devient(el, 'echec'))],
+        ['retient', els.find(el => el.genre === 'jauge' && devient(el, 'critique'))],
+        ['controle', els.find(el => el.genre === 'agent' && devient(el, 'faite'))],
+        ['bravo', els.find(el => el.genre === 'tache' && devient(el, 'faite'))],
       ] as const
     ).find(([, el]) => el)
     if (vue) reaction = { nom: vue[0], vise: vue[1]!.id, jusqua: maintenant + ATTENTE_REACTION }
