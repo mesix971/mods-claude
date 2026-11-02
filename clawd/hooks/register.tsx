@@ -1456,19 +1456,17 @@ async function prend($: EngineInterface, id: number, el: string, fin: number) {
 }
 
 /**
- * La bande a-t-elle changé sous le numéro au point qu'il n'a plus de sens ?
- * Atelier masqué, ou une de ses cibles qui n'est plus sur la bande (un plan
- * vidé, le bouton 🆕 qui n'est plus à montrer : une conversation neuve) : sa
- * copie resterait dessinée à une place vide. Sans atelier (null), il pose son
- * numéro lui-même : rien à comparer.
+ * La bande est-elle partie sous le numéro ? Atelier masqué : son numéro ne
+ * se voit plus, il le range. Une de ses cibles qui quitte la bande (un plan
+ * vidé à la fin d'un tour, le bouton 🆕 qui n'est plus à montrer) ne le coupe
+ * plus : coupé en route, il passait d'un coup de la bande à son coin. Il le
+ * finit, sa copie quelques secondes à une place vide. Sans atelier (null), il
+ * pose son numéro lui-même : rien à comparer.
  */
 async function bandePartie($: EngineInterface, n: { cibles?: readonly { id: string }[] }) {
   if (!n.cibles?.length) return false
-  const s = await read($, sceneAtelier)
-  if (s === null) return false
-  if ((await read($, atelierMasque)) === true) return true
-  const ids = new Set((Array.isArray(s.elements) ? s.elements : []).filter(e => !auRepos(e)).map(e => e.id))
-  return n.cibles.some(c => !ids.has(c.id))
+  if ((await read($, sceneAtelier)) === null) return false
+  return (await read($, atelierMasque)) === true
 }
 
 /** Le bouton 🆕 d'atelier au repos : toujours publié, il n'y a rien à montrer tant qu'il n'est pas `a-montrer` */
@@ -1478,9 +1476,10 @@ const auRepos = (e: ElementBande) => e.genre === 'bouton' && e.etat !== 'a-montr
 async function finNumero($: EngineInterface, id?: number) {
   const n = await read($, numero)
   if (!n || (id !== undefined && n.id !== id)) return
+  // son dessin effacé d'abord : son coin revient dans le même rendu (jamais deux Clawd à la fois, ni aucun)
+  if (await read($, grandeScene)) await update($, grandeScene, g => (g && g.id !== n.id ? g : null))
   await update($, numero, () => null)
   numeroLance = false
-  if (await read($, grandeScene)) await update($, grandeScene, g => (g && g.id !== n.id ? g : null))
   if ((await read($, emprunts)).length) await update($, emprunts, l => l.filter(x => x.numero !== n.id))
   // ce qui attendait la fin du numéro
   await suivanteScene($)
@@ -1946,8 +1945,8 @@ export const register: Register = on => {
     // un numéro laissé en plan par un rechargement : il rend tout, et le prochain attendra un peu
     numeroLance = false
     numeroLanceA = 0
-    if (await read($, numero)) await update($, numero, () => null)
     if (await read($, grandeScene)) await update($, grandeScene, () => null)
+    if (await read($, numero)) await update($, numero, () => null)
     if ((await read($, emprunts)).length) await update($, emprunts, () => [])
     dernierNumero = derniereActivite
     // une nouvelle session (ou un rechargement) : son déménagement repartira du début de sa boucle
@@ -2098,8 +2097,8 @@ export const register: Register = on => {
         if (numeroLance) {
           const n = await read($, numero)
           if (n) {
-            // un numéro resté sans fin (ses minuteurs perdus) : il rend tout ; la bande a changé sous lui (masquée,
-            // une de ses cibles partie, un questionnaire par-dessus) : une copie de rien resterait à l'écran, il rend tout
+            // un numéro resté sans fin (ses minuteurs perdus) : il rend tout ; la bande cachée sous lui (masquée, un
+            // questionnaire par-dessus) : il rend tout (une cible partie, elle, ne le coupe pas : voir `bandePartie`)
             if (!(maintenant <= n.fin + 2000) || sondage || (await bandePartie($, n))) await finNumero($, n.id)
             return
           }
@@ -2488,7 +2487,9 @@ export const register: Register = on => {
     // un numéro sur toute la bande : son coin reste vide pendant ce temps (n'y restent que ses cartons quand il l'a lancé
     // en plein déménagement : il revient les reprendre là où il les a laissés)
     const n = await read($, numero)
-    const enNumero = n !== null && maintenant < n.fin && e.surface === 'desktop'
+    // (et seulement une fois le dessin de son numéro posé : son numéro et son dessin s'écrivent l'un après l'autre, et un
+    // rendu entre les deux le faisait disparaître un instant au départ, ou apparaître en double à la fin)
+    const enNumero = n !== null && maintenant < n.fin && e.surface === 'desktop' && (await read($, grandeScene))?.id === n.id
     // son déménagement n'avance que quand on le voit : une scène ou un numéro qui l'interrompt le met en pause ; un
     // nouveau tour le fait repartir du début de sa boucle (où il en était juste avant : `faitAvant`)
     const faitAvant = boulotEnCours(maintenant)

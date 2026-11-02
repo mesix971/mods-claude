@@ -34,7 +34,14 @@ type On = Parameters<Parameters<typeof test>[1] extends infer F ? (F extends ($:
 type Noeud = { props?: Record<string, unknown>; children?: Noeud[] }
 
 /** Le moteur pour de faux, avec (ou sans) la bande partagée d'atelier ; ce que Clawd écrit dans son état est noté */
-function moteur(on: On, bande: { elements: ElementBande[] } | null = { elements: ELEMENTS }, lecon?: Record<string, unknown>, masque = false) {
+function moteur(
+  on: On,
+  bande: { elements: ElementBande[] } | null = { elements: ELEMENTS },
+  lecon?: Record<string, unknown>,
+  masque: boolean | (() => boolean) = false,
+  /** une écriture de son état qui n'aboutit pas (pas encore), pour voir ce qu'il dessine entre deux écritures */
+  retenue?: (e: { key: string; value: unknown }) => boolean,
+) {
   const stockage = new Map<string, unknown>()
   const ecrits: { key: string; value: unknown }[] = []
   const horloge = mock.clock(on as never, { now: MAINTENANT })
@@ -61,11 +68,13 @@ function moteur(on: On, bande: { elements: ElementBande[] } | null = { elements:
     e.plugin === 'atelier' && e.key === 'scene'
       ? { value: { value: bande && { lignes: ['quotas', 'pastilles'], ...bande }, version: 1 } }
       : e.plugin === 'atelier' && e.key === 'isHidden'
-        ? { value: { value: masque, version: 1 } }
+        ? { value: { value: typeof masque === 'function' ? masque() : masque, version: 1 } }
         : next(e),
   )
   on('state.set', ($, e, next) => {
-    ecrits.push({ key: (e as { key: string }).key, value: (e as { value: unknown }).value })
+    const ecrit = { key: (e as { key: string }).key, value: (e as { value: unknown }).value }
+    if (retenue?.(ecrit)) return { value: undefined } as never
+    ecrits.push(ecrit)
     return next(e)
   })
   /** Sa dernière écriture sous cette clé */
@@ -687,6 +696,66 @@ test('tu lui parles en plein numéro : il ne le coupe pas, le finit et rend tout
   await horloge.set(MAINTENANT + (prep.duree + RETENUE) * 1000 + 100)
   expect(tenus()).toEqual([])
   expect(dernier('numero')).toBeNull()
+  await ui.unmount()
+})
+
+/**
+ * Sa bande ouverte et sa session lancée (son tic tourne), puis le numéro `nom` demandé dès qu'il est libre (au repos, il
+ * finit d'abord ce qu'il fait)
+ */
+async function enNumero($: Parameters<Extract<Parameters<typeof test>[1], (...a: never[]) => unknown>>[0], horloge: { advance: (ms: number) => Promise<void> }, nom: string) {
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  await $.session.start(SESSION)
+  for (let k = 0; k < 60; k++) {
+    await horloge.advance(2000)
+    const r = await $.command.run({ command: 'clawd', args: `montre ${nom}`, origin: COMPOSER } as never)
+    if (!(r.text ?? '').includes('Il finit d’abord')) return ui
+  }
+  throw new Error(`jamais libre pour ${nom}`)
+}
+
+test('une cible qui quitte la bande en plein numéro (un plan vidé en fin de tour) : il le finit, sans passer d’un coup de la bande à son coin', async ($, on) => {
+  const bande = { elements: [...ELEMENTS] }
+  const { horloge, dernier, ecrits } = moteur(on, bande)
+  const ui = await enNumero($, horloge, 'chipe')
+  const { fin } = dernier('numero') as { fin: number }
+  // son plan est vidé : l'orbe qu'il était parti chiper quitte la bande
+  bande.elements = ELEMENTS.filter(e => e.genre !== 'tache')
+  // ses coups d'œil passent (un tic toutes les 4 s) : il continue, son coin reste vide, son numéro dessiné
+  for (let k = 0; k < 3; k++) {
+    await horloge.advance(4000)
+    expect(dernier('numero')).not.toBeNull()
+    expect(dernier('grandeScene')).not.toBeNull()
+    expect((await dessinDe(ui as never, 'clawd'))?.source).toBe(COIN_VIDE)
+  }
+  // au bout, il rentre dans son coin comme d'habitude : son dessin s'efface d'abord, puis son numéro (son coin revient
+  // dans le même rendu que son dessin s'en va : jamais deux Clawd à la fois, ni aucun)
+  const avant = ecrits.length
+  await horloge.set(fin + 4100)
+  expect(dernier('numero')).toBeNull()
+  expect(ecrits.slice(avant).filter(x => (x.key === 'grandeScene' || x.key === 'numero') && x.value === null).map(x => x.key)).toEqual(['grandeScene', 'numero'])
+  expect((await dessinDe(ui as never, 'clawd'))?.source).not.toBe(COIN_VIDE)
+  await ui.unmount()
+})
+
+test('atelier masqué en plein numéro : son numéro ne se voit plus, il le range et revient dans son coin', async ($, on) => {
+  let masque = false
+  const { horloge, dernier } = moteur(on, undefined, undefined, () => masque)
+  const ui = await enNumero($, horloge, 'chipe')
+  expect(dernier('numero')).toBeTruthy()
+  masque = true
+  await horloge.advance(8000)
+  expect(dernier('numero')).toBeNull()
+  expect((await dessinDe(ui as never, 'clawd'))?.source).not.toBe(COIN_VIDE)
+  await ui.unmount()
+})
+
+test('son coin ne se vide qu’avec le dessin de son numéro posé : un rendu entre son numéro et son dessin le garde à sa place', async ($, on) => {
+  // le dessin de son numéro qui tarde à s'écrire : son coin le garde (avant, il disparaissait un instant)
+  const { horloge, ecrits } = moteur(on, undefined, undefined, false, e => e.key === 'grandeScene' && e.value !== null)
+  const ui = await enNumero($, horloge, 'tournee')
+  expect(ecrits.some(x => x.key === 'numero' && x.value !== null)).toBe(true)
+  expect((await dessinDe(ui as never, 'clawd'))?.source).not.toBe(COIN_VIDE)
   await ui.unmount()
 })
 

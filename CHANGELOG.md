@@ -43,6 +43,12 @@
 
 ## clawd
 
+- **0.16.1** — 2026-11-02 — Ses numéros sur la bande ne le font plus sauter.
+  Une cible qui quitte la bande en route (un plan vidé en fin de tour) ne
+  coupe plus son numéro : coupé, il passait d'un coup de la bande à son coin.
+  Son coin ne se vide qu'une fois le dessin de son numéro posé, et à la fin ce
+  dessin s'efface avant que son coin revienne : plus d'instant sans lui, ni
+  deux Clawd à la fois.
 - **0.16.0** — 2026-11-02 — Il s'occupe de son feu de camp. Quand son feu
   brûle, quatre activités s'ajoutent à son tirage au repos : 🔥 il y jette un
   de ses cartons (qui flambe, il recule ébloui, puis se réchauffe aux braises),
