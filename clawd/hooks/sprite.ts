@@ -273,18 +273,20 @@ const BUCHES = ['.NNnnNN.', 'GnNNNNnG']
 /** Où brûle son feu : à sa droite, au sol (hors de ses bras, et dans le cadre de son portrait sur sa carte) */
 const FEU = { cx: X0 + 84, sol: Y0 + 48 }
 /**
- * Son feu de camp, s'il a une série (`flamme`) : posé chez lui, il ne le suit pas quand il se déplace, et il reste
- * allumé la nuit, quand il dort à côté. Derrière lui : ses bras tendus passent devant
+ * Son feu de camp, s'il a une série (`flamme`) ou qu'il joue une scène autour de lui (`dOffice` : allumé au plus petit) :
+ * posé chez lui, il ne le suit pas quand il se déplace, et il reste allumé la nuit, quand il dort à côté. Derrière lui :
+ * ses bras tendus passent devant
  */
-function feuDeCamp(): string {
-  if (!flamme) return ''
+function feuDeCamp(dOffice = false): string {
+  const n = flamme || (dOffice ? 1 : 0)
+  if (!n) return ''
   const { cx, sol } = FEU
   // (au mois, trois étincelles en montent, l'une après l'autre)
   const etincelles =
-    flamme === 3
+    n === 3
       ? [[-4, -18, 0], [3, -22, 0.7], [0, -26, 1.3]].map(([dx, dy, d]) => `<g class="monte" style="animation-delay:-${d}s">${R(cx + dx!, sol + dy!, 2, 2, PAL.Y!)}</g>`).join('')
       : ''
-  return dessinFlamme(flamme, cx, sol - 2) + art(BUCHES, cx - 8, sol - 4, 2) + etincelles
+  return dessinFlamme(n, cx, sol - 2) + art(BUCHES, cx - 8, sol - 4, 2) + etincelles
 }
 const CSS_FLAMME = `.flamme-a{animation:flamme-vacille .5s steps(1,end) infinite}.flamme-b{animation:flamme-vacille .5s steps(1,end) infinite;animation-delay:-.25s}@keyframes flamme-vacille{0%{opacity:1}50%,100%{opacity:0}}`
 
@@ -1793,6 +1795,30 @@ function visiteFilante(): Scene {
   )
 }
 
+// ------------------------------------------------------- autour de son feu
+// Quand son feu de camp brûle à côté de lui (sa série), il s'en occupe de temps en temps : il y jette un de ses cartons
+// (qui flambe : il recule, ébloui, puis se réchauffe aux braises), y remet une bûche, s'y réchauffe les pattes, ou y fait
+// griller une guimauve qu'il croque. Ses gestes visent le feu, à sa droite (`FEU`) ; le feu lui-même est celui de la
+// scène (`feuDeCamp`), allumé d'office pour elles
+
+/** Ses scènes autour de son feu (register.tsx ne les tire que quand son feu brûle) */
+export const AU_FEU: readonly ClawdAnim[] = ['flambe', 'buche', 'rechauffe', 'guimauve']
+/** Celles qui se jouent une fois (un carton ne brûle qu'une fois, une guimauve ne se croque qu'une fois) */
+const AU_FEU_UNE_FOIS: readonly ClawdAnim[] = ['flambe', 'buche', 'guimauve']
+/** Un carton qui brûle : roussi (1), puis calciné (2) */
+const roussi = (lignes: readonly string[], degre: 1 | 2) =>
+  lignes.map(l => (degre === 1 ? l.replace(/[HSC]/g, 'N').replace(/[cD]/g, 'n') : l.replace(/[HSC]/g, 'g').replace(/[cD]/g, 'K')))
+// ce qu'il reste du carton ; la bûche qu'il remet (pixels de 2)
+const CENDRES = ['..w.g..', '.gwgwg.', 'gwgggwg']
+const BUCHE = ['nNNNNNn', 'NNnNNnN']
+/** Une flambée sur son feu (la flamme de son mois, en grand : pixels de `p`), forme `k` (les deux alternent d'une image à l'autre) */
+function flambee(k: 0 | 1, p = 3): string {
+  const l = FLAMMES_SERIE[3][k]
+  return art(l, FEU.cx - (l[0]!.length * p) / 2, FEU.sol - 2 - l.length * p, p)
+}
+/** Une étincelle qui saute du feu (repère de son corps) */
+const etincelleFeu = (dx: number, dy: number) => R(X0 + dx, Y0 + dy, 2, 2, PAL.Y!)
+
 const SCENES: Record<ClawdAnim, () => Scene> = {
   // ------------------------------------------------------------- repos
   // au calme, il respire et cligne des yeux quand ça lui chante (`vivant`), en jetant un œil autour
@@ -2137,6 +2163,94 @@ const SCENES: Record<ClawdAnim, () => Scene> = {
       corps({ yeux: 'heureux' }),
     ],
   }),
+  // Un de ses cartons au feu : il le tient contre lui, prend son élan, le lance par-dessus sa patte ; le carton tombe
+  // dans le feu, qui flambe d'un coup : il recule, bras en l'air, des étoiles plein les yeux. Le carton roussit, noircit,
+  // les flammes retombent ; il tend la patte vers les braises, se réchauffe, et il ne reste que des cendres
+  flambe: () => {
+    const tenu = (p: Pose) => corps({ g: 'devant', d: 'devant', ...p }) + A(COLIS, 29, 22 + (p.dy ?? 0), 2)
+    const brule = (degre: 1 | 2) => A(roussi(COLIS, degre), 77, 34, 2)
+    return {
+      duree: 7.2,
+      images: [
+        tenu({ yeux: 'droite' }),
+        tenu({ yeux: 'droite', jambes: 'replie', dy: 4 }),
+        corps({ d: 'tendu', yeux: 'droite' }) + A(COLIS, 64, 0, 2),
+        corps({ d: 'tendu', yeux: 'droite', bouche: 'o' }) + A(COLIS, 74, 16, 2),
+        corps({ yeux: 'droite' }) + A(COLIS, 77, 34, 2),
+        corps({ g: 'haut', d: 'haut', yeux: 'grand', bouche: 'o', dx: -4 }) + brule(1) + flambee(0),
+        corps({ g: 'haut', d: 'haut', yeux: 'etoile', dx: -4 }) + brule(1) + flambee(1) + etincelleFeu(80, 12) + etincelleFeu(92, 18),
+        corps({ yeux: 'heureux', dx: -2 }) + brule(2) + flambee(0) + etincelleFeu(86, 8),
+        corps({ d: 'tendu', yeux: 'heureux' }) + brule(2) + flambee(1, 2),
+        corps({ d: 'tendu', yeux: 'ferme' }) + A(CENDRES, 77, 42, 2),
+        corps({ d: 'tendu', yeux: 'heureux' }) + A(CENDRES, 77, 42, 2),
+        corps({ yeux: 'clin' }),
+      ],
+    }
+  },
+  // Une bûche de plus : il la brandit au-dessus de sa tête, la lance dans le feu, qui repart en crépitant (des
+  // étincelles sautent), et s'époussette les pattes, fier de son feu
+  buche: () => {
+    const posee = A(BUCHE, 77, 40, 2)
+    return {
+      duree: 6,
+      images: [
+        corps({ g: 'ciel', d: 'ciel', yeux: 'haut' }) + A(BUCHE, 29, -16, 2),
+        corps({ g: 'ciel', d: 'ciel', yeux: 'droite' }) + A(BUCHE, 29, -16, 2),
+        corps({ d: 'tendu', yeux: 'droite' }) + A(BUCHE, 66, 6, 2),
+        corps({ d: 'tendu', yeux: 'droite', bouche: 'o' }) + A(BUCHE, 77, 26, 2),
+        corps({ yeux: 'droite' }) + posee + flambee(0, 2) + etincelleFeu(78, 22) + etincelleFeu(90, 18),
+        corps({ g: 'haut', d: 'haut', yeux: 'heureux' }) + posee + flambee(1, 2) + etincelleFeu(84, 14) + etincelleFeu(76, 10),
+        corps({ g: 'devant', d: 'devant', yeux: 'heureux' }) + posee + flambee(0, 2),
+        corps({ yeux: 'heureux' }) + posee + flambee(1, 2),
+        corps({ g: 'devant', d: 'devant', yeux: 'ferme' }) + posee + flambee(0, 2),
+        corps({ yeux: 'clin' }) + posee + flambee(1, 2),
+      ],
+    }
+  },
+  // Il s'assoit près du feu, tend la patte vers les flammes, ferme les yeux d'aise, se frotte les pattes, et recommence
+  rechauffe: () => {
+    const assis = (p: Pose) => corps({ jambes: 'assis', dy: 8, d: 'tendu', ...p })
+    return {
+      duree: 6.4,
+      images: [
+        assis({ yeux: 'droite' }),
+        assis({ yeux: 'droite' }),
+        assis({ yeux: 'mi' }),
+        assis({ yeux: 'ferme' }),
+        assis({ yeux: 'ferme' }),
+        assis({ g: 'devant', d: 'devant', yeux: 'heureux' }),
+        assis({ yeux: 'heureux' }),
+        assis({ yeux: 'droite' }),
+      ],
+    }
+  },
+  // Assis près du feu, il fait griller une guimauve au bout d'un bâton : blanche, dorée… un peu trop grillée (il ouvre
+  // grand les yeux) ; il la ramène à sa bouche, la croque, et en a des cœurs plein les yeux
+  guimauve: () => {
+    const assis = (p: Pose) => corps({ jambes: 'assis', dy: 8, ...p })
+    // le bâton, de sa patte tendue (assis, elle est à la hauteur 22 à 30) jusque juste au-dessus des flammes, la
+    // guimauve au bout
+    const grille = (c: string) => trait([[76, 27], [85, 32]], PAL.N!, 1) + R(X0 + 84, Y0 + 31, 4, 4, c)
+    // le bâton ramené vers sa bouche (à la hauteur 28 à 32), la guimauve (s'il en reste) juste devant
+    const goute = (reste: boolean) => trait([[64, 18], [43, 30]], PAL.N!, 1) + (reste ? R(X0 + 39, Y0 + 28, 4, 4, PAL.N!) : '')
+    return {
+      duree: 7.2,
+      images: [
+        assis({ d: 'tendu', yeux: 'droite' }) + grille(PAL.W!),
+        assis({ d: 'tendu', yeux: 'bas' }) + grille(PAL.W!),
+        assis({ d: 'tendu', yeux: 'droite' }) + grille(PAL.W!),
+        assis({ d: 'tendu', yeux: 'droite' }) + grille(PAL.Y!),
+        assis({ d: 'tendu', yeux: 'heureux' }) + grille(PAL.Y!),
+        assis({ d: 'tendu', yeux: 'grand', bouche: 'o' }) + grille(PAL.N!),
+        assis({ d: 'haut', yeux: 'heureux', bouche: 'o' }) + goute(true),
+        assis({ d: 'haut', yeux: 'ferme', bouche: 'grand' }) + goute(false),
+        assis({ yeux: 'ferme' }),
+        assis({ yeux: 'coeur' }),
+        assis({ yeux: 'coeur' }),
+        assis({ yeux: 'heureux' }),
+      ],
+    }
+  },
   // Une branche nouvelle : il brandit son drapeau, le plante à côté de lui et le salue, fier
   drapeau: () => ({
     duree: 4.2,
@@ -3219,7 +3333,7 @@ export function dureeScene(anim: ClawdAnim): number {
   // va), et sa montée de niveau (l'étoile ne tombe qu'une fois)
   if (anim === 'rapport') return RAPPORT_S
   const s = SCENES[anim]()
-  if (JEUX_CARTONS.includes(anim) || anim === 'niveau' || anim === 'ceremonie') return s.duree
+  if (JEUX_CARTONS.includes(anim) || AU_FEU_UNE_FOIS.includes(anim) || anim === 'niveau' || anim === 'ceremonie') return s.duree
   if (s.choreo) return s.duree
   const t = Math.min(14, Math.max(8, s.duree * 3))
   // une longue boucle (une petite histoire) que le plafond couperait en plein geste : des tours entiers, au moins un
@@ -3640,7 +3754,7 @@ function dessineScene(anim: ClawdAnim, copains: readonly Mini[], couleur: Teinte
     // une chorégraphie n'a pas de mini : tout le dessin prend sa teinte
     // sa bulle sur son trajet, dans le même dessin : elle le suit toujours, quoi qu'il arrive à l'image
     const c = choreographie(anim, s, bulle ? dessinBulle(bulle) : '')
-    const feu = feuDeCamp()
+    const feu = feuDeCamp(AU_FEU.includes(anim))
     return recolore(
       entete() +
         `<style>${CSS}${vit(reutilises(c.svg) + c.svg + feu)}${THEME}${bulle ? CSS_BULLE : ''}${c.css}</style>${filtre()}${reutilises(c.svg)}${c.ombre}` +
@@ -3689,8 +3803,8 @@ function dessineScene(anim: ClawdAnim, copains: readonly Mini[], couleur: Teinte
   // interrompu en plein déménagement : ses cartons restent où ils sont, et lui joue sa scène là où il en était
   const decor = enPlace?.decor ?? ''
   const ici = (svg: string) => (enPlace && enPlace.x !== 0 ? `<g transform="translate(${+enPlace.x.toFixed(1)} 0)">${svg}</g>` : svg)
-  // son feu de camp brûle chez lui, même quand il joue sa scène ailleurs
-  const feu = feuDeCamp()
+  // son feu de camp brûle chez lui, même quand il joue sa scène ailleurs (et toujours quand il s'en occupe)
+  const feu = feuDeCamp(AU_FEU.includes(anim))
   return (
     entete() +
     `<style>${css}${minis.css}${vit(reutilises(minis.svg + images + defs + decor) + minis.svg + images + defs + decor + feu + (s.fx ?? ''))}</style>${filtre()}${defs}${reutilises(minis.svg + images + defs + decor)}${ici(ombres)}` +
@@ -3923,6 +4037,7 @@ export const EMOJI: Record<ClawdAnim, string> = {
   livraison: '📦', drapeau: '🚩',
   ceremonie: '🎖', retrouvailles: '🥰', chat: '🐈', filante: '🌠',
   floss: '🕺', orange: '🍊', defaut: '🎶', griddy: '🔥', takel: '🫵', sixseven: '6️⃣7️⃣', niveau: '⭐',
+  flambe: '🔥', buche: '🪵', rechauffe: '♨', guimauve: '🍡',
 }
 
 /** Ses danses, pour le bouton 🕺 et ses envies (la danse d'origine, puis les clins d'œil) */

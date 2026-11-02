@@ -59,8 +59,8 @@ export function vecu(h: Humeur, quoi: 'parle' | 'caresse' | 'reussite'): Humeur 
 /** La nuit (22 h – 7 h) : il dort pour de bon quand tu n'es plus là */
 export const estNuit = (heure: number) => heure >= 22 || heure < 7
 
-const CALMES: readonly ClawdAnim[] = ['lecture', 'meditation', 'cafe', 'peche', 'arrosage', 'bulles', 'cookie', 'glace', 'gratte']
-const VIVES: readonly ClawdAnim[] = ['danse', 'floss', 'orange', 'defaut', 'griddy', 'takel', 'sixseven', 'corde', 'ballon', 'pirouette', 'yoyo', 'jongle', 'guitare', 'papillon', 'etirement']
+const CALMES: readonly ClawdAnim[] = ['lecture', 'meditation', 'cafe', 'peche', 'arrosage', 'bulles', 'cookie', 'glace', 'gratte', 'rechauffe', 'guimauve']
+const VIVES: readonly ClawdAnim[] = ['danse', 'floss', 'orange', 'defaut', 'griddy', 'takel', 'sixseven', 'corde', 'ballon', 'pirouette', 'yoyo', 'jongle', 'guitare', 'papillon', 'etirement', 'flambe']
 /** Pour attirer ton attention : il te fait signe, se demande où tu es, t'attend */
 const APPELS: readonly ClawdAnim[] = ['coucou', 'question', 'attend']
 

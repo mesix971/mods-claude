@@ -214,7 +214,10 @@ puis repart, chaque fois d'une autre façon.
   `/clawd livret` les montre, avec leur date, vos grades et votre vie commune.
 - Son feu de camp : dès 2 jours de suite ensemble, un petit feu s'allume au
   sol à côté de lui, chez lui ; il grandit à une semaine, puis à un mois (des
-  étincelles en montent). Il reste allumé la nuit, quand il dort à côté.
+  étincelles en montent). Il reste allumé la nuit, quand il dort à côté. Et
+  il s'en occupe de temps en temps : il y jette un de ses cartons (qui
+  flambe), y remet une bûche, s'y réchauffe les pattes ou y fait griller une
+  guimauve.
 - Survole-le et clique ⭐ : sa carte à collectionner s'ouvre. On y voit son
   portrait en grand, son grade, son expérience, ses performances, ses
   qualités en étoiles, son humeur et ses hauts faits, dans un cadre qui suit

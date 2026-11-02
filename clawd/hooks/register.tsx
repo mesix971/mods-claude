@@ -22,6 +22,7 @@ import type { Humeur } from './humeur'
 import { ACTIVITES, BAILLE_S, BONBON_S, CLAWD_TEXTE, DANSES, EMOJI, EN_BULLE, JEUX_CARTONS, RAPPORT_S, SORTIES, TAILLE, avecT0, bulleDedans, dureeBoulot, dureeRetour, dureeScene, estChoregraphie, etatBoulot, etatScene, minisAPart, svgBulle, svgDecor, svgMinis, svgScene, teinte, teinteConnue, tenueDe } from './sprite'
 import type { Bulle, Deguisement, EnPlace, Insigne, Mini, Sortie, Tenue } from './sprite'
 import type { Aura } from './sprite'
+import { AU_FEU } from './sprite'
 import { FAITS, GRADES, gradeDe, nouveauxFaits, prochainGrade } from './grades'
 import type { Fait } from './grades'
 import { svgCarte, texteCarte } from './carte'
@@ -524,6 +525,11 @@ async function vitSonHumeur($: EngineInterface, maintenant: number) {
   humeur = vit(humeur, dt, { dort: (await read($, dort)) === true, seul: maintenant - derniereActivite > SEUL_MS })
 }
 
+/** Son feu de camp brûle-t-il (sa série, 2 jours au moins) ? Il s'en occupe alors de temps en temps */
+let feuAllume = false
+/** Ses activités au repos : avec son feu allumé, celles autour de lui en plus (un carton au feu, une bûche…) */
+export const activitesAuRepos = (feu: boolean): readonly ClawdAnim[] => (feu ? [...ACTIVITES, ...AU_FEU] : ACTIVITES)
+
 /**
  * Tire une activité au sort selon son humeur (jamais deux fois la même
  * d'affilée) ; le vendredi soir ou le lundi matin, l'envie du moment passe
@@ -532,7 +538,7 @@ async function vitSonHumeur($: EngineInterface, maintenant: number) {
 function tirage(maintenant: number) {
   const d = deguisementDu(maintenant)
   const envie = d ? ENVIE_DU[d] : undefined
-  const anim = envie && envie !== derniereScene && Math.random() < ENVIE_P ? envie : choisit(humeur, ACTIVITES, derniereScene)
+  const anim = envie && envie !== derniereScene && Math.random() < ENVIE_P ? envie : choisit(humeur, activitesAuRepos(feuAllume), derniereScene)
   derniereScene = anim
   return { anim }
 }
@@ -1192,6 +1198,7 @@ function compte($: EngineInterface, f: (v: Vie) => Vie): Promise<void> {
       await $.store.set('vie', v)
       const n = vivante(v, maintenant)
       if ((await read($, serieVivante)) !== n) await update($, serieVivante, () => n)
+      feuAllume = n >= 2
       faitsAFeter.push(...nouveaux)
       if (faitsAFeter.length && dessine) await feteFaits($)
     })
@@ -1978,6 +1985,7 @@ export const register: Register = on => {
     // sa flamme reprend sa série gardée (vivante si son dernier jour compté est aujourd'hui ou hier)
     const serieGardee = vivante(await lisVie($), derniereActivite)
     await update($, serieVivante, () => serieGardee)
+    feuAllume = serieGardee >= 2
     xpANoter = 0
     niveauVu = niveauDe(xp)
     niveauAFeter = null

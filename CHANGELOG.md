@@ -43,6 +43,11 @@
 
 ## clawd
 
+- **0.16.0** — 2026-11-02 — Il s'occupe de son feu de camp. Quand son feu
+  brûle, quatre activités s'ajoutent à son tirage au repos : 🔥 il y jette un
+  de ses cartons (qui flambe, il recule ébloui, puis se réchauffe aux braises),
+  🪵 il y remet une bûche (étincelles), ♨ il s'y réchauffe les pattes, 🍡 il y
+  fait griller une guimauve qu'il croque, les yeux en cœur.
 - **0.15.1** — 2026-11-02 — Sa série devient un feu de camp : la flamme sur
   son ventre faisait trop avec sa médaille. Un petit feu (bûches, pierres) au
   sol à sa droite, chez lui, qui grandit à une semaine et à un mois ; il reste

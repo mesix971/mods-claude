@@ -30,7 +30,9 @@ Anthropic.
   He also earns achievements from your time together (a first fix after a run
   of failures, a week in a row, a year together…); `/clawd livret` lists
   them with their dates. Come back day after day and a small campfire lights up
-  next to him, growing at a week and at a month. Once a Legend, a soft glowing
+  next to him, growing at a week and at a month; now and then he tends it,
+  tossing in one of his boxes, adding a log, warming his paws or toasting a
+  marshmallow. Once a Legend, a soft glowing
   aura surrounds him (a breathing halo, blurred flames, orbs orbiting him); it
   grows stronger at levels 60, 75 and 100 (a crown of orbs, a white-hot core,
   then rainbow light and rising embers).

@@ -5,6 +5,8 @@ import { expect, mock, test } from 'claude-code/testing'
 import { ACTIVITES, BONBON_S, CLASSES_QUI_DEPLACENT, CLIGNEMENTS, DANSES, EMOJI, JEUX_CARTONS, RAPPORT_S, SORTIES, SOUFFLES, TEINTES, VIVANT_S, avecT0, classeDe, dureeScene, etatBoulot, etatScene, imagesScene, svgMinis, svgScene, tenueDe } from './sprite'
 import { autreQue, deToi, deguisementDu, insigneDe, niveauDe, seuilNiveau, sueurDe, visiteur } from './register'
 import { auraDe } from './register'
+import { activitesAuRepos } from './register'
+import { AU_FEU } from './sprite'
 import { COIN_VIDE, EXEMPLE, MAX_SVG, NUMEROS, departDe, prepareNumero, svgNumero } from './bande'
 import { FAITS, GRADES, gradeDe, nouveauxFaits, prochainGrade } from './grades'
 import { QUALITES, etoiles, svgCarte, texteCarte } from './carte'
@@ -2793,6 +2795,36 @@ test('🔥 sa série : un feu de camp à côté de lui, chez lui, qui vacille et
   // jamais sur ses minis, et rien sans série
   expect(svgMinis('chef', [{ fait: 'cherche' }], TEINTES.opus, 0, { flamme: 3 }) ?? '').not.toContain('flamme-a')
   expect(svgScene('coucou', [], 0, TEINTES.opus, undefined, undefined, { insigne: 'or' })).not.toContain('flamme-a')
+})
+
+test('🔥 autour de son feu : un carton au feu, une bûche de plus, il s’y réchauffe, il y grille une guimauve ; tirées seulement quand son feu brûle', () => {
+  // au repos, ces scènes ne se tirent que quand son feu brûle (sa série)
+  expect(activitesAuRepos(false)).toEqual(ACTIVITES)
+  expect(activitesAuRepos(true)).toEqual([...ACTIVITES, 'flambe', 'buche', 'rechauffe', 'guimauve'])
+  expect(AU_FEU.filter(a => ACTIVITES.includes(a))).toEqual([])
+  for (const anim of AU_FEU) {
+    // son feu y est allumé d'office, même sans série (une démo), et au sien quand il en a une
+    expect(svgScene(anim)).toContain('class="flamme-a"')
+    const d = svgScene(anim, [], 0, TEINTES.opus, undefined, undefined, { insigne: 'etoile', flamme: 3, aura: 2 })
+    expect(d).toContain('class="monte"')
+    expect(d).not.toContain('<text')
+    expect(d.length).toBeLessThan(40 * 1024)
+    for (const m of d.matchAll(/(?:href="#|url\(#)([^")]+)/g)) expect(d).toContain(`id="${m[1]}"`)
+    expect(EMOJI[anim]).not.toBe('')
+  }
+  // un carton ne brûle qu'une fois, une bûche ne se remet qu'une fois, une guimauve ne se croque qu'une fois ; au chaud,
+  // il reste plus longtemps
+  expect([dureeScene('flambe'), dureeScene('buche'), dureeScene('guimauve')]).toEqual([7.2, 6, 7.2])
+  expect(dureeScene('rechauffe')).toBeGreaterThan(6.4)
+  // le carton qu'il y jette roussit, noircit (sa flambée, en grand), puis il n'en reste que des cendres
+  const flambe = imagesScene('flambe')
+  expect(flambe.some(i => i.includes('#E8C792'))).toBe(true)
+  expect(flambe.some(i => !i.includes('#E8C792') && i.includes('#9A6234'))).toBe(true)
+  expect(flambe.filter(i => i.includes('#4A4A4A')).length).toBeGreaterThanOrEqual(4)
+  expect(flambe.at(-3)).toContain('#CFCFCF')
+  // sa guimauve : blanche, dorée, un peu trop grillée, puis croquée (des cœurs plein les yeux)
+  const guimauve = imagesScene('guimauve').join('')
+  for (const c of ['#FFFFFF', '#FFD75F', '#9A6234', '#FF6B9A']) expect(guimauve).toContain(c)
 })
 
 test('✨ son aura, passé Légende : elle gravite autour de lui et s’accentue avec ses niveaux ; légère, jamais sur ses minis', () => {

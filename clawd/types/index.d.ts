@@ -21,6 +21,11 @@ export type ClawdAnim =
   | 'papillon'
   | 'promenade'
   | 'pirouette'
+  // autour de son feu de camp (quand il en a un) : un carton au feu, une bûche de plus, il s'y réchauffe, il y grille une guimauve
+  | 'flambe'
+  | 'buche'
+  | 'rechauffe'
+  | 'guimauve'
   // ses danses : clins d'œil aux emotes qu'on connaît (la danse du fil, le déhanché…) et au 6-7
   | 'floss'
   | 'orange'
