@@ -5,6 +5,8 @@ import { expect, mock, test } from 'claude-code/testing'
 import { ACTIVITES, BONBON_S, CLASSES_QUI_DEPLACENT, CLIGNEMENTS, DANSES, EMOJI, JEUX_CARTONS, RAPPORT_S, SORTIES, SOUFFLES, TEINTES, VIVANT_S, avecT0, classeDe, dureeScene, etatBoulot, etatScene, imagesScene, svgMinis, svgScene, tenueDe } from './sprite'
 import { autreQue, deToi, deguisementDu, insigneDe, niveauDe, seuilNiveau, sueurDe, visiteur } from './register'
 import { COIN_VIDE, EXEMPLE, MAX_SVG, NUMEROS, departDe, prepareNumero, svgNumero } from './bande'
+import { FAITS, GRADES, gradeDe, nouveauxFaits, prochainGrade } from './grades'
+import type { Comptes } from './grades'
 
 const BAND = (isWorking = false) =>
   ({
@@ -2494,7 +2496,7 @@ test('⭐ ses niveaux : 50, 150, 300… points ; bronze, argent au 5, or au 10, 
     expect(niveauDe(seuilNiveau(n))).toBe(n)
     expect(niveauDe(seuilNiveau(n + 1) - 1)).toBe(n)
   }
-  expect([0, 1, 4, 5, 9, 10, 19, 20, 99].map(insigneDe)).toEqual([undefined, 'bronze', 'bronze', 'argent', 'argent', 'or', 'or', 'etoile', 'etoile'])
+  expect([0, 1, 3, 4, 5, 9, 10, 19, 20, 29, 30, 40, 50, 99].map(insigneDe)).toEqual([undefined, 'bronze', 'ruban', 'ruban', 'argent', 'argent', 'or', 'or', 'etoile', 'etoile', 'double', 'laurier', 'soleil', 'soleil'])
   expect([0, 49, 50, 69, 70, 100].map(sueurDe)).toEqual([0, 0, 1, 1, 2, 2])
   // rien à porter : son dessin de toujours
   expect(tenueDe({ visiere: false })).toBeUndefined()
@@ -2574,7 +2576,7 @@ test('⭐ chaque outil lui rapporte un point : à 50, il passe niveau 1, le fêt
   expect(toasts.some(t => t.includes('niveau'))).toBe(false)
   expect(await etoile(ui as never)).toBe('⭐0')
   await $.tool.call({ tool: 'Glob', pattern: '*.ts' } as never)
-  expect(await guette(ui, horloge, 'niveau', 40)).toContain('niveau')
+  expect(await guette(ui, horloge, 'ceremonie', 40)).toContain('ceremonie')
   expect(toasts.filter(t => t.includes('niveau 1')).length).toBe(1)
   expect(stockage.get('xp')).toBe(50)
   expect(stockage.get('niveauFete')).toBe(1)
@@ -2582,7 +2584,7 @@ test('⭐ chaque outil lui rapporte un point : à 50, il passe niveau 1, le fêt
   expect(await etoile(ui as never)).toBe('⭐1')
   // ⭐ au survol : où il en est, et ce qui fait monter son expérience
   await (ui as unknown as { press: (q: { key: string }) => Promise<void> }).press({ key: 'niveau' })
-  expect(toasts.at(-1)).toContain('Niveau 1 · 50 XP · encore 100 pour le niveau 2')
+  expect(toasts.at(-1)).toContain('Niveau 1 · Apprenti · 50 XP · encore 100 pour le niveau 2 · Compagnon au niveau 5')
   await ui.unmount()
 })
 
@@ -2617,7 +2619,7 @@ test('🥽⭐ sa visière dès l’ouverture d’une session en mode auto ; un t
   await $.classic.SessionStart({ source: 'startup', permission_mode: 'auto' } as never)
   expect(String((await svg(ui as never)).source)).toMatch(/href="#tnp?[vh]/)
   for (let i = 0; i < 50; i++) await $.tool.call({ tool: 'Glob', pattern: '*' } as never)
-  expect(await guette(ui, horloge, 'niveau', 40)).toContain('niveau')
+  expect(await guette(ui, horloge, 'ceremonie', 40)).toContain('ceremonie')
   await (ui as unknown as { press: (q: { key: string }) => Promise<void> }).press({ key: 'niveau' })
   expect(await etoile(ui as never)).toBe('⭐1')
   await ui.unmount()
@@ -2641,7 +2643,7 @@ test('⭐ deux sessions ouvertes : ce que chacune gagne s’ajoute au total, un 
   stockage.set('xp', 140)
   for (let i = 0; i < 10; i++) await $.tool.call({ tool: 'Glob', pattern: '*' } as never)
   // 50 ici (niveau 1)… et avec l'autre session, 150 : le niveau 2, fêté une seule fois
-  expect(await guette(ui, horloge, 'niveau', 40)).toContain('niveau')
+  expect(await guette(ui, horloge, 'ceremonie', 40)).toContain('ceremonie')
   expect(stockage.get('xp')).toBe(150)
   expect(stockage.get('niveauFete')).toBe(2)
   expect(toasts.filter(t => t.includes('niveau')).length).toBe(1)
@@ -2654,4 +2656,100 @@ test('⭐ deux sessions ouvertes : ce que chacune gagne s’ajoute au total, un 
   expect(String((await svg(apres as never)).source)).toContain('id="ib"')
   expect(toasts.filter(t => t.includes('niveau')).length).toBe(1)
   await apres.unmount()
+})
+
+test('🎖 ses grades et ses hauts faits : des noms à ses paliers, des souvenirs datés de ce que vous vivez', () => {
+  expect([0, 1, 4, 5, 10, 19, 20, 30, 49, 50, 99].map(gradeDe)).toEqual([null, 'Apprenti', 'Apprenti', 'Compagnon', 'Artisan', 'Artisan', 'Maître', 'Grand Maître', 'Grand Maître', 'Légende', 'Légende'])
+  expect(prochainGrade(7)).toEqual({ niveau: 10, nom: 'Artisan' })
+  expect(prochainGrade(50)).toBeNull()
+  expect(GRADES.map(g => g.niveau)).toEqual([...GRADES.map(g => g.niveau)].sort((a, b) => a - b))
+  // chaque haut fait a son id à lui
+  expect(new Set(FAITS.map(f => f.id)).size).toBe(FAITS.length)
+  const zero: Comptes = { outils: 0, sessions: 0, caresses: 0, delivrances: 0, pireSerie: 0, pushsDuJour: 0, serie: 0, meilleureSerie: 0, joursEnsemble: 0, heure: 14 }
+  expect(nouveauxFaits(zero, new Set())).toEqual([])
+  const ids = (c: Partial<Comptes>, deja: string[] = []) => nouveauxFaits({ ...zero, ...c }, new Set(deja)).map(f => f.id)
+  expect(ids({ heure: 3 })).toEqual(['noctambule'])
+  expect(ids({ outils: 10_000 })).toEqual(['mille-outils', 'dix-mille-outils'])
+  expect(ids({ outils: 10_000 }, ['mille-outils'])).toEqual(['dix-mille-outils'])
+  expect(ids({ delivrances: 1, pireSerie: 5 })).toEqual(['delivrance', 'phenix'])
+  expect(ids({ serie: 30, joursEnsemble: 400 })).toEqual(['un-mois', 'semaine', 'mois-de-suite', 'anniversaire'])
+})
+
+test('🎖 ses insignes plus hauts (ruban, deux étoiles, lauriers, soleil) et sa cérémonie : sans texte, légers, pareils d’un rendu à l’autre', () => {
+  for (const insigne of ['ruban', 'double', 'laurier', 'soleil'] as const) {
+    const d = svgScene('coucou', [], 0, TEINTES.opus, undefined, undefined, { insigne })
+    expect(d).toContain(`id="i${insigne[0]}"`)
+    expect(d).not.toContain('<text')
+    expect(d.length).toBeLessThan(40 * 1024)
+    expect(svgScene('coucou', [], 0, TEINTES.opus, undefined, undefined, { insigne })).toBe(d)
+  }
+  const c = svgScene('ceremonie')
+  expect(c).not.toContain('<text')
+  expect(c.length).toBeLessThan(40 * 1024)
+  expect(svgScene('ceremonie')).toBe(c)
+  // jouée une fois, en entier
+  expect(dureeScene('ceremonie')).toBe(5.6)
+})
+
+test('🎖 un grade franchi : sa cérémonie, au lieu de l’étoile ; un niveau ordinaire garde son étoile', async ($, on) => {
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  const { stockage, horloge } = moteur(on)
+  const toasts: string[] = []
+  on('ui.toast', ($, e) => {
+    toasts.push(e.text)
+    return { value: undefined }
+  })
+  on('tool.call', { tool: 'Glob' }, () => ({ result: { filenames: [] }, text: '' }) as never)
+  // juste avant le niveau 5 (750 points), le 4 déjà fêté
+  stockage.set('xp', 749)
+  stockage.set('niveauFete', 4)
+  await $.session.start({ cwd: '/projet', surface: 'desktop', isInteractive: true })
+  const ui = await $.ui.mount({ ...BAND(), surface: 'desktop' })
+  await $.tool.call({ tool: 'Glob', pattern: '*.ts' } as never)
+  expect(await guette(ui, horloge, 'ceremonie', 40)).toContain('ceremonie')
+  expect(toasts.filter(t => t.includes('Clawd devient Compagnon, au niveau 5'))).toHaveLength(1)
+  // le niveau 6 (1 050 points) : son étoile, comme d'habitude
+  stockage.set('xp', 1049)
+  await horloge.advance(60_000)
+  await $.session.start({ cwd: '/projet', surface: 'desktop', isInteractive: true })
+  await $.tool.call({ tool: 'Glob', pattern: '*.ts' } as never)
+  expect(await guette(ui, horloge, 'niveau', 40)).toContain('niveau')
+  expect(toasts.filter(t => t.includes('Clawd passe au niveau 6'))).toHaveLength(1)
+  await ui.unmount()
+})
+
+test('🔥 sa série de jours et ses hauts faits : une semaine de suite, fêtée une fois ; /clawd et son livret les racontent', async ($, on) => {
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  const { stockage, horloge } = moteur(on, undefined, new Date(2026, 9, 31, 10, 0).getTime())
+  const toasts: string[] = []
+  on('ui.toast', ($, e) => {
+    toasts.push(e.text)
+    return { value: undefined }
+  })
+  stockage.set('journee', '2026-10-30')
+  // six jours de suite jusqu'à hier, adopté il y a 40 jours
+  stockage.set('vie', { outils: 12, sessions: 9, delivrances: 0, pireSerie: 0, pushs: { jour: '', n: 0 }, serie: { jour: '2026-10-30', n: 6, record: 6 }, adopte: new Date(2026, 8, 21, 10, 0).getTime(), faits: {} })
+  await $.session.start({ cwd: '/projet', surface: 'desktop', isInteractive: true })
+  const ui = await $.ui.mount({ ...BAND(), surface: 'desktop' })
+  for (let i = 0; i < 30 && !toasts.some(t => t.includes('Une semaine de suite')); i++) await horloge.advance(1000)
+  const vie = stockage.get('vie') as { serie: { n: number; record: number }; sessions: number; faits: Record<string, string> }
+  expect(vie.serie).toMatchObject({ n: 7, record: 7 })
+  expect(vie.sessions).toBe(10)
+  expect(Object.keys(vie.faits).sort()).toEqual(['semaine', 'un-mois'])
+  expect(toasts.filter(t => t.startsWith('🏅 Haut fait rare : 🔥 Une semaine de suite ensemble'))).toHaveLength(1)
+  await ui.unmount()
+  const r = await $.command.run({ command: 'clawd', args: '', origin: { kind: 'composer' } })
+  expect(r.text).toContain('🔥 7 jours de suite ensemble')
+  expect(r.text).toContain('🏅 2 hauts faits sur')
+  const l = await $.command.run({ command: 'clawd', args: 'livret', origin: { kind: 'composer' } })
+  expect(l.text).toContain('📘 Le livret de Clawd')
+  expect(l.text).toContain('🔥 Une semaine de suite ensemble · rare · le 2026-10-31')
+  // un légendaire pas encore gagné garde son mystère
+  expect(l.text).toContain('▫️ ??? · légendaire')
+  expect(l.text).toContain('🔥 7 jour(s) de suite (record : 7)')
+  // une nouvelle session le même jour : pas de nouvelle fête, la série ne bouge pas
+  await $.session.start({ cwd: '/projet', surface: 'desktop', isInteractive: true })
+  await horloge.advance(5000)
+  expect((stockage.get('vie') as { serie: { n: number } }).serie.n).toBe(7)
+  expect(toasts.filter(t => t.includes('Une semaine de suite'))).toHaveLength(1)
 })

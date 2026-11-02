@@ -204,8 +204,16 @@ puis repart, chaque fois d'une autre façon.
   et les joues rouges à 70 %.
 - Chaque outil lancé ensemble lui rapporte un point d'expérience, une
   réussite 5, un mini qui rend son travail 3. À chaque niveau, une étoile lui
-  tombe du ciel ; sa médaille change aux niveaux 1, 5, 10 et 20.
-- Survole-le et clique ⭐ pour savoir où il en est.
+  tombe du ciel ; sa médaille change aux niveaux 1, 3, 5, 10, 20, 30, 40 et 50
+  (ruban, argent, or, étoile, deux étoiles, lauriers, soleil).
+- Ses grades : Apprenti, Compagnon (5), Artisan (10), Maître (20), Grand
+  Maître (30), Légende (50). Chaque grade a sa cérémonie : une grande médaille
+  descend jusqu'à son cou, sous les confettis.
+- Ses hauts faits, gagnés par ce que vous vivez ensemble : une première
+  délivrance, 1 000 outils lancés, une semaine de suite, un an ensemble…
+  `/clawd livret` les montre, avec leur date, vos grades et votre vie commune.
+- Survole-le et clique ⭐ pour savoir où il en est (son grade, sa série de
+  jours, ses hauts faits).
 
 <table>
 <tr>

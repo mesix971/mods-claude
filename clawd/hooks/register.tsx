@@ -20,6 +20,8 @@ import { HUMEUR_DEPART, choisit, decrit as decritHumeur, ecartRepos, estHumeur, 
 import type { Humeur } from './humeur'
 import { ACTIVITES, BAILLE_S, BONBON_S, CLAWD_TEXTE, DANSES, EMOJI, EN_BULLE, JEUX_CARTONS, RAPPORT_S, SORTIES, TAILLE, avecT0, bulleDedans, dureeBoulot, dureeRetour, dureeScene, estChoregraphie, etatBoulot, etatScene, minisAPart, svgBulle, svgDecor, svgMinis, svgScene, teinte, teinteConnue, tenueDe } from './sprite'
 import type { Bulle, Deguisement, EnPlace, Insigne, Mini, Sortie, Tenue } from './sprite'
+import { FAITS, GRADES, gradeDe, nouveauxFaits, prochainGrade } from './grades'
+import type { Fait } from './grades'
 
 
 const passage = atom({ plugin: 'clawd', key: 'passage' } as const, null)
@@ -216,7 +218,7 @@ function dejaDit(anim: ClawdAnim, p: { anim: ClawdAnim } | null) {
 export function priorite(anim: ClawdAnim): number {
   if (anim === 'alerte' || anim === 'question') return 4
   // (le rapport d'un mini aussi : son mini a déjà quitté l'équipe, une loupe ne doit pas le remplacer)
-  if (['fete', 'triste', 'delivrance', 'decourage', 'gratte', 'paquet', 'pause', 'rapport', 'vertige', 'soulage', 'attendu', 'retrouvailles', 'niveau', 'souvenir', 'revanche', 'livraison', 'drapeau'].includes(anim)) return 3
+  if (['fete', 'triste', 'delivrance', 'decourage', 'gratte', 'paquet', 'pause', 'rapport', 'vertige', 'soulage', 'attendu', 'retrouvailles', 'niveau', 'souvenir', 'revanche', 'livraison', 'drapeau', 'ceremonie'].includes(anim)) return 3
   if (LONGUES.includes(anim) || anim === 'tasse' || anim === 'attend' || anim === 'nuit' || anim === 'cache') return 2
   return anim === 'coucou' ? 0 : 1
 }
@@ -563,8 +565,13 @@ export function niveauDe(points: number): number {
   while (n > 0 && seuilNiveau(n) > points) n--
   return n
 }
-/** L'insigne de son niveau : une médaille de bronze dès le 1, d'argent au 5, d'or au 10, l'étoile au 20 */
-export const insigneDe = (n: number): Insigne | undefined => (n >= 20 ? 'etoile' : n >= 10 ? 'or' : n >= 5 ? 'argent' : n >= 1 ? 'bronze' : undefined)
+/**
+ * L'insigne de son niveau : une médaille de bronze dès le 1 (un ruban au 3),
+ * d'argent au 5, d'or au 10, l'étoile au 20, deux étoiles au 30, l'étoile dans
+ * ses lauriers au 40, des lauriers qui rayonnent au 50
+ */
+export const insigneDe = (n: number): Insigne | undefined =>
+  n >= 50 ? 'soleil' : n >= 40 ? 'laurier' : n >= 30 ? 'double' : n >= 20 ? 'etoile' : n >= 10 ? 'or' : n >= 5 ? 'argent' : n >= 3 ? 'ruban' : n >= 1 ? 'bronze' : undefined
 let xp = 0
 /** Ce qu'il a gagné depuis que c'est noté : ajouté au total gardé (relu), pas écrit par-dessus */
 let xpANoter = 0
@@ -616,6 +623,12 @@ async function note($: EngineInterface) {
     niveauVu = nv
     niveauAFeter = nv
   }
+  // les outils lancés depuis, comptés avec le reste de votre vie commune (ses hauts faits en dépendent)
+  if (outilsANoter) {
+    const n = outilsANoter
+    outilsANoter = 0
+    void compte($, v => ({ ...v, outils: v.outils + n }))
+  }
   if (niveauAFeter !== null && dessine) await feteNiveau($)
 }
 
@@ -624,14 +637,25 @@ async function feteNiveau($: EngineInterface) {
   const nv = niveauAFeter
   if (nv === null) return
   niveauAFeter = null
-  const fete = await $.store.get('niveauFete').catch(() => undefined)
+  let fete: unknown
+  try {
+    fete = await $.store.get('niveauFete')
+  } catch {
+    // illisible : il réessaiera (sans quoi un grade déjà acquis serait refêté)
+    niveauAFeter = nv
+    return
+  }
   if (typeof fete === 'number' && fete >= nv) return
   await $.store.set('niveauFete', nv).catch(() => {})
+  // un grade franchi (Compagnon, Artisan…, même en sautant plusieurs niveaux d'un coup) : sa cérémonie, au lieu de
+  // l'étoile d'un niveau ordinaire
+  const grade = gradeDe(nv) !== gradeDe(typeof fete === 'number' ? fete : 0) ? gradeDe(nv) : null
+  const anim = grade ? 'ceremonie' : 'niveau'
   // (sa scène d'abord : un toast refusé ne la lui retire pas ; derrière une longue action, elle attend son tour sans
   // tomber : elle ne se rejouera pas)
-  await scene($, 'niveau', dureeScene('niveau') * 1000, false, 5 * 60_000)
+  await scene($, anim, dureeScene(anim) * 1000, false, 5 * 60_000)
   try {
-    $.ui.toast(`⭐ Clawd passe au niveau ${nv} !`, { timeoutMs: 6000 })
+    $.ui.toast(grade ? `🎖 Clawd devient ${grade}, au niveau ${nv} !` : `⭐ Clawd passe au niveau ${nv} !`, { timeoutMs: 6000 })
   } catch {
     // pas de toast ici : son étoile suffit
   }
@@ -1057,10 +1081,145 @@ export async function voit($: EngineInterface) {
   return lignes.join('\n')
 }
 
-/** Son niveau, et ce qui fait monter son expérience */
+/** Son niveau, son grade, sa série et ses hauts faits, et ce qui fait monter son expérience */
 export async function sonNiveau($: EngineInterface) {
   const nv = await read($, niveau)
-  return `⭐ Niveau ${nv} · ${xp} XP · encore ${Math.max(0, seuilNiveau(nv + 1) - xp)} pour le niveau ${nv + 1} (un outil lancé : 1, une réussite : 5, un mini qui rend son travail : 3)`
+  const g = gradeDe(nv)
+  const suivant = prochainGrade(nv)
+  const v = await lisVie($)
+  const faits = Object.keys(v.faits).length
+  return [
+    `⭐ Niveau ${nv}${g ? ` · ${g}` : ''} · ${xp} XP · encore ${Math.max(0, seuilNiveau(nv + 1) - xp)} pour le niveau ${nv + 1}${suivant ? ` · ${suivant.nom} au niveau ${suivant.niveau}` : ''}`,
+    `${v.serie.n > 1 ? `🔥 ${v.serie.n} jours de suite ensemble · ` : ''}🏅 ${faits} haut${faits > 1 ? 's' : ''} fait${faits > 1 ? 's' : ''} sur ${FAITS.length} (/clawd livret) · un outil lancé : 1 XP, une réussite : 5, un mini qui rend son travail : 3`,
+  ].join('\n')
+}
+
+// ------------------------------------------------------ votre vie commune
+
+/** Ce qu'il garde de votre vie commune (`$.store`, clé `vie`), d'une session à l'autre */
+type Vie = {
+  outils: number
+  sessions: number
+  delivrances: number
+  pireSerie: number
+  pushs: { jour: string; n: number }
+  serie: { jour: string; n: number; record: number }
+  /** la première fois qu'il t'a vu (ms) */
+  adopte: number | null
+  /** ses hauts faits : leur id, et le jour où il l'a gagné */
+  faits: Record<string, string>
+}
+const VIE_VIDE: Vie = { outils: 0, sessions: 0, delivrances: 0, pireSerie: 0, pushs: { jour: '', n: 0 }, serie: { jour: '', n: 0, record: 0 }, adopte: null, faits: {} }
+/** Ce qu'il garde, relu pour l'afficher (une lecture ratée : rien) */
+const lisVie = async ($: EngineInterface): Promise<Vie> => vieDe(await $.store.get('vie').catch(() => null))
+/** Ce qu'il garde, d'après sa valeur stockée (une valeur absente ou abîmée repart de zéro, champ par champ) */
+function vieDe(brut: unknown): Vie {
+  const v = brut as Partial<Vie> | null
+  if (!v || typeof v !== 'object') return { ...VIE_VIDE, pushs: { ...VIE_VIDE.pushs }, serie: { ...VIE_VIDE.serie }, faits: {} }
+  const nombre = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) && x >= 0 ? x : 0)
+  return {
+    outils: nombre(v.outils),
+    sessions: nombre(v.sessions),
+    delivrances: nombre(v.delivrances),
+    pireSerie: nombre(v.pireSerie),
+    pushs: v.pushs && typeof v.pushs.jour === 'string' ? { jour: v.pushs.jour, n: nombre(v.pushs.n) } : { ...VIE_VIDE.pushs },
+    serie: v.serie && typeof v.serie.jour === 'string' ? { jour: v.serie.jour, n: nombre(v.serie.n), record: nombre(v.serie.record) } : { ...VIE_VIDE.serie },
+    adopte: typeof v.adopte === 'number' ? v.adopte : null,
+    faits: v.faits && typeof v.faits === 'object' ? Object.fromEntries(Object.entries(v.faits).filter(([, j]) => typeof j === 'string')) : {},
+  }
+}
+/** Les outils lancés depuis la dernière note (comptés avec son expérience, pas un par un) */
+let outilsANoter = 0
+/** Une session ouverte, pas encore comptée : elle l'est quand on la voit (un `claude -p`, une session en arrière-plan ne comptent pas) */
+let sessionANoter: number | null = null
+/** Le souvenir de la veille, joué quand on le voit (une session en arrière-plan ne le gâche pas) */
+let souvenirAJouer: number | null = null
+/** Ses hauts faits gagnés, pas encore fêtés : il attend qu'on le voie */
+let faitsAFeter: Fait[] = []
+
+/**
+ * Il note quelque chose de votre vie commune (relu, puis écrit : une autre
+ * session a pu y ajouter le sien), une note après l'autre, puis regarde s'il
+ * a gagné un haut fait.
+ */
+function compte($: EngineInterface, f: (v: Vie) => Vie): Promise<void> {
+  notes = notes
+    .then(async () => {
+      const maintenant = await $.clock.now()
+      const caressees = await read($, caresses)
+      // (une lecture ratée abandonne la note, au lieu d'écrire une vie vide par-dessus la vraie)
+      const v = f(vieDe(await $.store.get('vie')))
+      const nouveaux = !dessine ? [] : nouveauxFaits(
+        {
+          outils: v.outils,
+          sessions: v.sessions,
+          caresses: typeof caressees === 'number' ? caressees : 0,
+          delivrances: v.delivrances,
+          pireSerie: v.pireSerie,
+          pushsDuJour: v.pushs.jour === journee(maintenant) ? v.pushs.n : 0,
+          serie: v.serie.n,
+          meilleureSerie: v.serie.record,
+          joursEnsemble: v.adopte === null ? 0 : Math.floor((maintenant - v.adopte) / 86_400_000),
+          heure: new Date(maintenant).getHours(),
+        },
+        new Set(Object.keys(v.faits)),
+      )
+      for (const n of nouveaux) v.faits[n.id] = journee(maintenant)
+      await $.store.set('vie', v)
+      faitsAFeter.push(...nouveaux)
+      if (faitsAFeter.length && dessine) await feteFaits($)
+    })
+    .catch(() => {})
+  return notes
+}
+
+/** Une nouvelle journée ensemble : sa série continue (c'était hier) ou repart ; et sa date d'adoption, la première fois */
+const nouvelleJournee = (maintenant: number) => (v: Vie): Vie => {
+  const jour = journee(maintenant)
+  const adopte = v.adopte ?? maintenant
+  if (v.serie.jour === jour) return { ...v, adopte }
+  const n = v.serie.jour === journee(maintenant - 86_400_000) ? v.serie.n + 1 : 1
+  return { ...v, adopte, serie: { jour, n, record: Math.max(v.serie.record, n) } }
+}
+
+/** Il fête ses hauts faits tout neufs, un par un : une petite fête, la cérémonie pour un épique ou un légendaire */
+async function feteFaits($: EngineInterface) {
+  const faits = faitsAFeter
+  faitsAFeter = []
+  for (const f of faits) {
+    const grand = f.rarete === 'épique' || f.rarete === 'légendaire'
+    await scene($, grand ? 'ceremonie' : 'fete', grand ? dureeScene('ceremonie') * 1000 : 4000, false, 5 * 60_000)
+    try {
+      $.ui.toast(`🏅 Haut fait ${f.rarete} : ${f.emoji} ${f.titre}`, { timeoutMs: 8000 })
+    } catch {
+      // pas de toast ici : sa fête suffit, et le livret le garde
+    }
+  }
+}
+
+/** Son livret (/clawd livret) : ses grades, ses hauts faits avec leur date, votre vie commune */
+export async function livret($: EngineInterface) {
+  const nv = await read($, niveau)
+  const v = await lisVie($)
+  const maintenant = await $.clock.now()
+  const caressees = await read($, caresses)
+  const grades = GRADES.map(g => `${nv >= g.niveau ? '🎖' : '▫️'} ${g.nom} (niveau ${g.niveau})`)
+  // (un légendaire pas encore gagné garde son mystère)
+  const date = (j: string) => j.replace(/-(\d)(?=-|$)/g, '-0$1')
+  const faits = FAITS.map(f => (v.faits[f.id] ? `${f.emoji} ${f.titre} · ${f.rarete} · le ${date(v.faits[f.id]!)}` : `▫️ ${f.rarete === 'légendaire' ? '???' : f.titre} · ${f.rarete}`))
+  return [
+    `📘 Le livret de Clawd · niveau ${nv}${gradeDe(nv) ? ` · ${gradeDe(nv)}` : ''}`,
+    '',
+    'Ses grades :',
+    ...grades.map(l => `  ${l}`),
+    '',
+    `Ses hauts faits (${Object.keys(v.faits).length}/${FAITS.length}) :`,
+    ...faits.map(l => `  ${l}`),
+    '',
+    'Votre vie commune :',
+    `  ${v.adopte !== null ? `🗓 ensemble depuis ${Math.floor((maintenant - v.adopte) / 86_400_000)} jour(s) · ` : ''}${v.sessions} session(s) · ${v.outils} outil(s) lancé(s) · ${typeof caressees === 'number' ? caressees : 0} caresse(s)`,
+    `  🔥 ${v.serie.n} jour(s) de suite (record : ${v.serie.record}) · 🎆 ${v.delivrances} délivrance(s)`,
+  ].join('\n')
 }
 
 /** /clawd de base : son niveau et son humeur ; montre <numéro | bande | scène> ; voit */
@@ -1076,7 +1235,8 @@ async function commandeDeBase($: EngineInterface, args: string) {
     return `Dis-lui quoi montrer : « bande », un numéro (${Object.keys(NUMEROS).join(', ')}) ou une scène (${Object.keys(EMOJI).join(', ')}).`
   }
   if (/^voi[st]/i.test(args)) return voit($)
-  return [`${await sonNiveau($)}`, `🧠 En ce moment, ${decritHumeur(humeurActuelle(), (await read($, dort)) === true)}.`, '/clawd montre <numéro | bande | scène> · /clawd voit'].join('\n')
+  if (/^livret/i.test(args)) return livret($)
+  return [`${await sonNiveau($)}`, `🧠 En ce moment, ${decritHumeur(humeurActuelle(), (await read($, dort)) === true)}.`, '/clawd montre <numéro | bande | scène> · /clawd voit · /clawd livret'].join('\n')
 }
 
 /** Il prend l'original, si son numéro est toujours en cours : jusqu'à la fin du numéro au plus (atelier le redessine ensuite, quoi qu'il arrive) */
@@ -1335,6 +1495,7 @@ async function verdict($: EngineInterface, ok: boolean) {
     echecsDaffilee = 0
     // une série d'échecs enfin passée ; ou la galère du jour (vécue dans une autre session) que cette réussite résout
     if (serie >= 2 || (await galereDuJour($))) await retiens($, 'delivrance')
+    if (serie >= 2) void compte($, v => ({ ...v, delivrances: v.delivrances + 1, pireSerie: Math.max(v.pireSerie, serie) }))
     return serie >= 2 ? scene($, 'delivrance', dureeScene('delivrance') * 1000) : scene($, 'fete', 6000)
   }
   echecsDaffilee++
@@ -1485,6 +1646,8 @@ async function verdictDe($: EngineInterface, cmd: string, r: ToolCallResult) {
   if (lance(PUSH, cmd)) {
     if (!ok) return scene($, 'triste', 7000)
     await retiens($, 'push')
+    const jour = journee(await $.clock.now())
+    void compte($, v => ({ ...v, pushs: { jour, n: v.pushs.jour === jour ? v.pushs.n + 1 : 1 } }))
     return scene($, 'fete', 6000)
   }
   // un pull réussi (sans conflit : vu plus haut) : les nouveautés de GitHub arrivent en colis, il l'ouvre ; rien de neuf, rien
@@ -1616,10 +1779,12 @@ export const register: Register = on => {
     // la première session de la journée, il sort du lit ; ensuite, il est en forme ;
     // et si tu étais parti longtemps, il te fait la fête (après son café, le matin)
     const retour = await retrouvailles($, derniereActivite)
+    // une session de plus ensemble, et peut-être une nouvelle journée (sa série de jours)
+    sessionANoter = derniereActivite
     if (await premierDuJour($, derniereActivite)) {
       await emerge($)
       // et la veille lui revient (dans une session que tu vois : une session en arrière-plan ne le gâche pas)
-      if ((e as { isInteractive?: boolean }).isInteractive !== false) await seSouvient($, derniereActivite)
+      souvenirAJouer = derniereActivite
     } else if (!retour) await scene($, 'coucou', 4000)
     if (retour) await scene($, retour, dureeScene(retour) * 1000)
 
@@ -1703,6 +1868,18 @@ export const register: Register = on => {
         tic++
         // un niveau atteint quand on ne le voyait pas : il le fête maintenant qu'on le voit
         if (niveauAFeter !== null && dessine) await feteNiveau($)
+        if (faitsAFeter.length && dessine) await feteFaits($)
+        // une session qu'on voit : comptée (et sa série de jours) ; et la veille lui revient, après son réveil
+        if (dessine && sessionANoter !== null) {
+          const t = sessionANoter
+          sessionANoter = null
+          void compte($, v => nouvelleJournee(t)({ ...v, sessions: v.sessions + 1 }))
+        }
+        if (dessine && souvenirAJouer !== null) {
+          const t = souvenirAJouer
+          souvenirAJouer = null
+          await seSouvient($, t)
+        }
         if (numeroLance) {
           const n = await read($, numero)
           if (n) {
@@ -1774,6 +1951,8 @@ export const register: Register = on => {
     // la session est restée ouverte toute la nuit : il se réveille avec toi ; tu étais parti longtemps : il te fait la fête
     const retour = await retrouvailles($, maintenant)
     if (await premierDuJour($, maintenant)) {
+      // une nouvelle journée dans une session restée ouverte : sa série continue
+      void compte($, nouvelleJournee(maintenant))
       await emerge($)
       await seSouvient($, maintenant)
       if (retour) await scene($, retour, dureeScene(retour) * 1000)
@@ -1938,6 +2117,7 @@ export const register: Register = on => {
     } finally {
       // un outil d'un sous-agent qui finit ne baisse pas la patte : la permission du tour principal attend toujours
       if (e.agentId === undefined) await finAttente($, clePermission(e.tool, e)).catch(() => {})
+      outilsANoter++
       await gagne($, XP_OUTIL).catch(() => {})
     }
   })
@@ -2033,7 +2213,7 @@ export const register: Register = on => {
   if (commandePublique.active) {
     on('session.start', { cwd: /^/ }, async ($, e, next) => {
       await $.command
-        .register({ name: 'clawd', description: 'Clawd : son niveau, ou montre <numéro | bande | scène> · voit', argumentHint: '[montre <numéro | bande | scène> | voit]' })
+        .register({ name: 'clawd', description: 'Clawd : son niveau, ou montre <numéro | bande | scène> · voit · livret', argumentHint: '[montre <numéro | bande | scène> | voit | livret]' })
         .catch(() => {})
       return next(e)
     })
@@ -2175,6 +2355,7 @@ export const register: Register = on => {
       geste('caresse', anim)
       const n = (await update($, caresses, c => c + 1)) ?? 0
       await $.store.set('caresses', n)
+      void compte($, v => v)
       await reveil($)
       humeur = vecu(humeur, 'caresse')
       // ta caresse passe tout de suite : il arrête ce qu'il fait (même un cœur d'avant)
@@ -2220,9 +2401,10 @@ export const register: Register = on => {
       </Box>
     )
     // son niveau, au survol : où il en est de son expérience, et ce qui la fait monter
-    const montreNiveau = () => {
+    // (son grade, le prochain, sa série de jours et ses hauts faits avec)
+    const montreNiveau = async () => {
       try {
-        $.ui.toast(`⭐ Niveau ${nv} · ${xp} XP · encore ${Math.max(0, seuilNiveau(nv + 1) - xp)} pour le niveau ${nv + 1} (un outil lancé : 1, une réussite : 5, un mini qui rend son travail : 3)`, { timeoutMs: 8000 })
+        $.ui.toast(await sonNiveau($), { timeoutMs: 10_000 })
       } catch {
         // pas de toast ici : le chiffre de son bouton suffit
       }

@@ -24,8 +24,12 @@ Anthropic.
   five ways.
 - He sweats as the context fills up, wears an autopilot visor in auto or
   bypass mode, and earns experience from tool calls: each new level drops a
-  star from the sky, and the medal on his belly upgrades at levels 1, 5, 10
-  and 20.
+  star from the sky, and the medal on his belly upgrades at levels 1, 3, 5,
+  10, 20, 30, 40 and 50. Each rank (Apprentice, Journeyman at 5, Artisan at
+  10, Master at 20, Grand Master at 30, Legend at 50) gets its own ceremony.
+  He also earns achievements from your time together (a first fix after a run
+  of failures, a week in a row, a year together…); `/clawd livret` lists
+  them with their dates.
 - With the atelier mod from the same marketplace, he plays short gags across
   its band (he steals the loading orb, makes the pills pop like popcorn,
   shrinks to hop from pill to pill and run on the orb, or grows to shake them;
@@ -69,8 +73,10 @@ permission requests. It reads what Claude Code provides: the current model,
 the permission mode, the context and rate-limit figures, the list of
 subagents, and the band published by atelier. It keeps its petting count,
 experience, mood, a few dates (such as your last visit) and the day's high
-point (a word like `delivrance` and its date, never a command or its output)
-in the plugin store. Command replies are in French; the drawing itself has no text.
+point (a word like `delivrance` and its date, never a command or its output),
+plus a few counters for his achievements (tools launched, sessions, fixes,
+pushes per day, days in a row, the date he first saw you, and the date of
+each achievement) in the plugin store. Command replies are in French; the drawing itself has no text.
 
 It never reads the text of your prompts or of Claude's answers. Its hooks
 never change what Claude does: prompts, tool calls, subagent launches and

@@ -43,6 +43,19 @@
 
 ## clawd
 
+- **0.13.0** — 2026-11-02 — Ses grades et sa reconnaissance.
+  - Des grades nommés : Apprenti (1), Compagnon (5), Artisan (10), Maître
+    (20), Grand Maître (30), Légende (50). Un grade franchi a sa cérémonie
+    (une grande médaille descend jusqu'à son cou), à la place de l'étoile.
+  - Plus de paliers sur son ventre : un ruban (3), deux étoiles (30), l'étoile
+    dans ses lauriers (40), des lauriers qui rayonnent (50).
+  - Ses hauts faits (table `FAITS`, grades.ts) : délivrance, phénix, 1 000
+    et 10 000 outils, cent caresses, cent sessions, noctambule, une semaine
+    et un mois de suite, un mois et un an ensemble ; fêtés une fois (la
+    cérémonie pour un épique ou un légendaire), gardés avec leur date.
+  - Sa série de jours ensemble et sa date d'adoption. `/clawd livret` : ses
+    grades, ses hauts faits, votre vie commune ; ⭐ dit son grade, le
+    prochain, sa série et ses hauts faits.
 - **0.12.0** — 2026-10-31 — Il réagit à plus de choses, et ses minis ont du
   caractère.
   - Git : un pull qui ramène des nouveautés, un colis tombe du ciel et il

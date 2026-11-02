@@ -91,6 +91,8 @@ export type ClawdAnim =
   // git : un pull qui ramène des nouveautés (un colis), une branche nouvelle (son drapeau)
   | 'livraison'
   | 'drapeau'
+  // un grade (Compagnon, Artisan…) : sa cérémonie, une grande médaille qui descend jusqu'à lui
+  | 'ceremonie'
   // tu reviens après une longue absence : il t'a attendu (8 h), il saute de joie (un jour et demi)
   | 'attendu'
   | 'retrouvailles'

@@ -137,7 +137,7 @@ const YEUX_PARLANTS: readonly Yeux[] = ['coeur', 'etoile', 'croix', 'grand']
  * demander (mode auto ou bypass), la sueur qui monte avec le contexte, et
  * l'insigne de son niveau, épinglé sur son ventre.
  */
-export type Insigne = 'bronze' | 'argent' | 'or' | 'etoile'
+export type Insigne = 'bronze' | 'ruban' | 'argent' | 'or' | 'etoile' | 'double' | 'laurier' | 'soleil'
 export type Tenue = {
   /** son déguisement du jour (la date, l'heure) */
   deguise?: Deguisement
@@ -213,16 +213,37 @@ const CSS_GOUTTE =
 // de son corps, quelle que soit sa couleur) en bronze, puis en argent, puis en or ; passé le niveau 20, une étoile d'or
 // qui brille de temps en temps
 const MEDAILLE = (c: string, liseré: string) => ['.rr.', 'rcWr', 'rccr', '.rr.'].map(l => l.replaceAll('c', c).replaceAll('r', liseré))
-const METAUX: Record<Exclude<Insigne, 'etoile'>, [string, string]> = { bronze: ['Z', 'z'], argent: ['w', 'G'], or: ['Y', 'y'] }
+const METAUX: Record<'bronze' | 'argent' | 'or', [string, string]> = { bronze: ['Z', 'z'], argent: ['w', 'G'], or: ['Y', 'y'] }
 const ETOILE_INSIGNE = ['..Y..', '.YYY.', 'YYWYY', '.YYY.', '.Y.Y.']
-const INSIGNES: readonly Insigne[] = ['bronze', 'argent', 'or', 'etoile']
+// Plus haut encore : un ruban rouge sur sa médaille de bronze (niveau 3), deux étoiles (30), l'étoile dans une couronne
+// de lauriers (40), puis ses lauriers rayonnent comme un soleil (50) : jamais un long palier sans rien de neuf
+const RUBAN = ['R..R', '.RR.']
+const DOUBLE = ['.Y...Y.', 'YYY.YYY', '.Y...Y.']
+const LAURIER = ['v..Y..v', 'v.YYY.v', 'vYYWYYv', '.vYYYv.', '..vYv..']
+const INSIGNES: readonly Insigne[] = ['bronze', 'ruban', 'argent', 'or', 'etoile', 'double', 'laurier', 'soleil']
 /** Le dessin de son insigne (`i` : son initiale) */
-const insigneDef = (i: Insigne) =>
-  `<g id="i${i[0]}">${
-    i === 'etoile'
-      ? artGroupe(ETOILE_INSIGNE, -1, -1, 2, 'Y') + `<g class="brille">${R(7, -3, 2, 2, PAL.W!)}</g>`
-      : artGroupe(MEDAILLE(...METAUX[i]), 0, 0, 2, METAUX[i][1])
-  }</g>`
+const insigneDef = (i: Insigne) => `<g id="i${i[0]}">${dessinInsigne(i)}</g>`
+function dessinInsigne(i: Insigne): string {
+  const scintille = (x: number, y: number) => `<g class="brille">${R(x, y, 2, 2, PAL.W!)}</g>`
+  switch (i) {
+    case 'etoile':
+      return artGroupe(ETOILE_INSIGNE, -1, -1, 2, 'Y') + scintille(7, -3)
+    case 'ruban':
+      return artGroupe(RUBAN, 0, -4, 2, 'R') + artGroupe(MEDAILLE(...METAUX.bronze), 0, 0, 2, 'z')
+    case 'double':
+      return artGroupe(DOUBLE, -3, 1, 2, 'Y') + scintille(9, -1)
+    case 'laurier':
+      return artGroupe(LAURIER, -3, -1, 2, 'Y') + scintille(9, -3)
+    case 'soleil':
+      // ses rayons scintillent l'un après l'autre autour des lauriers
+      return (
+        artGroupe(LAURIER, -3, -1, 2, 'Y') +
+        [[3, -5], [-5, 3], [11, 3], [3, 11]].map(([x, y], k) => `<g class="brille" style="animation-delay:${(k * 0.75).toFixed(2)}s">${R(x!, y!, 2, 2, PAL.Y!)}</g>`).join('')
+      )
+    default:
+      return artGroupe(MEDAILLE(...METAUX[i]), 0, 0, 2, METAUX[i][1])
+  }
+}
 const CSS_BRILLE = `.brille{animation:brille 3s steps(1,end) infinite;opacity:0}@keyframes brille{0%,78%{opacity:0}80%,92%{opacity:1}}`
 
 /** Sa tenue lui met-elle quelque chose de plus (visière, sueur, insigne) ? Un mini n'a que la visière */
@@ -237,7 +258,7 @@ const enTenue = () => visiere || (!enMini && (sueur > 0 || insigne !== null))
 const idTenue = (profil: boolean, haut = false) =>
   `tn${profil ? 'p' : ''}${visiere ? (haut ? 'h' : 'v') : ''}${!enMini && sueur ? sueur : ''}${!enMini && insigne ? insigne[0] : ''}`
 /** Les noms de ces dessins, dans ce qui les reprend */
-const ID_TENUE = /href="#(tnp?[vh]?[12]?[baoe]?)"/g
+const ID_TENUE = /href="#(tnp?[vh]?[12]?[baoerdls]?)"/g
 /**
  * Ce que sa tenue lui met, d'après son nom (`idTenue`), dans son repère (le
  * coin haut-gauche de son corps ; de profil, celui de `profil`) : sa visière,
@@ -246,7 +267,7 @@ const ID_TENUE = /href="#(tnp?[vh]?[12]?[baoe]?)"/g
  * par image : ses scènes les plus longues restent légères.
  */
 function tenueDef(id: string): string {
-  const [, p, v, s, i] = /^tn(p?)([vh]?)([12]?)([baoe]?)$/.exec(id) ?? []
+  const [, p, v, s, i] = /^tn(p?)([vh]?)([12]?)([baoerdls]?)$/.exec(id) ?? []
   const contenu = p
     ? (v ? VISIERE_PROFIL : '') + (s ? goutte(86, 54) : '') + (i ? `<use href="#i${i}" x="53" y="75"/>` : '')
     : (v ? `<use href="#visiere"${v === 'h' ? ' y="-9"' : ''}/>` : '') +
@@ -1914,6 +1935,28 @@ const SCENES: Record<ClawdAnim, () => Scene> = {
       corps({ g: 'haut', d: 'haut', yeux: 'heureux' }) + A(DRAPEAU, 78, 22, 3),
     ],
   }),
+  // Un grade (Compagnon, Artisan, Maître…) : sa cérémonie. Les confettis tombent, une grande médaille descend du ciel jusqu'à
+  // son cou, il la regarde, salue bien bas, et lève les bras ; plus solennelle que l'étoile d'un niveau ordinaire
+  ceremonie: () => {
+    const medaille = (dy: number) => artGroupe(RUBAN, X0 + 30, Y0 + dy - 6, 3, 'R') + artGroupe(ETOILE_INSIGNE, X0 + 29, Y0 + dy, 3, 'Y')
+    return {
+      duree: 5.6,
+      fx: effets.confettis(),
+      images: [
+        corps({ yeux: 'haut', bouche: 'o' }) + medaille(-44),
+        corps({ yeux: 'haut', bouche: 'o' }) + medaille(-28),
+        corps({ yeux: 'haut' }) + medaille(-10),
+        corps({ yeux: 'bas', jambes: 'replie', dy: 2 }) + medaille(18),
+        corps({ yeux: 'bas' }) + medaille(22),
+        corps({ yeux: 'heureux', g: 'devant', d: 'devant' }) + medaille(22),
+        corps({ yeux: 'ferme', jambes: 'replie', dy: 4, g: 'pend', d: 'pend' }) + medaille(25),
+        corps({ yeux: 'heureux', d: 'tete' }) + medaille(22),
+        corps({ yeux: 'heureux', g: 'ciel', d: 'ciel' }) + medaille(22),
+        corps({ yeux: 'heureux', g: 'ciel', d: 'ciel', dy: -6, jambes: 'replie', masse: 'etire' }) + medaille(16),
+        corps({ yeux: 'heureux', g: 'haut', d: 'haut' }) + medaille(22),
+      ],
+    }
+  },
   // Le matin, il se souvient du moment fort de la veille (sa mémoire, register.tsx) : une bulle de pensée au-dessus de
   // lui, et dedans le trophée de sa délivrance ou de son push ; il sourit, puis saute de joie
   souvenir: () => {
@@ -2947,7 +2990,7 @@ export function dureeScene(anim: ClawdAnim): number {
   // va), et sa montée de niveau (l'étoile ne tombe qu'une fois)
   if (anim === 'rapport') return RAPPORT_S
   const s = SCENES[anim]()
-  if (JEUX_CARTONS.includes(anim) || anim === 'niveau') return s.duree
+  if (JEUX_CARTONS.includes(anim) || anim === 'niveau' || anim === 'ceremonie') return s.duree
   if (s.choreo) return s.duree
   const t = Math.min(14, Math.max(8, s.duree * 3))
   // une longue boucle (une petite histoire) que le plafond couperait en plein geste : des tours entiers, au moins un
@@ -3631,7 +3674,8 @@ export const EMOJI: Record<ClawdAnim, string> = {
   fatigue: '😓', vertige: '😵', coeur: '♥', nuit: '🌙', reveil: '🥱', tasse: '🗜', paquet: '✨', attend: '✋',
   question: '❔', deballe: '📥', decourage: '😞', delivrance: '🎆', colis: '🎁', gigogne: '🪆', tambour: '🥁', podium: '🏆',
   pause: '🥛', rapport: '🤝', bonbon: '🍬', detente: '😎', baille: '😪', cache: '🫣', soulage: '😮‍💨', souvenir: '💭', revanche: '💪', attendu: '🤗',
-  livraison: '📦', drapeau: '🚩', retrouvailles: '🥰', chat: '🐈', filante: '🌠',
+  livraison: '📦', drapeau: '🚩',
+  ceremonie: '🎖', retrouvailles: '🥰', chat: '🐈', filante: '🌠',
   floss: '🕺', orange: '🍊', defaut: '🎶', griddy: '🔥', takel: '🫵', sixseven: '6️⃣7️⃣', niveau: '⭐',
 }
 
