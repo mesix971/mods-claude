@@ -206,6 +206,8 @@ declare module 'claude-code' {
       grandeScene: { id: number; svg: string; hauteur: number; debut: number; fin: number } | null
       /** Son coup d'œil : quelque chose vient de changer sur la bande, ses yeux s'y tournent (à sa gauche, ou au-dessus de lui) jusqu'à `jusqua` (ms) */
       regard: { vers: 'gauche' | 'haut'; jusqua: number } | null
+      /** Sa série de jours ensemble, vivante (le dernier jour compté est aujourd'hui ou hier) : sa flamme en dépend */
+      serie: number
       /** Claude agit sans te demander (mode auto ou bypass) : il porte sa visière de pilote automatique */
       pilote: boolean
       /** Le contexte se remplit : 0 rien, 1 une goutte de sueur (la moitié), 2 deux gouttes et les joues rouges (70 %) */

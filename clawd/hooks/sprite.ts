@@ -149,11 +149,14 @@ export type Tenue = {
   insigne?: Insigne
   /** où il regarde : ce qui vient de changer sur la bande (à sa gauche, ou au-dessus de lui) ; ses yeux ouverts s'y tournent */
   regard?: 'gauche' | 'haut'
+  /** sa série de jours ensemble : une petite flamme qui vacille sur son ventre (1 : dès 2 jours, 2 : une semaine, 3 : un mois) */
+  flamme?: 1 | 2 | 3
 }
 let regardVers: 'gauche' | 'haut' | null = null
 let visiere = false
 let sueur: 0 | 1 | 2 = 0
 let insigne: Insigne | null = null
+let flamme: 0 | 1 | 2 | 3 = 0
 /** Un mini-Clawd se dessine : ni la sueur ni l'insigne de Clawd, mais la même visière (son sous-agent a le même mode) */
 let enMini = false
 /** Dessine un mini-Clawd (voir `enMini`) */
@@ -175,6 +178,7 @@ export function tenueDe(t: Tenue): Tenue | undefined {
     ...(t.sueur ? { sueur: t.sueur } : {}),
     ...(t.insigne ? { insigne: t.insigne } : {}),
     ...(t.regard ? { regard: t.regard } : {}),
+    ...(t.flamme ? { flamme: t.flamme } : {}),
   }
   return Object.keys(n).length ? n : undefined
 }
@@ -245,9 +249,23 @@ function dessinInsigne(i: Insigne): string {
   }
 }
 const CSS_BRILLE = `.brille{animation:brille 3s steps(1,end) infinite;opacity:0}@keyframes brille{0%,78%{opacity:0}80%,92%{opacity:1}}`
+// Sa série de jours ensemble : une flamme sur son ventre, en face de sa médaille, qui vacille (deux formes en alternance)
+// et grandit avec la série (dès 2 jours, une semaine, un mois)
+const FLAMMES_SERIE: Record<1 | 2 | 3, [string[], string[]]> = {
+  1: [['.R.', 'RYR', 'RYR', '.R.'], ['R..', 'RRY', 'RYR', '.R.']],
+  2: [['..R..', '.RRR.', 'RRYRR', 'RYYYR', '.RYR.'], ['.R...', '.RR.R', 'RRYRR', 'RYYYR', '.RYR.']],
+  3: [['..R...', '.RR.R.', '.RRRR.', 'RRYYRR', 'RYYYYR', 'RYWWYR', '.RYYR.'], ['...R..', '.R.RR.', '.RRRR.', 'RRYYRR', 'RYYYYR', 'RYWWYR', '.RYYR.']],
+}
+/** Sa flamme de série (pixels de 2), posée en (`x`, `y`) : ses deux formes alternent (`.flamme-a`, `.flamme-b`) */
+const dessinFlamme = (n: number, x: number, y: number) => {
+  const [a, b] = FLAMMES_SERIE[(n === 3 ? 3 : n === 2 ? 2 : 1) as 1 | 2 | 3]
+  const hauteurFlamme = a.length * 2
+  return `<g class="flamme-a">${art(a, x, y + 8 - hauteurFlamme, 2)}</g><g class="flamme-b">${art(b, x, y + 8 - hauteurFlamme, 2)}</g>`
+}
+const CSS_FLAMME = `.flamme-a{animation:flamme-vacille .5s steps(1,end) infinite}.flamme-b{animation:flamme-vacille .5s steps(1,end) infinite;animation-delay:-.25s}@keyframes flamme-vacille{0%{opacity:1}50%,100%{opacity:0}}`
 
 /** Sa tenue lui met-elle quelque chose de plus (visière, sueur, insigne) ? Un mini n'a que la visière */
-const enTenue = () => visiere || (!enMini && (sueur > 0 || insigne !== null))
+const enTenue = () => visiere || (!enMini && (sueur > 0 || insigne !== null || flamme > 0))
 /**
  * Le nom du dessin de ce que sa tenue lui met, de face (`tn`) ou de profil
  * (`tnp`), ses parties à la suite : `v` sa visière (`h` relevée sur son
@@ -256,9 +274,9 @@ const enTenue = () => visiere || (!enMini && (sueur > 0 || insigne !== null))
  * pèse peu dans chaque image. Un mini n'a que la visière.
  */
 const idTenue = (profil: boolean, haut = false) =>
-  `tn${profil ? 'p' : ''}${visiere ? (haut ? 'h' : 'v') : ''}${!enMini && sueur ? sueur : ''}${!enMini && insigne ? insigne[0] : ''}`
+  `tn${profil ? 'p' : ''}${visiere ? (haut ? 'h' : 'v') : ''}${!enMini && sueur ? sueur : ''}${!enMini && insigne ? insigne[0] : ''}${!enMini && flamme ? `f${flamme}` : ''}`
 /** Les noms de ces dessins, dans ce qui les reprend */
-const ID_TENUE = /href="#(tnp?[vh]?[12]?[baoerdls]?)"/g
+const ID_TENUE = /href="#(tnp?[vh]?[12]?[baoerdls]?(?:f[123])?)"/g
 /**
  * Ce que sa tenue lui met, d'après son nom (`idTenue`), dans son repère (le
  * coin haut-gauche de son corps ; de profil, celui de `profil`) : sa visière,
@@ -267,12 +285,13 @@ const ID_TENUE = /href="#(tnp?[vh]?[12]?[baoerdls]?)"/g
  * par image : ses scènes les plus longues restent légères.
  */
 function tenueDef(id: string): string {
-  const [, p, v, s, i] = /^tn(p?)([vh]?)([12]?)([baoerdls]?)$/.exec(id) ?? []
+  const [, p, v, s, i, f] = /^tn(p?)([vh]?)([12]?)([baoerdls]?)(?:f([123]))?$/.exec(id) ?? []
   const contenu = p
-    ? (v ? VISIERE_PROFIL : '') + (s ? goutte(86, 54) : '') + (i ? `<use href="#i${i}" x="53" y="75"/>` : '')
+    ? (v ? VISIERE_PROFIL : '') + (s ? goutte(86, 54) : '') + (i ? `<use href="#i${i}" x="53" y="75"/>` : '') + (f ? dessinFlamme(Number(f), 70, 77) : '')
     : (v ? `<use href="#visiere"${v === 'h' ? ' y="-9"' : ''}/>` : '') +
       (s ? goutte(54, 1) + (s === '2' ? `${goutte(12, 3, true)}<use href="#joues"/>` : '') : '') +
-      (i ? `<use href="#i${i}" x="46" y="22"/>` : '')
+      (i ? `<use href="#i${i}" x="46" y="22"/>` : '') +
+      (f ? dessinFlamme(Number(f), 18, 22) : '')
   return `<g id="${id}">${contenu}</g>`
 }
 
@@ -2741,7 +2760,7 @@ function vivant(): string {
  */
 const VIVANT = vivant()
 const vit = (svg: string) =>
-  (/class="(?:souffle|cligne)"/.test(svg) ? VIVANT : '') + (svg.includes('class="goutte') ? CSS_GOUTTE : '') + (svg.includes('class="brille"') ? CSS_BRILLE : '')
+  (/class="(?:souffle|cligne)"/.test(svg) ? VIVANT : '') + (svg.includes('class="goutte') ? CSS_GOUTTE : '') + (svg.includes('class="brille"') ? CSS_BRILLE : '') + (svg.includes('class="flamme-a"') ? CSS_FLAMME : '')
 
 const CSS = `
 .flotte{animation:flotte 3s ease-in-out infinite}
@@ -3373,13 +3392,14 @@ const sonDeguisement = (anim: ClawdAnim, d?: Deguisement | Tenue): Deguisement |
  * visage : il garde sa sueur et son insigne.
  */
 function deguiseEn<T>(d: Deguisement | Tenue | undefined, dessine: () => T): T {
-  const avant = { deguisement, visiere, sueur, insigne, regardVers }
+  const avant = { deguisement, visiere, sueur, insigne, regardVers, flamme }
   if (typeof d === 'object') {
     deguisement = d.deguise ?? null
     visiere = d.visiere === true
     sueur = d.sueur ?? 0
     insigne = d.insigne ?? null
     regardVers = d.regard ?? null
+    flamme = d.flamme ?? 0
   } else {
     deguisement = d ?? null
     visiere = false
@@ -3387,7 +3407,7 @@ function deguiseEn<T>(d: Deguisement | Tenue | undefined, dessine: () => T): T {
   try {
     return dessine()
   } finally {
-    ;({ deguisement, visiere, sueur, insigne, regardVers } = avant)
+    ;({ deguisement, visiere, sueur, insigne, regardVers, flamme } = avant)
   }
 }
 

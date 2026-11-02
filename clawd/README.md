@@ -29,7 +29,8 @@ Anthropic.
   10, Master at 20, Grand Master at 30, Legend at 50) gets its own ceremony.
   He also earns achievements from your time together (a first fix after a run
   of failures, a week in a row, a year together…); `/clawd livret` lists
-  them with their dates.
+  them with their dates. Come back day after day and a small flame flickers on
+  his belly, growing at a week and at a month.
 - With the atelier mod from the same marketplace, he plays short gags across
   its band (he steals the loading orb, makes the pills pop like popcorn,
   shrinks to hop from pill to pill and run on the orb, or grows to shake them;

@@ -43,6 +43,12 @@
 
 ## clawd
 
+- **0.13.1** — 2026-11-02 — Sa flamme de série, et une série qui ne recule plus.
+  - Une petite flamme vacille sur son ventre, en face de sa médaille, dès 2
+    jours de suite ensemble ; elle grandit à une semaine, puis à un mois.
+  - Sa série ne recule plus : une session se compte le jour où on la voit, et
+    un jour plus ancien que le dernier compté ne la fait jamais retomber.
+
 - **0.13.0** — 2026-11-02 — Ses grades et sa reconnaissance.
   - Des grades nommés : Apprenti (1), Compagnon (5), Artisan (10), Maître
     (20), Grand Maître (30), Légende (50). Un grade franchi a sa cérémonie

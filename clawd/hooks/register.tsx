@@ -36,6 +36,7 @@ const motNonLu = atom({ plugin: 'clawd', key: 'mot' } as const, null)
 const emprunts = atom({ plugin: 'clawd', key: 'emprunts' } as const, [])
 const grandeScene = atom({ plugin: 'clawd', key: 'grandeScene' } as const, null)
 const coupDOeil = atom({ plugin: 'clawd', key: 'regard' } as const, null)
+const serieVivante = atom({ plugin: 'clawd', key: 'serie' } as const, 0)
 const pilote = atom({ plugin: 'clawd', key: 'pilote' } as const, false)
 const transpire = atom({ plugin: 'clawd', key: 'sueur' } as const, 0)
 const niveau = atom({ plugin: 'clawd', key: 'niveau' } as const, 0)
@@ -665,7 +666,9 @@ async function feteNiveau($: EngineInterface) {
 async function tenueSession($: EngineInterface): Promise<Tenue> {
   const s = await read($, transpire)
   const i = insigneDe(await read($, niveau))
-  return { visiere: (await read($, pilote)) === true, ...(s === 1 || s === 2 ? { sueur: s } : {}), ...(i ? { insigne: i } : {}) }
+  const n = await read($, serieVivante)
+  const flamme = n >= 30 ? 3 : n >= 7 ? 2 : n >= 2 ? 1 : 0
+  return { visiere: (await read($, pilote)) === true, ...(s === 1 || s === 2 ? { sueur: s } : {}), ...(i ? { insigne: i } : {}), ...(flamme ? { flamme } : {}) }
 }
 
 // ------------------------------------------------------ ses visiteurs
@@ -1166,6 +1169,8 @@ function compte($: EngineInterface, f: (v: Vie) => Vie): Promise<void> {
       )
       for (const n of nouveaux) v.faits[n.id] = journee(maintenant)
       await $.store.set('vie', v)
+      const n = vivante(v, maintenant)
+      if ((await read($, serieVivante)) !== n) await update($, serieVivante, () => n)
       faitsAFeter.push(...nouveaux)
       if (faitsAFeter.length && dessine) await feteFaits($)
     })
@@ -1177,10 +1182,19 @@ function compte($: EngineInterface, f: (v: Vie) => Vie): Promise<void> {
 const nouvelleJournee = (maintenant: number) => (v: Vie): Vie => {
   const jour = journee(maintenant)
   const adopte = v.adopte ?? maintenant
-  if (v.serie.jour === jour) return { ...v, adopte }
+  // (un jour plus ancien que le dernier compté ne fait jamais reculer sa série)
+  if (v.serie.jour === jour || jourEnMs(v.serie.jour) > jourEnMs(jour)) return { ...v, adopte }
   const n = v.serie.jour === journee(maintenant - 86_400_000) ? v.serie.n + 1 : 1
   return { ...v, adopte, serie: { jour, n, record: Math.max(v.serie.record, n) } }
 }
+
+/** Un jour (`journee`) en ms, pour les comparer (0 : pas de jour) */
+const jourEnMs = (j: string) => {
+  const m = /^(\d+)-(\d+)-(\d+)$/.exec(j)
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getTime() : 0
+}
+/** Sa série encore vivante (son dernier jour compté est aujourd'hui ou hier), sinon 0 */
+const vivante = (v: Vie, maintenant: number) => (v.serie.jour === journee(maintenant) || v.serie.jour === journee(maintenant - 86_400_000) ? v.serie.n : 0)
 
 /** Il fête ses hauts faits tout neufs, un par un : une petite fête, la cérémonie pour un épique ou un légendaire */
 async function feteFaits($: EngineInterface) {
@@ -1772,6 +1786,9 @@ export const register: Register = on => {
     // son expérience, gardée d'une session à l'autre : son niveau et son insigne, sans refêter un niveau déjà atteint
     const points = await $.store.get('xp').catch(() => undefined)
     xp = typeof points === 'number' && points >= 0 ? points : 0
+    // sa flamme reprend sa série gardée (vivante si son dernier jour compté est aujourd'hui ou hier)
+    const serieGardee = vivante(await lisVie($), derniereActivite)
+    await update($, serieVivante, () => serieGardee)
     xpANoter = 0
     niveauVu = niveauDe(xp)
     niveauAFeter = null
@@ -1871,9 +1888,8 @@ export const register: Register = on => {
         if (faitsAFeter.length && dessine) await feteFaits($)
         // une session qu'on voit : comptée (et sa série de jours) ; et la veille lui revient, après son réveil
         if (dessine && sessionANoter !== null) {
-          const t = sessionANoter
           sessionANoter = null
-          void compte($, v => nouvelleJournee(t)({ ...v, sessions: v.sessions + 1 }))
+          void compte($, v => nouvelleJournee(maintenant)({ ...v, sessions: v.sessions + 1 }))
         }
         if (dessine && souvenirAJouer !== null) {
           const t = souvenirAJouer

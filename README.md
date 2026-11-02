@@ -212,6 +212,9 @@ puis repart, chaque fois d'une autre façon.
 - Ses hauts faits, gagnés par ce que vous vivez ensemble : une première
   délivrance, 1 000 outils lancés, une semaine de suite, un an ensemble…
   `/clawd livret` les montre, avec leur date, vos grades et votre vie commune.
+- Sa flamme de série : dès 2 jours de suite ensemble, une petite flamme
+  vacille sur son ventre, en face de sa médaille ; elle grandit à une semaine,
+  puis à un mois.
 - Survole-le et clique ⭐ pour savoir où il en est (son grade, sa série de
   jours, ses hauts faits).
 

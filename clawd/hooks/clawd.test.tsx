@@ -2753,3 +2753,37 @@ test('🔥 sa série de jours et ses hauts faits : une semaine de suite, fêtée
   expect((stockage.get('vie') as { serie: { n: number } }).serie.n).toBe(7)
   expect(toasts.filter(t => t.includes('Une semaine de suite'))).toHaveLength(1)
 })
+
+test('🔥 sa flamme de série : sur son ventre, elle vacille et grandit (2 jours, une semaine, un mois) ; pas sur ses minis', () => {
+  for (const flamme of [1, 2, 3] as const) {
+    const d = svgScene('coucou', [], 0, TEINTES.opus, undefined, undefined, { flamme, insigne: 'or' })
+    expect(d).toContain(`f${flamme}"`)
+    expect(d).toContain('class="flamme-a"')
+    expect(d).toContain('@keyframes flamme-vacille')
+    // (sans écraser l'animation `vacille` qui existait déjà)
+    expect((d.match(/@keyframes vacille/g) ?? []).length).toBeLessThanOrEqual(1)
+    expect(d).not.toContain('<text')
+    expect(d.length).toBeLessThan(40 * 1024)
+  }
+  expect(tenueDe({ flamme: 2 })).toEqual({ flamme: 2 })
+  // de profil aussi (en marchant), et jamais sur un mini
+  expect(svgScene('balade', [], 0, TEINTES.opus, undefined, undefined, { flamme: 1 })).toContain('class="flamme-a"')
+  expect(svgMinis('chef', [{ fait: 'cherche' }], TEINTES.opus, 0, { flamme: 3 }) ?? '').not.toContain('flamme-a')
+})
+
+test('🔥 sa série ne recule jamais, et une session se compte à l’heure où on la voit', async ($, on) => {
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  const { stockage, horloge } = moteur(on, undefined, new Date(2026, 10, 2, 10, 0).getTime())
+  stockage.set('journee', '2026-11-2')
+  // déjà deux jours de suite, aujourd'hui compté
+  stockage.set('vie', { outils: 0, sessions: 3, delivrances: 0, pireSerie: 0, pushs: { jour: '', n: 0 }, serie: { jour: '2026-11-2', n: 2, record: 2 }, adopte: new Date(2026, 10, 1, 9, 0).getTime(), faits: {} })
+  await $.session.start({ cwd: '/projet', surface: 'desktop', isInteractive: true })
+  const ui = await $.ui.mount({ ...BAND(), surface: 'desktop' })
+  await horloge.advance(8000)
+  const vie = stockage.get('vie') as { serie: { n: number; jour: string; record: number }; sessions: number }
+  expect(vie.serie).toEqual({ jour: '2026-11-2', n: 2, record: 2 })
+  expect(vie.sessions).toBe(4)
+  // sa flamme est là (2 jours de suite)
+  expect(String((await svg(ui as never)).source)).toContain('class="flamme-a"')
+  await ui.unmount()
+})
