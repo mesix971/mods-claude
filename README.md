@@ -215,8 +215,10 @@ puis repart, chaque fois d'une autre façon.
 - Sa flamme de série : dès 2 jours de suite ensemble, une petite flamme
   vacille sur son ventre, en face de sa médaille ; elle grandit à une semaine,
   puis à un mois.
-- Survole-le et clique ⭐ pour savoir où il en est (son grade, sa série de
-  jours, ses hauts faits).
+- Survole-le et clique ⭐ : sa carte à collectionner s'ouvre. On y voit son
+  portrait en grand, son grade, son expérience, ses performances, ses
+  qualités en étoiles, son humeur et ses hauts faits, dans un cadre qui suit
+  son grade (holographique pour une Légende). Aussi : `/clawd carte`.
 
 <table>
 <tr>

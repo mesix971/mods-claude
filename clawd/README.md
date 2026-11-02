@@ -49,7 +49,10 @@ Anthropic.
 - He remembers the high point of his day (a fix after a run of failures, a
   rough patch, a push) and recalls it the next morning, in a thought bubble.
 
-Hover him for ♥ (pet), 🎲 (new activity), 🕺 (dance) and ⭐ (level).
+Hover him for ♥ (pet), 🎲 (new activity), 🕺 (dance) and ⭐ (his card: a
+collectible card with his portrait, rank, experience, stats, qualities and
+achievements, in a pane, or in his band where the app opens no pane).
+`/clawd carte` opens it too, `/clawd mots` shows what he told you, in full.
 `/clawd` shows his level and mood, `/clawd montre <scene>` plays a scene, and
 `/clawd voit` explains what he sees on atelier's band (the keywords and
 replies are in French).

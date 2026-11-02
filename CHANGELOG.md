@@ -43,6 +43,18 @@
 
 ## clawd
 
+- **0.14.0** — 2026-11-02 — Sa carte, et ses mots en entier.
+  - ⭐ au survol (ou `/clawd carte`) : sa carte à collectionner, dans un
+    panneau. On y voit son portrait vivant en grand, son grade et son modèle,
+    son expérience, ses performances, ses qualités en étoiles (ardeur,
+    ténacité, fidélité, tendresse), son humeur et ses hauts faits. Le cadre
+    suit son grade, holographique pour une Légende. Un second clic la range.
+  - 💬 (ou `/clawd mots`) : son mot de la nuit en entier, dans l'onglet « Ses
+    mots » de sa carte, au lieu d'un toast qui le coupait ; il y reste à
+    relire.
+  - Là où l'app n'ouvre pas de panneau, la carte s'ouvre dans sa bande,
+    au-dessus de lui, avec ✕ pour la ranger.
+
 - **0.13.1** — 2026-11-02 — Sa flamme de série, et une série qui ne recule plus.
   - Une petite flamme vacille sur son ventre, en face de sa médaille, dès 2
     jours de suite ensemble ; elle grandit à une semaine, puis à un mois.

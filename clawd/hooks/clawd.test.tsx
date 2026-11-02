@@ -6,6 +6,8 @@ import { ACTIVITES, BONBON_S, CLASSES_QUI_DEPLACENT, CLIGNEMENTS, DANSES, EMOJI,
 import { autreQue, deToi, deguisementDu, insigneDe, niveauDe, seuilNiveau, sueurDe, visiteur } from './register'
 import { COIN_VIDE, EXEMPLE, MAX_SVG, NUMEROS, departDe, prepareNumero, svgNumero } from './bande'
 import { FAITS, GRADES, gradeDe, nouveauxFaits, prochainGrade } from './grades'
+import { QUALITES, etoiles, svgCarte, texteCarte } from './carte'
+import type { Fiche } from './carte'
 import type { Comptes } from './grades'
 
 const BAND = (isWorking = false) =>
@@ -2582,9 +2584,13 @@ test('⭐ chaque outil lui rapporte un point : à 50, il passe niveau 1, le fêt
   expect(stockage.get('niveauFete')).toBe(1)
   expect(String((await svg(ui as never)).source)).toContain('id="ib"')
   expect(await etoile(ui as never)).toBe('⭐1')
-  // ⭐ au survol : où il en est, et ce qui fait monter son expérience
+  // ⭐ au survol : sa carte (pas de panneau ici : dans sa bande), avec où il en est ; un second clic la range
   await (ui as unknown as { press: (q: { key: string }) => Promise<void> }).press({ key: 'niveau' })
-  expect(toasts.at(-1)).toContain('Niveau 1 · Apprenti · 50 XP · encore 100 pour le niveau 2 · Compagnon au niveau 5')
+  const alt = await carteDessinee(ui)
+  expect(alt).toContain('Clawd · Apprenti · Opus · niveau 1')
+  expect(alt).toContain('0 / 100 XP vers le niveau 2 · Compagnon au niveau 5')
+  await (ui as unknown as { press: (q: { key: string }) => Promise<void> }).press({ key: 'niveau' })
+  expect(await carteDessinee(ui)).toBe('')
   await ui.unmount()
 })
 
@@ -2786,4 +2792,175 @@ test('🔥 sa série ne recule jamais, et une session se compte à l’heure où
   // sa flamme est là (2 jours de suite)
   expect(String((await svg(ui as never)).source)).toContain('class="flamme-a"')
   await ui.unmount()
+})
+
+// ------------------------------------------------------------- sa carte
+
+/** La description de sa carte dessinée (dans sa bande ou son panneau), '' sans carte */
+const carteDessinee = async (ui: unknown) =>
+  String(
+    (await (ui as { findAll: (q: unknown) => Promise<{ props: { alt?: unknown } }[]> }).findAll({ type: 'Svg' })).map(x => String(x.props.alt ?? '')).find(a => a.startsWith('Carte de')) ?? '',
+  )
+const presse = (ui: unknown, key: string) => (ui as { press: (q: { key: string }) => Promise<void> }).press({ key })
+const texteVu = async (ui: unknown, motif: string) => (await (ui as { find: (q: unknown) => Promise<{ text?: string } | undefined> }).find({ type: 'Text', text: motif }))?.text
+const PANNEAU = (surface: 'desktop' | 'terminal', bodyColumns = 50) =>
+  ({
+    plugin: 'clawd',
+    component: 'Pane',
+    requestId: 'carte',
+    surface,
+    props: { title: 'Clawd', isFocused: false, bodyColumns, placement: 'dock', scroll: { offset: 0, bodyRows: 40 }, view: {} },
+  }) as const
+const VIE = { outils: 6234, sessions: 87, delivrances: 6, pireSerie: 5, pushs: { jour: '', n: 0 }, serie: { jour: '', n: 0, record: 12 }, adopte: null, faits: { phenix: '2026-10-30' } }
+
+test('🪪 sa carte s’ouvre dans un panneau (⭐) : son portrait vivant, ses performances, ses qualités ; un second clic la range', async ($, on) => {
+  const { stockage } = moteur(on)
+  stockage.set('vie', VIE)
+  const ouvertures: { id: string; title?: string }[] = []
+  const fermetures: string[] = []
+  let ouvert = false
+  on('ui.open', ($, e) => {
+    ouvertures.push(e)
+    ouvert = true
+    return { value: { isPlaced: true } }
+  })
+  on('ui.close', ($, e) => {
+    fermetures.push(e.id)
+    ouvert = false
+    return { value: undefined }
+  })
+  on('ui.panes', () => ({ value: ouvert ? [{ id: 'carte', title: 'Clawd', isShown: true, isFocused: false, isPlaced: true }] : [] }) as never)
+  const ui = await $.ui.mount({ ...BAND(), surface: 'desktop' })
+  await presse(ui, 'niveau')
+  expect(ouvertures).toEqual([expect.objectContaining({ id: 'carte', title: 'Clawd' })])
+  // dans son panneau, pas dans sa bande
+  expect(await carteDessinee(ui)).toBe('')
+  const panneau = await $.ui.mount(PANNEAU('desktop'))
+  const c = (await panneau.find({ type: 'Svg' }))?.props as { source: string; alt: string; width: number; height: number }
+  expect(c.alt).toContain('Clawd · sans grade · Opus · niveau 0')
+  expect(c.alt).toMatch(/6\s?234 outils/)
+  expect(c.alt).toContain('Ardeur ★★★☆☆')
+  expect(c.alt).toContain('Tendresse ☆☆☆☆☆')
+  expect(c.source).toContain('PERFORMANCES')
+  expect(c.source).toContain('QUALITÉS')
+  // son portrait : sa scène de repos, recadrée sur lui, nette
+  expect(c.source).toContain('viewBox="30 8 120 92"')
+  expect(c.source).toContain('shape-rendering="crispEdges"')
+  expect(c.source).toContain('🐦‍🔥')
+  // à la largeur du panneau, sans déformer
+  expect(c.width).toBeLessThanOrEqual(360)
+  expect(Math.abs(c.height / c.width - 703 / 360)).toBeLessThan(0.05)
+  // pas d'onglets sans mot à lire
+  expect(await panneau.find({ key: 'vue-mots' })).toBeUndefined()
+  await panneau.unmount()
+  // un second clic la range
+  await presse(ui, 'niveau')
+  expect(fermetures).toEqual(['carte'])
+  await ui.unmount()
+})
+
+test('💬 son mot de la nuit se lit en entier (sa carte, ses mots) ; là où l’app n’ouvre pas de panneau, dans sa bande', async ($, on) => {
+  const { stockage } = moteur(on)
+  const fermetures: string[] = []
+  on('ui.open', () => ({ value: { isPlaced: false, reason: 'aucune surface ne place de panneau' } }))
+  on('ui.close', ($, e) => {
+    fermetures.push(e.id)
+    return { value: undefined }
+  })
+  const message = `${'Aujourd’hui j’ai appris à jongler avec les pastilles, '.repeat(9)}fin.`
+  expect(message.length).toBeGreaterThan(450)
+  // son mot de la nuit, posé (la version perso le lit dans son dépôt) : jusqu'à ce qu'il soit lu
+  let lu = false
+  on('state.get', ($, e, next) => (!lu && e.plugin === 'clawd' && e.key === 'mot' ? { value: { value: { id: 'm1', date: '2026-11-02', message }, version: 1 } } : next(e)) as never)
+  on('state.set', ($, e, next) => {
+    if ((e as { key: string }).key === 'mot') lu = true
+    return next(e)
+  })
+  const ui = await $.ui.mount({ ...BAND(), surface: 'desktop' })
+  await presse(ui, 'lire-mot')
+  expect(stockage.get('mot-vu')).toBe('m1')
+  // le panneau, ouvert sans qu'on le voie, ne reste pas ouvert
+  expect(fermetures).toEqual(['carte'])
+  // son mot, en entier, avec de quoi passer à sa carte et la ranger
+  expect(await texteVu(ui, 'fin.')).toBe(message)
+  expect(await ui.find({ key: 'lire-mot' })).toBeUndefined()
+  await presse(ui, 'vue-carte')
+  expect(await carteDessinee(ui)).toContain('Clawd · sans grade')
+  // ses mots restent là, d'un onglet à l'autre
+  await presse(ui, 'vue-mots')
+  expect(await texteVu(ui, 'fin.')).toBe(message)
+  await presse(ui, 'ranger-carte')
+  expect(await texteVu(ui, 'fin.')).toBeUndefined()
+  expect(await ui.find({ key: 'ranger-carte' })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('🪪 /clawd carte, et sur le terminal : sa carte en mots', async ($, on) => {
+  const { stockage } = moteur(on)
+  stockage.set('vie', VIE)
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  on('command.register', () => ({ value: { command: 'clawd' } }) as never)
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  await $.session.start({ cwd: '/projet', surface: 'terminal', isInteractive: true })
+  const r = await $.command.run({ command: 'clawd', args: 'carte', origin: { kind: 'composer' } } as never)
+  expect(r.text).toBe('🪪 Sa carte est ouverte.')
+  const panneau = await $.ui.mount(PANNEAU('terminal'))
+  expect(await panneau.find({ type: 'Svg' })).toBeUndefined()
+  const lignes = (await (panneau as unknown as { findAll: (q: unknown) => Promise<{ text?: string }[]> }).findAll({ type: 'Text' })).map(t => t.text ?? '').join('\n')
+  expect(lignes).toContain('Clawd · sans grade · Opus · niveau 0')
+  expect(lignes).toContain('🏅 1/12 hauts faits : 🐦‍🔥')
+  await panneau.unmount()
+  // /clawd mots : ce qu'il t'a dit, en entier (rien encore)
+  const m = await $.command.run({ command: 'clawd', args: 'mots', origin: { kind: 'composer' } } as never)
+  expect(m.text).toBe('💬 Ses mots sont ouverts.')
+  const mots = await $.ui.mount(PANNEAU('terminal'))
+  expect(await texteVu(mots, 'Pas de mot')).toBe('Pas de mot pour l’instant.')
+  expect(await mots.find({ key: 'vue-carte' })).toBeDefined()
+  await mots.unmount()
+})
+
+test('🪪 le dessin de sa carte : en hauteur ou en largeur, son cadre suit son grade, rien de ce qu’on y ajoute ne devient une balise', () => {
+  expect(etoiles(0, [1, 5])).toBe(0)
+  expect(etoiles(5, [1, 5])).toBe(2)
+  expect(QUALITES.map(q => q.paliers.length)).toEqual([5, 5, 5, 5])
+  const fiche: Fiche = {
+    niveau: 52,
+    xp: 70_000,
+    xpDe: seuilNiveau(52),
+    xpA: seuilNiveau(53),
+    grade: 'Légende',
+    prochain: null,
+    modele: 'Fable',
+    couleur: TEINTES.fable,
+    humeur: { energie: 0.2, joie: 0.9, ennui: 0.6 },
+    dort: true,
+    outils: 61_000,
+    sessions: 400,
+    delivrances: 120,
+    serie: 45,
+    record: 120,
+    caresses: 1200,
+    joursEnsemble: 400,
+    faits: FAITS.map(f => f.id),
+    savoirs: '🎓 <script>alert(1)</script> & co',
+  }
+  const scene = svgScene('dodo', [], 0, TEINTES.fable, undefined, undefined, { insigne: 'soleil', flamme: 3, visiere: true, deguise: 'citrouille' })
+  for (const format of ['portrait', 'paysage'] as const) {
+    const c = svgCarte(fiche, scene, format)
+    expect(c.svg.startsWith('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ')).toBe(true)
+    expect(c.svg).toContain(`viewBox="0 0 ${c.largeur} ${c.hauteur}"`)
+    expect(c.svg).not.toContain('<script>')
+    expect(c.svg).toContain('&lt;script&gt;alert(1)&lt;/script&gt; &amp; co')
+    // une Légende : son cadre holographique tourne, un reflet passe sur son portrait
+    expect(c.svg).toContain('type="rotate"')
+    expect(c.svg).toContain('url(#ct-reflet)')
+    // sous la limite du moteur, même avec tout ce qu'il porte
+    expect(c.svg.length).toBeLessThan(MAX_SVG)
+    expect(format === 'portrait' ? c.hauteur > c.largeur : c.largeur > c.hauteur).toBe(true)
+  }
+  // un apprenti : un cadre de bronze, pas de reflet
+  const debutant = svgCarte({ ...fiche, niveau: 1, grade: 'Apprenti', faits: [], savoirs: undefined }, scene, 'portrait').svg
+  expect(debutant).toContain('#d9a066')
+  expect(debutant).not.toContain('url(#ct-reflet)')
+  expect(texteCarte({ ...fiche, savoirs: undefined }).join('\n')).toContain('🏅 12/12 hauts faits')
 })

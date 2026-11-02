@@ -13,6 +13,7 @@
 
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, ToolCallResult } from 'claude-code'
+import type { ResolveInput } from 'claude-code'
 
 import type { ClawdAnim, ClawdCopain, ElementBande } from '../types'
 import { CELLULE, COIN_VIDE, HAUTEUR as HAUTEUR_BANDE, LARGEUR_BANDE, MARGE, MAX_SVG, NUMEROS, RETENUE, departDe, diagnostic, estNumero, numerosAvecMinis, numerosJouables, prepareNumero, reactionA, svgNumero } from './bande'
@@ -22,6 +23,8 @@ import { ACTIVITES, BAILLE_S, BONBON_S, CLAWD_TEXTE, DANSES, EMOJI, EN_BULLE, JE
 import type { Bulle, Deguisement, EnPlace, Insigne, Mini, Sortie, Tenue } from './sprite'
 import { FAITS, GRADES, gradeDe, nouveauxFaits, prochainGrade } from './grades'
 import type { Fait } from './grades'
+import { svgCarte, texteCarte } from './carte'
+import type { Fiche } from './carte'
 
 
 const passage = atom({ plugin: 'clawd', key: 'passage' } as const, null)
@@ -40,6 +43,8 @@ const serieVivante = atom({ plugin: 'clawd', key: 'serie' } as const, 0)
 const pilote = atom({ plugin: 'clawd', key: 'pilote' } as const, false)
 const transpire = atom({ plugin: 'clawd', key: 'sueur' } as const, 0)
 const niveau = atom({ plugin: 'clawd', key: 'niveau' } as const, 0)
+const carteOuverte = atom({ plugin: 'clawd', key: 'carte' } as const, null)
+const motGarde = atom({ plugin: 'clawd', key: 'motGarde' } as const, null)
 /** La bande partagée d'atelier : ce qu'il y dessine, et où */
 const sceneAtelier = atom({ plugin: 'atelier', key: 'scene' } as const, null)
 const atelierMasque = atom({ plugin: 'atelier', key: 'isHidden' } as const, false)
@@ -999,6 +1004,8 @@ export async function motLu($: EngineInterface) {
   if (!m) return null
   await $.store.set('mot-vu', m.id)
   await update($, motNonLu, () => null)
+  // sa carte le garde, en entier (ses mots)
+  await update($, motGarde, () => ({ date: m.date, message: m.message }))
   return m
 }
 
@@ -1250,7 +1257,161 @@ async function commandeDeBase($: EngineInterface, args: string) {
   }
   if (/^voi[st]/i.test(args)) return voit($)
   if (/^livret/i.test(args)) return livret($)
-  return [`${await sonNiveau($)}`, `🧠 En ce moment, ${decritHumeur(humeurActuelle(), (await read($, dort)) === true)}.`, '/clawd montre <numéro | bande | scène> · /clawd voit · /clawd livret'].join('\n')
+  if (/^carte/i.test(args)) return ouvreCarteParCommande($, 'carte')
+  if (/^mots?$/i.test(args)) return ouvreCarteParCommande($, 'mots')
+  return [`${await sonNiveau($)}`, `🧠 En ce moment, ${decritHumeur(humeurActuelle(), (await read($, dort)) === true)}.`, '/clawd montre <numéro | bande | scène> · /clawd voit · /clawd livret · /clawd carte · /clawd mots'].join('\n')
+}
+
+// ------------------------------------------------------------- sa carte
+
+/** Son panneau : sa carte */
+const CARTE = 'carte'
+
+/**
+ * Ce que la version perso ajoute à sa carte (posé par elle, à l'ouverture et
+ * quand il a du nouveau) : une ligne (ses leçons, ses diplômes), et ses
+ * nouvelles, à lire en entier (sa leçon, son rêve, son dernier mot)
+ */
+export const carteEnPlus: { savoirs?: string; nouvelles: { titre: string; texte: string }[] } = { nouvelles: [] }
+
+/** Ce que sa carte montre de lui, d'après ce qu'il garde */
+async function ficheDe($: EngineInterface): Promise<Fiche> {
+  const nv = await read($, niveau)
+  const v = await lisVie($)
+  const maintenant = await $.clock.now()
+  const caressees = await read($, caresses)
+  const sonModele = (await read($, modele)) ?? (await $.session.model().catch(() => null))
+  const famille = /haiku|sonnet|opus|fable/i.exec(sonModele ?? '')?.[0]?.toLowerCase() ?? 'opus'
+  return {
+    niveau: nv,
+    xp,
+    xpDe: seuilNiveau(nv),
+    xpA: seuilNiveau(nv + 1),
+    grade: gradeDe(nv),
+    prochain: prochainGrade(nv),
+    modele: famille.charAt(0).toUpperCase() + famille.slice(1),
+    couleur: teinte(sonModele),
+    humeur: humeurActuelle(),
+    dort: (await read($, dort)) === true,
+    outils: v.outils,
+    sessions: v.sessions,
+    delivrances: v.delivrances,
+    serie: vivante(v, maintenant),
+    record: v.serie.record,
+    caresses: typeof caressees === 'number' ? caressees : 0,
+    joursEnsemble: v.adopte === null ? null : Math.floor((maintenant - v.adopte) / 86_400_000),
+    faits: Object.keys(v.faits),
+    ...(carteEnPlus.savoirs ? { savoirs: carteEnPlus.savoirs } : {}),
+  }
+}
+
+/** Ses nouvelles, à lire en entier : son dernier mot lu, puis ce que la version perso y ajoute (sans doublon) */
+async function nouvellesDe($: EngineInterface) {
+  const mot = await read($, motGarde)
+  const toutes = [...(mot ? [{ titre: `💬 Son mot du ${mot.date}`, texte: mot.message }] : []), ...carteEnPlus.nouvelles]
+  return toutes.filter((n, i) => toutes.findIndex(m => m.texte === n.texte) === i)
+}
+
+/**
+ * Il te montre sa carte, ou ses mots en entier : dans un panneau, ou dans sa
+ * bande, au-dessus de lui, là où l'app n'en ouvre pas. Déjà ouverte, elle
+ * passe à cette vue ; `bascule` : déjà ouverte sur cette vue, elle se range.
+ */
+export async function montreCarte($: EngineInterface, vue: 'carte' | 'mots', bascule = false): Promise<'panneau' | 'bande' | 'rangee'> {
+  const avant = await read($, carteOuverte)
+  const enPanneau = (await $.ui.panes().catch(() => [])).some(p => p.id === CARTE)
+  if (avant !== null && (avant.enBande || enPanneau)) {
+    if (bascule && avant.vue === vue) {
+      await rangeCarte($)
+      return 'rangee'
+    }
+    await update($, carteOuverte, () => ({ ...avant, vue }))
+    return avant.enBande ? 'bande' : 'panneau'
+  }
+  // la vue d'abord : son panneau la lit dès son premier dessin
+  await update($, carteOuverte, () => ({ vue, enBande: false }))
+  const ouvert = await $.ui.open({ id: CARTE, title: 'Clawd', columns: 52 }).catch(() => null)
+  if (ouvert?.isPlaced) return 'panneau'
+  // pas de panneau ici : il ne reste pas ouvert sans qu'on le voie, sa carte s'ouvre dans sa bande
+  if (ouvert) await $.ui.close({ id: CARTE }).catch(() => {})
+  await update($, carteOuverte, () => ({ vue, enBande: true }))
+  return 'bande'
+}
+
+/** Il range sa carte (son panneau, ou sa place dans sa bande) */
+export async function rangeCarte($: EngineInterface) {
+  await update($, carteOuverte, () => null)
+  await $.ui.close({ id: CARTE }).catch(() => {})
+}
+
+/** /clawd carte (ou mots : ce qu'il t'a dit, en entier) : sa carte, et où elle s'est ouverte */
+export async function ouvreCarteParCommande($: EngineInterface, vue: 'carte' | 'mots') {
+  const quoi = vue === 'mots' ? '💬 Ses mots sont ouverts' : '🪪 Sa carte est ouverte'
+  return (await montreCarte($, vue)) === 'bande' ? `${quoi}, au-dessus de lui dans sa bande (✕ pour la ranger).` : `${quoi}.`
+}
+
+/**
+ * Sa carte dessinée sur `colonnes` cases de large (dans son panneau, ou dans
+ * sa bande : `enBande`, avec de quoi la ranger) : son portrait vivant et ce
+ * qu'il est, ou ses mots, en entier. Le terminal, qui ne dessine pas de SVG,
+ * l'a en mots.
+ */
+async function vueCarte($: EngineInterface, e: ResolveInput<'Pane' | 'AbovePrompt'>, colonnes: number, enBande: boolean) {
+  const vue = (await read($, carteOuverte))?.vue === 'mots' ? 'mots' : 'carte'
+  const f = await ficheDe($)
+  const nouvelles = await nouvellesDe($)
+  const { Box, Text, Button } = $.ui.resolve(e)
+  const versVue = (v: 'carte' | 'mots') => () => void montreCarte($, v).catch(() => {})
+  const onglets = nouvelles.length > 0 || vue === 'mots'
+  const haut = (
+    <Box key="carte-haut" flexDirection="row" gap={1}>
+      {onglets && <Button key="vue-carte" label="🪪 Sa carte" variant={vue === 'carte' ? 'primary' : 'secondary'} onPress={versVue('carte')} />}
+      {onglets && <Button key="vue-mots" label={`💬 Ses mots (${nouvelles.length})`} variant={vue === 'mots' ? 'primary' : 'secondary'} onPress={versVue('mots')} />}
+      {enBande && <Button key="ranger-carte" label="✕" plain onPress={() => void rangeCarte($).catch(() => {})} />}
+    </Box>
+  )
+  if (vue === 'mots') {
+    return (
+      <Box key="carte" flexDirection="column" gap={1}>
+        {haut}
+        {nouvelles.length ? (
+          nouvelles.map((n, i) => (
+            <Box key={`mot-${i}`} flexDirection="column">
+              <Text bold color={f.couleur.O}>{n.titre}</Text>
+              <Text wrap="wrap">{n.texte}</Text>
+            </Box>
+          ))
+        ) : (
+          <Text dimColor>Pas de mot pour l’instant.</Text>
+        )}
+      </Box>
+    )
+  }
+  if (e.surface === 'desktop') {
+    const { Svg } = $.ui.resolve(e)
+    // son portrait : sa scène de repos (ou son sommeil), avec ce qu'il porte aujourd'hui
+    const tenueDuJour = tenueDe({ ...(await tenueSession($)), deguise: deguisementDu(await $.clock.now()) })
+    const place = Math.floor(colonnes * CELLULE)
+    const c = svgCarte(f, svgScene(f.dort ? 'dodo' : 'repos', [], 0, teinte((await read($, modele)) ?? (await $.session.model().catch(() => null))), undefined, undefined, tenueDuJour), enBande && place >= 560 ? 'paysage' : 'portrait')
+    const largeur = Math.min(c.largeur, place)
+    return (
+      <Box key="carte" flexDirection="column" gap={1}>
+        {haut}
+        <Svg source={c.svg} alt={`Carte de ${texteCarte(f).join(' · ')}`} width={largeur} height={Math.round((c.hauteur * largeur) / c.largeur)} />
+      </Box>
+    )
+  }
+  return (
+    <Box key="carte" flexDirection="column">
+      {haut}
+      {CLAWD_TEXTE.map((l, i) => (
+        <Text key={`art-${i}`} color={f.couleur.O}>{l}</Text>
+      ))}
+      {texteCarte(f).map((l, i) => (
+        <Text key={`ligne-${i}`} wrap="wrap">{l}</Text>
+      ))}
+    </Box>
+  )
 }
 
 /** Il prend l'original, si son numéro est toujours en cours : jusqu'à la fin du numéro au plus (atelier le redessine ensuite, quoi qu'il arrive) */
@@ -2229,7 +2390,7 @@ export const register: Register = on => {
   if (commandePublique.active) {
     on('session.start', { cwd: /^/ }, async ($, e, next) => {
       await $.command
-        .register({ name: 'clawd', description: 'Clawd : son niveau, ou montre <numéro | bande | scène> · voit · livret', argumentHint: '[montre <numéro | bande | scène> | voit | livret]' })
+        .register({ name: 'clawd', description: 'Clawd : son niveau, ou montre <numéro | bande | scène> · voit · livret · carte · mots', argumentHint: '[montre <numéro | bande | scène> | voit | livret | carte | mots]' })
         .catch(() => {})
       return next(e)
     })
@@ -2237,6 +2398,9 @@ export const register: Register = on => {
   }
 
   // ------------------------------------------------------------ dessin
+
+  // sa carte, dans son panneau (⭐ au survol, 💬, /clawd carte)
+  on('ui.render', { component: 'Pane', requestId: CARTE }, async ($, e) => vueCarte($, e, e.props.bodyColumns, false))
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     dessine = true
@@ -2408,23 +2572,22 @@ export const register: Register = on => {
     // son mot de la nuit, pas encore lu : une bulle au-dessus de lui ; un clic le montre
     const mot = await read($, motNonLu)
     const lireMot = async () => {
-      const m = await motLu($)
-      if (m) $.ui.toast(`💬 Clawd : « ${m.message} »`, { timeoutMs: 20_000 })
+      // en entier, dans sa carte (ses mots) : un toast le couperait
+      await motLu($)
+      await montreCarte($, 'mots').catch(() => {})
     }
     const bulleMot = mot && (
       <Box key="mot" position="absolute" top={0} right={0}>
         <Button key="lire-mot" label="💬" plain onPress={lireMot} />
       </Box>
     )
-    // son niveau, au survol : où il en est de son expérience, et ce qui la fait monter
-    // (son grade, le prochain, sa série de jours et ses hauts faits avec)
+    // son niveau, au survol : sa carte (son grade, son expérience, ses performances, ses qualités, ses hauts faits) ;
+    // un second clic la range
     const montreNiveau = async () => {
-      try {
-        $.ui.toast(await sonNiveau($), { timeoutMs: 10_000 })
-      } catch {
-        // pas de toast ici : le chiffre de son bouton suffit
-      }
+      await montreCarte($, 'carte', true).catch(() => {})
     }
+    // sa carte, posée dans sa bande là où l'app n'ouvre pas de panneau : au-dessus de ce que les autres dessinent
+    const carteBande = (await read($, carteOuverte))?.enBande ? await vueCarte($, e, Math.max(24, e.props.bodyColumns - 18), true) : null
     const boutons = (
       <Box position="absolute" top={0} left={0} display="none" hover={{ display: 'flex' }} flexDirection="row">
         <Button key="caresse" label="♥" plain onPress={caresser} />
@@ -2439,6 +2602,7 @@ export const register: Register = on => {
       return (
         <Box flexDirection="row" alignItems="flex-end">
           <Box flexDirection="column" flexGrow={1}>
+            {carteBande}
             {dessous}
           </Box>
           <Box key="clawd" flexShrink={0}>
@@ -2484,6 +2648,7 @@ export const register: Register = on => {
     return (
       <Box flexDirection="row" alignItems="flex-end">
         <Box flexDirection="column" flexGrow={1}>
+          {carteBande}
           {dessous}
         </Box>
         <Box key="clawd" flexShrink={0} flexDirection="row" alignItems="center">

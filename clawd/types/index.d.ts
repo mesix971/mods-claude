@@ -214,6 +214,10 @@ declare module 'claude-code' {
       sueur: 0 | 1 | 2
       /** Son niveau, d'après son expérience (gardée d'une session à l'autre) : l'insigne sur son ventre en dépend */
       niveau: number
+      /** Sa carte, ouverte : sa vue (sa carte, ou ses mots en entier), et si elle est posée dans sa bande (l'app n'a pas ouvert de panneau) ; null : rangée */
+      carte: { vue: 'carte' | 'mots'; enBande: boolean } | null
+      /** Son dernier mot lu (sa bulle 💬) : sa carte le garde, en entier */
+      motGarde: { date: string; message: string } | null
     }
     /** La bande partagée d'atelier, l'autre mod du dépôt (il l'écrit, Clawd la lit) */
     atelier: {
