@@ -1,7 +1,7 @@
 # Clawd
 
 A tiny pixel-art Claude who lives above your prompt and silently acts out your
-Claude Code session, in 73 animated scenes and no text.
+Claude Code session, in 82 animated scenes and no text.
 
 Unofficial, fan-made project by mesix971. Not affiliated with or endorsed by
 Anthropic.
@@ -96,7 +96,7 @@ came. The subagent hook reads the new agent's id and model, to give its
 mini-Clawd the right color. It reads no credential, and `www.w3.org` appears
 in its code only as the namespace of the SVG drawings.
 
-All 73 scenes are shown in the [project's README](https://github.com/mesix971/mods-claude#clawd).
+Most of his scenes are shown in the [project's README](https://github.com/mesix971/mods-claude#clawd).
 
 ## License
 

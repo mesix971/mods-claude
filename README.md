@@ -6,7 +6,7 @@
 
 **[▶ Le film de présentation](https://mesix971.github.io/mods-claude/)** · [Installer](#installation) · [Clawd](#clawd) · [atelier](#atelier) · [In English](#in-english)
 
-<img src="https://img.shields.io/badge/Clawd-73%20sc%C3%A8nes%20anim%C3%A9es-d97758" alt="Clawd : 73 scènes animées"> <img src="https://img.shields.io/badge/mod-Claude%20Code-24292f" alt="Mod Claude Code"> <img src="https://img.shields.io/badge/licence-MIT-4cc38a" alt="Licence MIT">
+<img src="https://img.shields.io/badge/Clawd-82%20sc%C3%A8nes%20anim%C3%A9es-d97758" alt="Clawd : 82 scènes animées"> <img src="https://img.shields.io/badge/mod-Claude%20Code-24292f" alt="Mod Claude Code"> <img src="https://img.shields.io/badge/licence-MIT-4cc38a" alt="Licence MIT">
 
 </div>
 
@@ -16,7 +16,7 @@ Projet perso, fan-made et non officiel, sans lien avec Anthropic.
 
 Two mods for [Claude Code](https://claude.com/claude-code), in the CLI and the desktop app's Code tab:
 
-- **clawd**: a tiny pixel-art Claude who lives above your prompt and silently acts out your session, in 73 animated scenes with no text. He carries boxes while Claude works, and sometimes opens one. He celebrates passing builds and sulks under a rain cloud when they break. Each subagent arrives as a mini-Clawd in its model's color, hands its work back, then leaves in one of five ways. He sweats as the context fills, wears an autopilot visor in auto or bypass mode, and levels up as you work together. With atelier loaded, he also plays gags across its band: he steals the loading orb and makes the pills pop like popcorn, then always puts everything back.
+- **clawd**: a tiny pixel-art Claude who lives above your prompt and silently acts out your session, in 82 animated scenes with no text. He carries boxes while Claude works, and sometimes opens one. He celebrates passing builds and sulks under a rain cloud when they break. Each subagent arrives as a mini-Clawd in its model's color, hands its work back, then leaves in one of five ways. He sweats as the context fills, wears an autopilot visor in auto or bypass mode, and levels up as you work together, up to a Legend wrapped in a glowing aura. Come back day after day and he keeps a campfire going next to him (he tosses a box in, toasts a marshmallow). Hover him and click ⭐ for his collectible card. With atelier loaded, he also plays gags across its band: he steals the loading orb and makes the pills pop like popcorn, then always puts everything back.
 - **atelier**: a project band for Android developers:
   - APK and phone versions, with Install and Launch buttons;
   - git status, with Commit, Push and Pull buttons;
@@ -72,7 +72,7 @@ rangée qui couvre la bande, et Clawd y joue ses numéros.
 Le petit Claude orange, en pixel art animé, à droite du bandeau au-dessus du
 prompt. Fond transparent, taille du Clawd de l'app, contour et ombre qui
 suivent ton thème clair ou sombre. Pas un mot : tout passe par ses gestes.
-Chaque image ci-dessous est l'une de ses 73 scènes, telle que le mod la
+Chaque image ci-dessous est l'une de ses 82 scènes, telle que le mod la
 dessine (générée depuis son code par `promo/vitrine.mts`).
 
 ### Au repos, il vit sa vie
@@ -241,6 +241,49 @@ puis repart, chaque fois d'une autre façon.
 <td align="center" width="25%"><img src="promo/vitrine/insigne-argent.svg" width="200" alt="Médaille d'argent"><br><sub>Niveau 5 : argent</sub></td>
 <td align="center" width="25%"><img src="promo/vitrine/insigne-or.svg" width="200" alt="Médaille d'or"><br><sub>Niveau 10 : or</sub></td>
 <td align="center" width="25%"><img src="promo/vitrine/insigne-etoile.svg" width="200" alt="L'étoile d'or"><br><sub>Niveau 20 : l'étoile</sub></td>
+</tr>
+<tr>
+<td align="center"><img src="promo/vitrine/insigne-ruban.svg" width="200" alt="Médaille de bronze à ruban rouge"><br><sub>Niveau 3 : le ruban</sub></td>
+<td align="center"><img src="promo/vitrine/insigne-double.svg" width="200" alt="Deux étoiles d'or"><br><sub>Niveau 30 : deux étoiles</sub></td>
+<td align="center"><img src="promo/vitrine/insigne-laurier.svg" width="200" alt="L'étoile dans ses lauriers"><br><sub>Niveau 40 : les lauriers</sub></td>
+<td align="center"><img src="promo/vitrine/insigne-soleil.svg" width="200" alt="Des lauriers qui rayonnent"><br><sub>Niveau 50 : le soleil</sub></td>
+</tr>
+</table>
+<table>
+<tr>
+<td align="center" width="25%"><img src="promo/vitrine/ceremonie.svg" width="200" alt="Une grande médaille descend jusqu'au cou de Clawd sous les confettis"><br><sub>Un nouveau grade : sa cérémonie</sub></td>
+<td align="center" width="25%"><img src="promo/vitrine/aura-50.svg" width="200" alt="Clawd dans une lumière dorée, des orbes autour de lui"><br><sub>Niveau 50, Légende : son aura</sub></td>
+<td align="center" width="25%"><img src="promo/vitrine/aura-75.svg" width="200" alt="Clawd dans une aura dorée au cœur blanc"><br><sub>Niveau 75 : le cœur blanc</sub></td>
+<td align="center" width="25%"><img src="promo/vitrine/aura-100.svg" width="200" alt="Clawd dans une aura aux couleurs de l'arc-en-ciel"><br><sub>Niveau 100 : l'arc-en-ciel</sub></td>
+</tr>
+</table>
+
+### Son feu de camp
+
+Dès 2 jours de suite ensemble, un petit feu s'allume à côté de lui. Il grandit
+avec votre série, et Clawd s'en occupe de temps en temps.
+
+<table>
+<tr>
+<td align="center" width="33%"><img src="promo/vitrine/feu.svg" width="270" alt="Clawd à côté de son feu de camp"><br><sub>Un mois de suite : son feu</sub></td>
+<td align="center" width="33%"><img src="promo/vitrine/feu-flambe.svg" width="270" alt="Clawd jette un carton au feu, qui flambe"><br><sub>Un carton au feu</sub></td>
+<td align="center" width="33%"><img src="promo/vitrine/feu-buche.svg" width="270" alt="Clawd lance une bûche dans le feu"><br><sub>Une bûche de plus</sub></td>
+</tr>
+<tr>
+<td align="center"><img src="promo/vitrine/feu-rechauffe.svg" width="270" alt="Clawd assis se réchauffe les pattes au feu"><br><sub>Les pattes au chaud</sub></td>
+<td align="center"><img src="promo/vitrine/feu-guimauve.svg" width="270" alt="Clawd fait griller une guimauve"><br><sub>Une guimauve grillée</sub></td>
+<td></td>
+</tr>
+</table>
+
+### Sa carte à collectionner
+
+Survole-le et clique ⭐, ou tape `/clawd carte`. Son cadre suit son grade.
+
+<table>
+<tr>
+<td align="center" width="50%"><img src="promo/vitrine/carte-maitre.svg" width="300" alt="La carte d'un Clawd Maître, niveau 21"><br><sub>Un Maître (cadre doré)</sub></td>
+<td align="center" width="50%"><img src="promo/vitrine/carte-legende.svg" width="300" alt="La carte d'un Clawd Légende, niveau 100, cadre arc-en-ciel"><br><sub>Une Légende (cadre holographique)</sub></td>
 </tr>
 </table>
 

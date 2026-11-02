@@ -47,7 +47,14 @@ const tuiles: Tuile[] = [
   { fichier: 'visiere', anim: 'coucou', tenue: { visiere: true } },
   { fichier: 'sueur', anim: 'ecoute', tenue: { sueur: 2 } },
   { fichier: 'niveau', anim: 'niveau', tenue: { insigne: 'or' } },
-  ...['bronze', 'argent', 'or', 'etoile'].map(insigne => ({ fichier: `insigne-${insigne}`, anim: 'coucou', tenue: { insigne } })),
+  ...['bronze', 'argent', 'or', 'etoile', 'ruban', 'double', 'laurier', 'soleil'].map(insigne => ({ fichier: `insigne-${insigne}`, anim: 'coucou', tenue: { insigne } })),
+  // sa cérémonie quand il change de grade
+  { fichier: 'ceremonie', anim: 'ceremonie', tenue: { insigne: 'etoile' } },
+  // son feu de camp (votre série de jours), et ce qu'il en fait
+  { fichier: 'feu', anim: 'repos', tenue: { insigne: 'etoile', flamme: 3 } },
+  ...s.AU_FEU.map((anim: string) => ({ fichier: `feu-${anim}`, anim, tenue: { insigne: 'etoile', flamme: 2 } })),
+  // son aura de Légende, qui s'accentue avec ses niveaux
+  ...([[1, 50], [3, 75], [4, 100]] as const).map(([aura, n]) => ({ fichier: `aura-${n}`, anim: 'repos', tenue: { insigne: 'soleil', aura } })),
   // sa journée
   ...['reveil', 'pause', 'retrouvailles', 'chat', 'filante', 'dodo', 'nuit'].map(anim => ({ fichier: anim, anim })),
   // ses déguisements du jour
@@ -64,6 +71,26 @@ for (const t of tuiles) {
   writeFileSync(`${dossier}${t.fichier}.svg`, svg)
   avant.delete(`${t.fichier}.svg`)
   total += svg.length
+}
+// sa carte à collectionner (⭐) : un Maître, et une Légende dans son aura (des fiches d'exemple, pas celles de quelqu'un)
+const c = await import('../clawd/hooks/carte.ts')
+const FICHES = [
+  {
+    fichier: 'carte-maitre',
+    tenue: { insigne: 'etoile', flamme: 2 },
+    fiche: { niveau: 21, xp: 12_000, xpDe: 25 * 21 * 22, xpA: 25 * 22 * 23, grade: 'Maître', prochain: { nom: 'Grand Maître', niveau: 30 }, modele: 'Sonnet', couleur: T.sonnet, humeur: { energie: 0.8, joie: 0.7, ennui: 0.1 }, dort: false, outils: 6234, sessions: 87, delivrances: 6, serie: 9, record: 12, caresses: 41, joursEnsemble: 38, faits: ['mille-outils', 'delivrance', 'un-mois', 'semaine', 'phenix'] },
+  },
+  {
+    fichier: 'carte-legende',
+    tenue: { insigne: 'soleil', flamme: 3, aura: 4 },
+    fiche: { niveau: 100, xp: 252_600, xpDe: 25 * 100 * 101, xpA: 25 * 101 * 102, grade: 'Légende', prochain: null, modele: 'Fable', couleur: T.fable, humeur: { energie: 0.9, joie: 0.9, ennui: 0.1 }, dort: false, outils: 61_000, sessions: 400, delivrances: 120, serie: 45, record: 120, caresses: 1200, joursEnsemble: 400, faits: ['noctambule', 'mille-outils', 'delivrance', 'un-mois', 'semaine', 'pushs', 'cent-caresses', 'cent-sessions', 'phenix', 'dix-mille-outils', 'mois-de-suite', 'anniversaire'] },
+  },
+]
+for (const { fichier, tenue, fiche } of FICHES) {
+  const carte = c.svgCarte(fiche as never, s.svgScene('repos', [], 0, fiche.couleur, undefined, undefined, tenue as never), 'portrait')
+  writeFileSync(`${dossier}${fichier}.svg`, carte.svg)
+  avant.delete(`${fichier}.svg`)
+  total += carte.svg.length
 }
 for (const f of avant) rmSync(`${dossier}${f}`)
 console.log(`vitrine : ${tuiles.length} scènes, ${(total / 1024).toFixed(0)} Ko en tout`)
