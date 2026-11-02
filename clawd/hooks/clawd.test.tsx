@@ -2761,21 +2761,38 @@ test('🔥 sa série de jours et ses hauts faits : une semaine de suite, fêtée
   expect(toasts.filter(t => t.includes('Une semaine de suite'))).toHaveLength(1)
 })
 
-test('🔥 sa flamme de série : sur son ventre, elle vacille et grandit (2 jours, une semaine, un mois) ; pas sur ses minis', () => {
+test('🔥 sa série : un feu de camp à côté de lui, chez lui, qui vacille et grandit (2 jours, une semaine, un mois) ; plus rien sur son ventre', () => {
+  const poids: number[] = []
   for (const flamme of [1, 2, 3] as const) {
     const d = svgScene('coucou', [], 0, TEINTES.opus, undefined, undefined, { flamme, insigne: 'or' })
-    expect(d).toContain(`f${flamme}"`)
     expect(d).toContain('class="flamme-a"')
     expect(d).toContain('@keyframes flamme-vacille')
     // (sans écraser l'animation `vacille` qui existait déjà)
-    expect((d.match(/@keyframes vacille/g) ?? []).length).toBeLessThanOrEqual(1)
+    expect((d.match(/@keyframes vacille/g) ?? []).length).toBeLessThanOrEqual(1)
     expect(d).not.toContain('<text')
     expect(d.length).toBeLessThan(40 * 1024)
+    // ses bûches au sol à sa droite (à x = 130, sous ses pieds), pas sur son ventre : sa tenue n'a que sa médaille
+    expect(d).toContain('<rect x="132" y="90" width="4" height="2" fill="#9A6234"/>')
+    expect(d).toContain('href="#tno"')
+    expect(d).not.toMatch(/tn[^"]*f\d/)
+    poids.push(d.length)
   }
+  // il grandit, et au mois des étincelles en montent
+  expect(poids).toEqual([...poids].sort((a, b) => a - b))
+  expect(svgScene('coucou', [], 0, TEINTES.opus, undefined, undefined, { flamme: 3 })).toContain('class="monte"')
   expect(tenueDe({ flamme: 2 })).toEqual({ flamme: 2 })
-  // de profil aussi (en marchant), et jamais sur un mini
+  // il reste allumé la nuit, à côté de lui qui dort ; il ne le suit pas quand il joue sa scène ailleurs
+  expect(svgScene('dodo', [], 0, TEINTES.opus, undefined, undefined, { flamme: 2, insigne: 'or' })).toContain('class="flamme-a"')
+  const ailleurs = svgScene('coucou', [], 0, TEINTES.opus, undefined, undefined, { flamme: 1 }, { x: -60, decor: '' })
+  // (hors du groupe de sa scène, déplacé là où il la joue)
+  expect(ailleurs.indexOf('class="flamme-a"')).toBeLessThan(ailleurs.lastIndexOf('translate(-60 0)'))
+  // en chorégraphie aussi, et en rentrant chez lui à pied (son feu ne s'éteint pas le temps du trajet)
   expect(svgScene('balade', [], 0, TEINTES.opus, undefined, undefined, { flamme: 1 })).toContain('class="flamme-a"')
+  const rentre = svgScene('coucou', [], 0, TEINTES.opus, undefined, undefined, { flamme: 2 }, { x: -60, decor: '', rentre: true })
+  expect(rentre.indexOf('class="flamme-a"')).toBeLessThan(rentre.indexOf('class="rentre-scene"'))
+  // jamais sur ses minis, et rien sans série
   expect(svgMinis('chef', [{ fait: 'cherche' }], TEINTES.opus, 0, { flamme: 3 }) ?? '').not.toContain('flamme-a')
+  expect(svgScene('coucou', [], 0, TEINTES.opus, undefined, undefined, { insigne: 'or' })).not.toContain('flamme-a')
 })
 
 test('✨ son aura, passé Légende : elle gravite autour de lui et s’accentue avec ses niveaux ; légère, jamais sur ses minis', () => {

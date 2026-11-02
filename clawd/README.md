@@ -29,8 +29,8 @@ Anthropic.
   10, Master at 20, Grand Master at 30, Legend at 50) gets its own ceremony.
   He also earns achievements from your time together (a first fix after a run
   of failures, a week in a row, a year together…); `/clawd livret` lists
-  them with their dates. Come back day after day and a small flame flickers on
-  his belly, growing at a week and at a month. Once a Legend, a soft glowing
+  them with their dates. Come back day after day and a small campfire lights up
+  next to him, growing at a week and at a month. Once a Legend, a soft glowing
   aura surrounds him (a breathing halo, blurred flames, orbs orbiting him); it
   grows stronger at levels 60, 75 and 100 (a crown of orbs, a white-hot core,
   then rainbow light and rising embers).

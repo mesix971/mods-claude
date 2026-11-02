@@ -212,9 +212,9 @@ puis repart, chaque fois d'une autre façon.
 - Ses hauts faits, gagnés par ce que vous vivez ensemble : une première
   délivrance, 1 000 outils lancés, une semaine de suite, un an ensemble…
   `/clawd livret` les montre, avec leur date, vos grades et votre vie commune.
-- Sa flamme de série : dès 2 jours de suite ensemble, une petite flamme
-  vacille sur son ventre, en face de sa médaille ; elle grandit à une semaine,
-  puis à un mois.
+- Son feu de camp : dès 2 jours de suite ensemble, un petit feu s'allume au
+  sol à côté de lui, chez lui ; il grandit à une semaine, puis à un mois (des
+  étincelles en montent). Il reste allumé la nuit, quand il dort à côté.
 - Survole-le et clique ⭐ : sa carte à collectionner s'ouvre. On y voit son
   portrait en grand, son grade, son expérience, ses performances, ses
   qualités en étoiles, son humeur et ses hauts faits, dans un cadre qui suit

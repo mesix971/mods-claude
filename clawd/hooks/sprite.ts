@@ -149,7 +149,7 @@ export type Tenue = {
   insigne?: Insigne
   /** où il regarde : ce qui vient de changer sur la bande (à sa gauche, ou au-dessus de lui) ; ses yeux ouverts s'y tournent */
   regard?: 'gauche' | 'haut'
-  /** sa série de jours ensemble : une petite flamme qui vacille sur son ventre (1 : dès 2 jours, 2 : une semaine, 3 : un mois) */
+  /** sa série de jours ensemble : un petit feu de camp à côté de lui, qui grandit (1 : dès 2 jours, 2 : une semaine, 3 : un mois) */
   flamme?: 1 | 2 | 3
   /** son aura, passé Légende : de plus en plus forte avec ses niveaux (voir `AURAS`) */
   aura?: Aura
@@ -253,18 +253,38 @@ function dessinInsigne(i: Insigne): string {
   }
 }
 const CSS_BRILLE = `.brille{animation:brille 3s steps(1,end) infinite;opacity:0}@keyframes brille{0%,78%{opacity:0}80%,92%{opacity:1}}`
-// Sa série de jours ensemble : une flamme sur son ventre, en face de sa médaille, qui vacille (deux formes en alternance)
-// et grandit avec la série (dès 2 jours, une semaine, un mois)
+// Sa série de jours ensemble : un petit feu de camp au sol, à sa droite, chez lui (sur son ventre, la flamme faisait
+// trop avec sa médaille). Il vacille (deux formes en alternance) et grandit avec la série : dès 2 jours, une semaine,
+// un mois (des étincelles en montent)
 const FLAMMES_SERIE: Record<1 | 2 | 3, [string[], string[]]> = {
   1: [['.R.', 'RYR', 'RYR', '.R.'], ['R..', 'RRY', 'RYR', '.R.']],
   2: [['..R..', '.RRR.', 'RRYRR', 'RYYYR', '.RYR.'], ['.R...', '.RR.R', 'RRYRR', 'RYYYR', '.RYR.']],
   3: [['..R...', '.RR.R.', '.RRRR.', 'RRYYRR', 'RYYYYR', 'RYWWYR', '.RYYR.'], ['...R..', '.R.RR.', '.RRRR.', 'RRYYRR', 'RYYYYR', 'RYWWYR', '.RYYR.']],
 }
-/** Sa flamme de série (pixels de 2), posée en (`x`, `y`) : ses deux formes alternent (`.flamme-a`, `.flamme-b`) */
-const dessinFlamme = (n: number, x: number, y: number) => {
+/** La flamme de son feu (pixels de 2), centrée sur `cx`, son pied sur `bas` : ses deux formes alternent (`.flamme-a`, `.flamme-b`) */
+const dessinFlamme = (n: number, cx: number, bas: number) => {
   const [a, b] = FLAMMES_SERIE[(n === 3 ? 3 : n === 2 ? 2 : 1) as 1 | 2 | 3]
-  const hauteurFlamme = a.length * 2
-  return `<g class="flamme-a">${art(a, x, y + 8 - hauteurFlamme, 2)}</g><g class="flamme-b">${art(b, x, y + 8 - hauteurFlamme, 2)}</g>`
+  const x = cx - a[0]!.length
+  const y = bas - a.length * 2
+  return `<g class="flamme-a">${art(a, x, y, 2)}</g><g class="flamme-b">${art(b, x, y, 2)}</g>`
+}
+// Ses bûches croisées, cerclées de deux pierres (pixels de 2)
+const BUCHES = ['.NNnnNN.', 'GnNNNNnG']
+/** Où brûle son feu : à sa droite, au sol (hors de ses bras, et dans le cadre de son portrait sur sa carte) */
+const FEU = { cx: X0 + 84, sol: Y0 + 48 }
+/**
+ * Son feu de camp, s'il a une série (`flamme`) : posé chez lui, il ne le suit pas quand il se déplace, et il reste
+ * allumé la nuit, quand il dort à côté. Derrière lui : ses bras tendus passent devant
+ */
+function feuDeCamp(): string {
+  if (!flamme) return ''
+  const { cx, sol } = FEU
+  // (au mois, trois étincelles en montent, l'une après l'autre)
+  const etincelles =
+    flamme === 3
+      ? [[-4, -18, 0], [3, -22, 0.7], [0, -26, 1.3]].map(([dx, dy, d]) => `<g class="monte" style="animation-delay:-${d}s">${R(cx + dx!, sol + dy!, 2, 2, PAL.Y!)}</g>`).join('')
+      : ''
+  return dessinFlamme(flamme, cx, sol - 2) + art(BUCHES, cx - 8, sol - 4, 2) + etincelles
 }
 const CSS_FLAMME = `.flamme-a{animation:flamme-vacille .5s steps(1,end) infinite}.flamme-b{animation:flamme-vacille .5s steps(1,end) infinite;animation-delay:-.25s}@keyframes flamme-vacille{0%{opacity:1}50%,100%{opacity:0}}`
 
@@ -438,7 +458,7 @@ const cssAura = (svg: string) =>
   (svg.includes('class="au-iris"') ? `.au-iris{animation:au-iris 8s linear infinite${REPRISE_AURA}}@keyframes au-iris{to{filter:hue-rotate(360deg)}}` : '')
 
 /** Sa tenue lui met-elle quelque chose de plus (visière, sueur, insigne) ? Un mini n'a que la visière */
-const enTenue = () => visiere || (!enMini && (sueur > 0 || insigne !== null || flamme > 0))
+const enTenue = () => visiere || (!enMini && (sueur > 0 || insigne !== null))
 /**
  * Le nom du dessin de ce que sa tenue lui met, de face (`tn`) ou de profil
  * (`tnp`), ses parties à la suite : `v` sa visière (`h` relevée sur son
@@ -447,9 +467,9 @@ const enTenue = () => visiere || (!enMini && (sueur > 0 || insigne !== null || f
  * pèse peu dans chaque image. Un mini n'a que la visière.
  */
 const idTenue = (profil: boolean, haut = false) =>
-  `tn${profil ? 'p' : ''}${visiere ? (haut ? 'h' : 'v') : ''}${!enMini && sueur ? sueur : ''}${!enMini && insigne ? insigne[0] : ''}${!enMini && flamme ? `f${flamme}` : ''}`
+  `tn${profil ? 'p' : ''}${visiere ? (haut ? 'h' : 'v') : ''}${!enMini && sueur ? sueur : ''}${!enMini && insigne ? insigne[0] : ''}`
 /** Les noms de ces dessins, dans ce qui les reprend */
-const ID_TENUE = /href="#(tnp?[vh]?[12]?[baoerdls]?(?:f[123])?)"/g
+const ID_TENUE = /href="#(tnp?[vh]?[12]?[baoerdls]?)"/g
 /**
  * Ce que sa tenue lui met, d'après son nom (`idTenue`), dans son repère (le
  * coin haut-gauche de son corps ; de profil, celui de `profil`) : sa visière,
@@ -458,13 +478,12 @@ const ID_TENUE = /href="#(tnp?[vh]?[12]?[baoerdls]?(?:f[123])?)"/g
  * par image : ses scènes les plus longues restent légères.
  */
 function tenueDef(id: string): string {
-  const [, p, v, s, i, f] = /^tn(p?)([vh]?)([12]?)([baoerdls]?)(?:f([123]))?$/.exec(id) ?? []
+  const [, p, v, s, i] = /^tn(p?)([vh]?)([12]?)([baoerdls]?)$/.exec(id) ?? []
   const contenu = p
-    ? (v ? VISIERE_PROFIL : '') + (s ? goutte(86, 54) : '') + (i ? `<use href="#i${i}" x="53" y="75"/>` : '') + (f ? dessinFlamme(Number(f), 70, 77) : '')
+    ? (v ? VISIERE_PROFIL : '') + (s ? goutte(86, 54) : '') + (i ? `<use href="#i${i}" x="53" y="75"/>` : '')
     : (v ? `<use href="#visiere"${v === 'h' ? ' y="-9"' : ''}/>` : '') +
       (s ? goutte(54, 1) + (s === '2' ? `${goutte(12, 3, true)}<use href="#joues"/>` : '') : '') +
-      (i ? `<use href="#i${i}" x="46" y="22"/>` : '') +
-      (f ? dessinFlamme(Number(f), 18, 22) : '')
+      (i ? `<use href="#i${i}" x="46" y="22"/>` : '')
   return `<g id="${id}">${contenu}</g>`
 }
 
@@ -3574,9 +3593,16 @@ export function svgScene(anim: ClawdAnim, copains: readonly Mini[] = [], deja = 
 
 /** Les scènes où il porte son bonnet de nuit */
 const SOUS_LE_BONNET: readonly ClawdAnim[] = ['dodo', 'nuit', 'reveil']
-/** Ce qu'il porte dans cette scène : sous son bonnet de nuit, ni chapeau, ni visière, ni sueur (il garde son insigne et son aura) */
+/**
+ * Ce qu'il porte dans cette scène : sous son bonnet de nuit, ni chapeau, ni visière, ni sueur (il garde son insigne et
+ * son aura, et son feu de camp reste allumé à côté de lui)
+ */
 const sonDeguisement = (anim: ClawdAnim, d?: Deguisement | Tenue): Deguisement | Tenue | undefined =>
-  !SOUS_LE_BONNET.includes(anim) ? d : typeof d === 'object' ? { ...(d.insigne ? { insigne: d.insigne } : {}), ...(d.aura ? { aura: d.aura } : {}) } : {}
+  !SOUS_LE_BONNET.includes(anim)
+    ? d
+    : typeof d === 'object'
+      ? { ...(d.insigne ? { insigne: d.insigne } : {}), ...(d.aura ? { aura: d.aura } : {}), ...(d.flamme ? { flamme: d.flamme } : {}) }
+      : {}
 
 /**
  * Dessine avec cette tenue (le temps de ce dessin seulement). Une tenue
@@ -3614,10 +3640,11 @@ function dessineScene(anim: ClawdAnim, copains: readonly Mini[], couleur: Teinte
     // une chorégraphie n'a pas de mini : tout le dessin prend sa teinte
     // sa bulle sur son trajet, dans le même dessin : elle le suit toujours, quoi qu'il arrive à l'image
     const c = choreographie(anim, s, bulle ? dessinBulle(bulle) : '')
+    const feu = feuDeCamp()
     return recolore(
       entete() +
-        `<style>${CSS}${vit(reutilises(c.svg) + c.svg)}${THEME}${bulle ? CSS_BULLE : ''}${c.css}</style>${filtre()}${reutilises(c.svg)}${c.ombre}` +
-        `<g filter="url(#contour)">${c.svg}${s.fx ?? ''}</g></svg>`,
+        `<style>${CSS}${vit(reutilises(c.svg) + c.svg + feu)}${THEME}${bulle ? CSS_BULLE : ''}${c.css}</style>${filtre()}${reutilises(c.svg)}${c.ombre}` +
+        `<g filter="url(#contour)">${feu}${c.svg}${s.fx ?? ''}</g></svg>`,
       couleur,
     )
   }
@@ -3662,10 +3689,12 @@ function dessineScene(anim: ClawdAnim, copains: readonly Mini[], couleur: Teinte
   // interrompu en plein déménagement : ses cartons restent où ils sont, et lui joue sa scène là où il en était
   const decor = enPlace?.decor ?? ''
   const ici = (svg: string) => (enPlace && enPlace.x !== 0 ? `<g transform="translate(${+enPlace.x.toFixed(1)} 0)">${svg}</g>` : svg)
+  // son feu de camp brûle chez lui, même quand il joue sa scène ailleurs
+  const feu = feuDeCamp()
   return (
     entete() +
-    `<style>${css}${minis.css}${vit(reutilises(minis.svg + images + defs + decor) + minis.svg + images + defs + decor + (s.fx ?? ''))}</style>${filtre()}${defs}${reutilises(minis.svg + images + defs + decor)}${ici(ombres)}` +
-    `<g filter="url(#contour)">${decor}${ici(`${s.minis ? `<g class="${s.minis}">${minis.svg}</g>` : minis.svg}<g class="${s.cls ?? ''}" style="animation-delay:${delai()}">${recolore(images, peinture)}</g>${recolore(s.fx ?? '', peinture)}`)}</g></svg>`
+    `<style>${css}${minis.css}${vit(reutilises(minis.svg + images + defs + decor) + minis.svg + images + defs + decor + feu + (s.fx ?? ''))}</style>${filtre()}${defs}${reutilises(minis.svg + images + defs + decor)}${ici(ombres)}` +
+    `<g filter="url(#contour)">${feu}${decor}${ici(`${s.minis ? `<g class="${s.minis}">${minis.svg}</g>` : minis.svg}<g class="${s.cls ?? ''}" style="animation-delay:${delai()}">${recolore(images, peinture)}</g>${recolore(s.fx ?? '', peinture)}`)}</g></svg>`
   )
 }
 
@@ -3746,8 +3775,10 @@ function rentreChezLui(svg: string, { x, decor, vers = 0, avance = 0 }: EnPlace,
   const pas = recolore(deProfil(vers > x ? 'd' : 'g', 'vite'), couleur)
   // (ses cartons, et ce que sa tenue lui met de profil, s'ils ne sont pas déjà dans sa scène ; sa sueur qui perle)
   const defs = reutilises(decor + pas, scene)
-  const tenueCss = (defs.includes('class="goutte') && !scene.includes('@keyframes goutte') ? CSS_GOUTTE : '') + (defs.includes('class="brille"') && !scene.includes('@keyframes brille') ? CSS_BRILLE : '') + (defs.includes('class="au-taille') && !scene.includes('@keyframes au-taille') ? cssAura(defs) : '')
-  const retour = `${defs}<g class="rentre-pas">${OMBRE}</g><g filter="url(#contour)"><g class="rentre-range">${decor}</g><g class="rentre-pas">${pas}</g></g>`
+  // son feu de camp reste allumé pendant qu'il rentre (sa scène, cachée jusqu'à son arrivée, a le sien, au même endroit)
+  const feu = feuDeCamp()
+  const tenueCss = (defs.includes('class="goutte') && !scene.includes('@keyframes goutte') ? CSS_GOUTTE : '') + (defs.includes('class="brille"') && !scene.includes('@keyframes brille') ? CSS_BRILLE : '') + (feu && !scene.includes('@keyframes flamme-vacille') ? CSS_FLAMME : '') + (defs.includes('class="au-taille') && !scene.includes('@keyframes au-taille') ? cssAura(defs) : '')
+  const retour = `${defs}<g class="rentre-pas">${OMBRE}</g><g filter="url(#contour)">${feu}<g class="rentre-range">${decor}</g><g class="rentre-pas">${pas}</g></g>`
   const tete = scene.slice(0, i).replace('style="--t0:0s"', `style="--t0:0s;--tm:calc(var(--t0,0s) + ${reste}s)"`)
   return `${tete}${css}${tenueCss}</style>${retour}<g class="rentre-scene">${scene.slice(i + '</style>'.length)}</g></svg>`
 }

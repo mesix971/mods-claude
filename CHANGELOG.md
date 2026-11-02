@@ -43,6 +43,10 @@
 
 ## clawd
 
+- **0.15.1** — 2026-11-02 — Sa série devient un feu de camp : la flamme sur
+  son ventre faisait trop avec sa médaille. Un petit feu (bûches, pierres) au
+  sol à sa droite, chez lui, qui grandit à une semaine et à un mois ; il reste
+  allumé la nuit et pendant qu'il rentre à pied.
 - **0.15.0** — 2026-11-02 — Son aura de Légende.
   - Au niveau 50, une lumière douce et translucide l'entoure : un halo qui
     respire, des flammes floues qui ondulent, des orbes qui gravitent autour
