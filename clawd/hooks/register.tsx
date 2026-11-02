@@ -45,6 +45,7 @@ const transpire = atom({ plugin: 'clawd', key: 'sueur' } as const, 0)
 const niveau = atom({ plugin: 'clawd', key: 'niveau' } as const, 0)
 const carteOuverte = atom({ plugin: 'clawd', key: 'carte' } as const, null)
 const motGarde = atom({ plugin: 'clawd', key: 'motGarde' } as const, null)
+const carteAJour = atom({ plugin: 'clawd', key: 'carteAJour' } as const, '')
 /** La bande partagée d'atelier : ce qu'il y dessine, et où */
 const sceneAtelier = atom({ plugin: 'atelier', key: 'scene' } as const, null)
 const atelierMasque = atom({ plugin: 'atelier', key: 'isHidden' } as const, false)
@@ -1330,12 +1331,24 @@ export async function montreCarte($: EngineInterface, vue: 'carte' | 'mots', bas
   }
   // la vue d'abord : son panneau la lit dès son premier dessin
   await update($, carteOuverte, () => ({ vue, enBande: false }))
-  const ouvert = await $.ui.open({ id: CARTE, title: 'Clawd', columns: 52 }).catch(() => null)
+  // (au-dessus du prompt, toute sa hauteur plutôt qu'un tiers ; à côté de la conversation, sa largeur)
+  const ouvert = await $.ui.open({ id: CARTE, title: 'Clawd', columns: 52, rows: 40 }).catch(() => null)
   if (ouvert?.isPlaced) return 'panneau'
   // pas de panneau ici : il ne reste pas ouvert sans qu'on le voie, sa carte s'ouvre dans sa bande
   if (ouvert) await $.ui.close({ id: CARTE }).catch(() => {})
   await update($, carteOuverte, () => ({ vue, enBande: true }))
   return 'bande'
+}
+
+/**
+ * Sa carte ouverte se redessine quand ce qu'elle montre a changé (son
+ * expérience, votre vie commune, son humeur au vingtième, ses nouvelles) :
+ * rien de tout ça ne passe par un atome que son dessin lirait
+ */
+async function rafraichitCarte($: EngineInterface) {
+  if ((await read($, carteOuverte)) === null) return
+  const empreinte = [...texteCarte(await ficheDe($)), ...(await nouvellesDe($)).map(n => `${n.titre}|${n.texte}`)].join('\n')
+  if ((await read($, carteAJour)) !== empreinte) await update($, carteAJour, () => empreinte)
 }
 
 /** Il range sa carte (son panneau, ou sa place dans sa bande) */
@@ -1351,13 +1364,15 @@ export async function ouvreCarteParCommande($: EngineInterface, vue: 'carte' | '
 }
 
 /**
- * Sa carte dessinée sur `colonnes` cases de large (dans son panneau, ou dans
+ * Sa carte dessinée sur `cases` cases de large (dans son panneau, ou dans
  * sa bande : `enBande`, avec de quoi la ranger) : son portrait vivant et ce
  * qu'il est, ou ses mots, en entier. Le terminal, qui ne dessine pas de SVG,
  * l'a en mots.
  */
-async function vueCarte($: EngineInterface, e: ResolveInput<'Pane' | 'AbovePrompt'>, colonnes: number, enBande: boolean) {
+async function vueCarte($: EngineInterface, e: ResolveInput<'Pane' | 'AbovePrompt'>, cases: number, enBande: boolean) {
   const vue = (await read($, carteOuverte))?.vue === 'mots' ? 'mots' : 'carte'
+  // (lu ici : ce qu'elle montre a changé, elle se redessine)
+  await read($, carteAJour)
   const f = await ficheDe($)
   const nouvelles = await nouvellesDe($)
   const { Box, Text, Button } = $.ui.resolve(e)
@@ -1391,7 +1406,7 @@ async function vueCarte($: EngineInterface, e: ResolveInput<'Pane' | 'AbovePromp
     const { Svg } = $.ui.resolve(e)
     // son portrait : sa scène de repos (ou son sommeil), avec ce qu'il porte aujourd'hui
     const tenueDuJour = tenueDe({ ...(await tenueSession($)), deguise: deguisementDu(await $.clock.now()) })
-    const place = Math.floor(colonnes * CELLULE)
+    const place = Math.floor(cases * CELLULE)
     const c = svgCarte(f, svgScene(f.dort ? 'dodo' : 'repos', [], 0, teinte((await read($, modele)) ?? (await $.session.model().catch(() => null))), undefined, undefined, tenueDuJour), enBande && place >= 560 ? 'paysage' : 'portrait')
     const largeur = Math.min(c.largeur, place)
     return (
@@ -2052,6 +2067,8 @@ export const register: Register = on => {
           sessionANoter = null
           void compte($, v => nouvelleJournee(maintenant)({ ...v, sessions: v.sessions + 1 }))
         }
+        // sa carte ouverte suit ce qu'il vit (son expérience, votre vie commune, son humeur, ses nouvelles)
+        await rafraichitCarte($)
         if (dessine && souvenirAJouer !== null) {
           const t = souvenirAJouer
           souvenirAJouer = null

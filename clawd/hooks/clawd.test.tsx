@@ -2964,3 +2964,26 @@ test('🪪 le dessin de sa carte : en hauteur ou en largeur, son cadre suit son 
   expect(debutant).not.toContain('url(#ct-reflet)')
   expect(texteCarte({ ...fiche, savoirs: undefined }).join('\n')).toContain('🏅 12/12 hauts faits')
 })
+
+test('🪪 sa carte ouverte suit ce qu’il vit : votre vie commune change, elle se redessine sans qu’on la rouvre ; toute sa hauteur au-dessus du prompt', async ($, on) => {
+  const { stockage, horloge } = moteur(on)
+  stockage.set('vie', VIE)
+  const ouvertures: { rows?: number }[] = []
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  on('ui.open', ($, e) => {
+    ouvertures.push(e)
+    return { value: { isPlaced: true } }
+  })
+  await $.session.start({ cwd: '/projet', surface: 'desktop', isInteractive: true })
+  const ui = await $.ui.mount({ ...BAND(), surface: 'desktop' })
+  await presse(ui, 'niveau')
+  expect(ouvertures.at(-1)?.rows).toBe(40)
+  const panneau = await $.ui.mount(PANNEAU('desktop'))
+  const alt = async () => String(((await panneau.find({ type: 'Svg' }))?.props as { alt?: string } | undefined)?.alt ?? '')
+  expect(await alt()).toMatch(/6\s?234 outils/)
+  stockage.set('vie', { ...VIE, outils: 7001 })
+  await horloge.advance(4000)
+  expect(await alt()).toMatch(/7\s?001 outils/)
+  await panneau.unmount()
+  await ui.unmount()
+})

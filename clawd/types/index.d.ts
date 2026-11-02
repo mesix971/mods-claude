@@ -218,6 +218,8 @@ declare module 'claude-code' {
       carte: { vue: 'carte' | 'mots'; enBande: boolean } | null
       /** Son dernier mot lu (sa bulle 💬) : sa carte le garde, en entier */
       motGarde: { date: string; message: string } | null
+      /** Ce que sa carte ouverte montre, résumé : quand ça change, elle se redessine */
+      carteAJour: string
     }
     /** La bande partagée d'atelier, l'autre mod du dépôt (il l'écrit, Clawd la lit) */
     atelier: {
