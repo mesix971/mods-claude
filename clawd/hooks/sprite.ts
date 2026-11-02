@@ -151,12 +151,15 @@ export type Tenue = {
   regard?: 'gauche' | 'haut'
   /** sa série de jours ensemble : une petite flamme qui vacille sur son ventre (1 : dès 2 jours, 2 : une semaine, 3 : un mois) */
   flamme?: 1 | 2 | 3
+  /** son aura, passé Légende : de plus en plus forte avec ses niveaux (voir `AURAS`) */
+  aura?: Aura
 }
 let regardVers: 'gauche' | 'haut' | null = null
 let visiere = false
 let sueur: 0 | 1 | 2 = 0
 let insigne: Insigne | null = null
 let flamme: 0 | 1 | 2 | 3 = 0
+let aura: 0 | Aura = 0
 /** Un mini-Clawd se dessine : ni la sueur ni l'insigne de Clawd, mais la même visière (son sous-agent a le même mode) */
 let enMini = false
 /** Dessine un mini-Clawd (voir `enMini`) */
@@ -179,6 +182,7 @@ export function tenueDe(t: Tenue): Tenue | undefined {
     ...(t.insigne ? { insigne: t.insigne } : {}),
     ...(t.regard ? { regard: t.regard } : {}),
     ...(t.flamme ? { flamme: t.flamme } : {}),
+    ...(t.aura ? { aura: t.aura } : {}),
   }
   return Object.keys(n).length ? n : undefined
 }
@@ -263,6 +267,175 @@ const dessinFlamme = (n: number, x: number, y: number) => {
   return `<g class="flamme-a">${art(a, x, y + 8 - hauteurFlamme, 2)}</g><g class="flamme-b">${art(b, x, y + 8 - hauteurFlamme, 2)}</g>`
 }
 const CSS_FLAMME = `.flamme-a{animation:flamme-vacille .5s steps(1,end) infinite}.flamme-b{animation:flamme-vacille .5s steps(1,end) infinite;animation-delay:-.25s}@keyframes flamme-vacille{0%{opacity:1}50%,100%{opacity:0}}`
+
+// Son aura, passé Légende (niveau 50) : une lumière douce et translucide, à l'opposé de ses pixels. Un halo qui respire
+// derrière lui, des flammes de lumière qui ondulent, des orbes qui gravitent autour de lui sur un anneau qui passe devant
+// son ventre et derrière son dos, des étincelles qui s'allument. Elle s'accentue avec ses niveaux (`auraDe`,
+// register.tsx) : une couronne d'orbes au-dessus de sa tête et des flammes plus hautes (60), le cœur blanc (75), puis
+// tout aux couleurs de l'arc-en-ciel, avec des braises qui montent (100). Rien n'y est tout à fait opaque : son trait
+// sombre (`contour`) ne s'y pose pas (`filtre`), il la ferait virer au marron
+export type Aura = 1 | 2 | 3 | 4
+/** Un anneau d'orbes, dans le repère de son corps : son centre, ses rayons, son tour (s), son sens (-1 : à rebours) */
+type Anneau = { cx: number; cy: number; rx: number; ry: number; tour: number; sens: 1 | -1 }
+const ANNEAUX = {
+  // autour de sa taille : devant ses pattes en bas, derrière lui en haut
+  taille: { cx: 36, cy: 26, rx: 50, ry: 11, tour: 6, sens: 1 },
+  // sa couronne au-dessus de sa tête, à rebours
+  couronne: { cx: 36, cy: -9, rx: 26, ry: 5, tour: 4, sens: -1 },
+} as const satisfies Record<string, Anneau>
+/**
+ * Ce que chaque palier lui met : son halo (ses rayons), ses flammes (la hauteur de leurs langues), le blanc au cœur ; ses
+ * orbes sur chaque anneau ; ses étincelles ; ses braises ; l'arc-en-ciel
+ */
+const AURAS: Record<Aura, { halo: readonly [number, number]; flammes: number; coeur: boolean; taille: number; couronne: number; etincelles: number; braises: boolean; iris: boolean }> = {
+  1: { halo: [54, 38], flammes: 9, coeur: false, taille: 4, couronne: 0, etincelles: 3, braises: false, iris: false },
+  2: { halo: [58, 40], flammes: 14, coeur: false, taille: 5, couronne: 3, etincelles: 4, braises: false, iris: false },
+  3: { halo: [62, 42], flammes: 18, coeur: true, taille: 6, couronne: 4, etincelles: 5, braises: false, iris: false },
+  4: { halo: [66, 44], flammes: 24, coeur: true, taille: 7, couronne: 5, etincelles: 5, braises: true, iris: true },
+}
+/**
+ * Les dégradés de sa lumière, d'un or crème près de lui jusqu'à rien (jamais tout à fait opaques : son trait sombre ne
+ * s'y pose pas, même quand ils s'empilent), le flou qui adoucit ses flammes, et ses formes reprises, centrées sur leur
+ * point : ses orbes (`auo`, `auO` pour sa couronne, `aub` pour ses braises) et son étincelle (`aus`, une étoile à
+ * quatre branches fines)
+ */
+const DEFS_AURA =
+  `<radialGradient id="aug-h"><stop offset="0" stop-color="#FFE9A6" stop-opacity=".5"/><stop offset=".55" stop-color="${PAL.Y}" stop-opacity=".42"/><stop offset=".8" stop-color="#FFC14D" stop-opacity=".16"/><stop offset="1" stop-color="#FFC14D" stop-opacity="0"/></radialGradient>` +
+  `<linearGradient id="aug-f" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFF6D0" stop-opacity="0"/><stop offset=".25" stop-color="#FFE38A" stop-opacity=".45"/><stop offset=".7" stop-color="#FFC24A" stop-opacity=".55"/><stop offset="1" stop-color="#FF9F2E" stop-opacity=".45"/></linearGradient>` +
+  `<radialGradient id="aug-c"><stop offset="0" stop-color="${PAL.W}" stop-opacity=".6"/><stop offset="1" stop-color="${PAL.W}" stop-opacity="0"/></radialGradient>` +
+  `<radialGradient id="aug-o"><stop offset="0" stop-color="${PAL.W}" stop-opacity=".9"/><stop offset=".4" stop-color="#FFE38A" stop-opacity=".75"/><stop offset="1" stop-color="${PAL.Y}" stop-opacity="0"/></radialGradient>` +
+  `<filter id="aug-flou" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="1.5"/></filter>` +
+  `<circle id="auo" r="4" fill="url(#aug-o)"/><circle id="auO" r="3" fill="url(#aug-o)"/><circle id="aub" r="2.5" fill="url(#aug-o)"/>` +
+  `<path id="aus" fill="${PAL.W}" fill-opacity=".8" d="M0-5Q.6-.6 5 0Q.6.6 0 5Q-.6.6-5 0Q-.6-.6 0-5Z"/>`
+/** Un nombre arrondi au dixième, pour un tracé court */
+const dixieme = (n: number) => +n.toFixed(1)
+/**
+ * Ses flammes de lumière (repère de son corps) : une ellipse autour de lui, posée au sol, dont le haut se découpe en
+ * langues effilées, plus hautes au milieu (`haut`) ; `decale` les fait pousser entre celles de l'autre nappe
+ */
+function flammes(rx: number, ry: number, haut: number, decale: boolean): string {
+  const cx = X0 + 36
+  const cy = Y0 + 22
+  const sol = Y0 + 48
+  // là où l'ellipse touche le sol
+  const pied = rx * Math.sqrt(Math.max(0, 1 - ((sol - cy) / ry) ** 2))
+  const n = 7
+  const sur = (t: number, plus = 0) => [dixieme(cx - rx * Math.cos(t)), dixieme(cy - (ry + plus) * Math.sin(t))] as const
+  let d = `M${dixieme(cx - pied)} ${sol}Q${cx - rx} ${sol} ${cx - rx} ${cy}`
+  for (let k = 0; k < n; k++) {
+    const [a, b] = [(Math.PI * k) / n, (Math.PI * (k + 1)) / n]
+    const milieu = (a + b) / 2
+    // une langue sur deux un peu plus courte, et l'autre nappe en contretemps
+    const pointe = haut * Math.sin(milieu) ** 1.5 * ((k + (decale ? 1 : 0)) % 2 ? 0.65 : 1)
+    const [px, py] = sur(milieu, pointe)
+    const [ax, ay] = sur(a, pointe * 0.35)
+    const [bx, by] = sur(b, pointe * 0.35)
+    const [fx, fy] = sur(b)
+    d += `Q${ax} ${ay} ${px} ${py}Q${bx} ${by} ${fx} ${fy}`
+  }
+  return `${d}Q${cx + rx} ${sol} ${dixieme(cx + pied)} ${sol}Z`
+}
+/**
+ * Les `n` orbes d'un anneau, réparties sur son tour : `au-<anneau>` les y mène, `au-<initiale><n>-<rang>` les décale
+ * (`au-t4-2` : la 3e de 4 sur son anneau de taille, voir `decalagesOrbes`) ; `devant` : seulement quand elles passent
+ * devant lui
+ */
+function orbes(nom: keyof typeof ANNEAUX, n: number, devant: boolean): string {
+  let s = ''
+  for (let k = 0; k < n; k++) s += `<use href="#au${nom === 'taille' ? 'o' : 'O'}" class="au-${nom}${devant ? '-v' : ''} au-${nom[0]}${n}-${k}"/>`
+  return s
+}
+/** Où ses étincelles s'allument autour de lui (repère de son corps), l'une après l'autre */
+const ETINCELLES: readonly [number, number][] = [[-10, 2], [82, 8], [36, -24], [-6, 40], [78, 40]]
+/** Son aura derrière lui (`d`) ou devant lui (`v`), dans le repère de son corps : écrite une fois par SVG, reprise par chaque image */
+function auraDef(id: string): string {
+  const [, cote, palier] = /^au([dv])([1-4])$/.exec(id) ?? []
+  const p = AURAS[Number(palier) as Aura]
+  if (!p) return ''
+  let s = ''
+  if (cote === 'd') {
+    const [rx, ry] = p.halo
+    // son halo qui respire, ses deux nappes de flammes qui ondulent chacune à son rythme, le blanc au cœur
+    s += `<ellipse class="au-pulse" cx="${X0 + 36}" cy="${Y0 + 24}" rx="${rx}" ry="${ry}" fill="url(#aug-h)"/>`
+    s +=
+      `<g filter="url(#aug-flou)"><path class="au-fl1" fill="url(#aug-f)" d="${flammes(rx - 14, ry - 10, p.flammes, false)}"/>` +
+      `<path class="au-fl2" fill="url(#aug-f)" d="${flammes(rx - 20, ry - 14, p.flammes * 0.7, true)}"/></g>`
+    if (p.coeur) s += `<ellipse cx="${X0 + 36}" cy="${Y0 + 22}" rx="${rx - 30}" ry="${ry - 14}" fill="url(#aug-c)"/>`
+    s += ETINCELLES.slice(0, p.etincelles)
+      // (posée par son groupe : sur le <use> même, x et y ne déplacent pas le centre de son échelle, elle grandirait
+      // depuis le coin de la toile)
+      .map(([x, y], k) => `<g transform="translate(${X0 + x} ${Y0 + y})"><use href="#aus" class="au-sc${k ? ` au-k${k}` : ''}"/></g>`)
+      .join('')
+    s += orbes('taille', p.taille, false) + orbes('couronne', p.couronne, false)
+    if (p.braises)
+      s += [-6, 8, 30, 64, 76].map((x, k) => `<use href="#aub" x="${X0 + x}" y="${Y0 + 30}" class="au-braise${k ? ` au-k${k}` : ''}"/>`).join('')
+  } else s += orbes('taille', p.taille, true) + orbes('couronne', p.couronne, true)
+  // (lisse, elle : pas les bords nets de ses pixels)
+  return `<g id="${id}" shape-rendering="geometricPrecision"${p.iris ? ' class="au-iris"' : ''}>${s}</g>`
+}
+/** Son aura dans une image (son corps décalé de `dx`, `dy`), derrière ou devant lui ; rien sans aura, ni sur un mini */
+const sonAura = (cote: 'd' | 'v', dx = 0, dy = 0) => (aura && !enMini ? `<use href="#au${cote}${aura}"${dx ? ` x="${dx}"` : ''}${dy ? ` y="${dy}"` : ''}/>` : '')
+/** Les dessins de son aura repris dans ce contenu */
+const ID_AURA = /href="#(au[dv][1-4])"/g
+/**
+ * Le tour d'un anneau (16 pas, depuis son centre : ses orbes y sont posées à l'origine), quand ses orbes passent devant
+ * lui (la moitié basse de l'anneau), et le décalage de chacune sur son tour
+ */
+function cssAnneau(nom: keyof typeof ANNEAUX): string {
+  const a = ANNEAUX[nom]
+  const N = 16
+  const pas = Array.from({ length: N + 1 }, (_, k) => {
+    const t = (a.sens * 2 * Math.PI * k) / N
+    return `${+((k / N) * 100).toFixed(2)}%{translate:${dixieme(X0 + a.cx + a.rx * Math.cos(t))}px ${dixieme(Y0 + a.cy + a.ry * Math.sin(t))}px}`
+  }).join('')
+  // à l'endroit, elle passe devant lui la première moitié de son tour ; à rebours, la seconde. Sa copie de derrière ne
+  // se montre que l'autre moitié : deux orbes empilées dépasseraient le seuil de son trait sombre. La bascule se fait
+  // sur les côtés, hors de son corps : on ne la voit pas
+  const [avant, apres] = a.sens === 1 ? ['1', '0'] : ['0', '1']
+  return (
+    `@keyframes au-${nom}{${pas}}` +
+    `.au-${nom}{animation:au-${nom} ${a.tour}s linear infinite,au-${nom}-d ${a.tour}s steps(1,end) infinite}@keyframes au-${nom}-d{0%{opacity:${apres}}50%{opacity:${avant}}}` +
+    `.au-${nom}-v{animation:au-${nom} ${a.tour}s linear infinite,au-${nom}-v ${a.tour}s steps(1,end) infinite}@keyframes au-${nom}-v{0%{opacity:${avant}}50%{opacity:${apres}}}`
+  )
+}
+const CSS_ANNEAUX = { taille: cssAnneau('taille'), couronne: cssAnneau('couronne') }
+/**
+ * Le temps de son aura : celui de sa scène (`--t0`, voir `avecT0`), écrit `var(--t0, 0s)`, avec une espace. Quand il
+ * rentre chez lui à pied, `rentreChezLui` met sa scène à l'heure de son arrivée (`--tm`) en réécrivant `var(--t0,0s)` ;
+ * son aura, qui tourne aussi pendant qu'il marche, y échappe ainsi (sinon elle resterait figée, ses orbes hors de vue)
+ */
+const REPRISE_AURA = ';animation-delay:var(--t0, 0s)'
+const delaiAura = (d: number) => (Math.abs(d) < 0.0005 ? 'var(--t0, 0s)' : `calc(var(--t0, 0s) - ${Math.abs(d).toFixed(3)}s)`)
+/** Le décalage de chacune de ses orbes sur son tour, d'après leur rang et leur nombre (`orbes`) : après leurs animations, qu'il complète */
+function decalagesOrbes(svg: string): string {
+  const vus = new Set([...svg.matchAll(/ au-([tc])(\d)-(\d)"/g)].map(m => m[0]))
+  return [...vus]
+    .map(c => {
+      const [, i, n, k] = / au-([tc])(\d)-(\d)"/.exec(c)!
+      const tour = ANNEAUX[i === 't' ? 'taille' : 'couronne'].tour
+      return `.au-${i}${n}-${k}{animation-delay:${delaiAura(-(tour * Number(k)) / Number(n))}}`
+    })
+    .join('')
+}
+/**
+ * Le style de son aura, seulement ce que ce dessin en reprend. Tout y suit son temps (`REPRISE_AURA`) : l'app recrée
+ * son image quand la bande change, et son arc-en-ciel, son halo, ses flammes repartiraient de zéro
+ */
+const cssAura = (svg: string) =>
+  (svg.includes('class="au-taille') ? CSS_ANNEAUX.taille : '') +
+  (svg.includes('class="au-couronne') ? CSS_ANNEAUX.couronne : '') +
+  (svg.includes('class="au-pulse"')
+    ? `.au-pulse{transform-box:fill-box;transform-origin:center;animation:au-pulse 2.8s ease-in-out infinite${REPRISE_AURA}}@keyframes au-pulse{50%{transform:scale(1.06);opacity:.7}}` +
+      // ses flammes ondulent depuis leur pied, chaque nappe à son rythme
+      `.au-fl1,.au-fl2{transform-box:fill-box;transform-origin:50% 100%;animation:au-fl1 1.3s ease-in-out infinite alternate${REPRISE_AURA}}.au-fl2{animation-name:au-fl2;animation-duration:.9s}` +
+      `@keyframes au-fl1{from{transform:scaleY(.92) skewX(-3deg)}to{transform:scaleY(1.08) skewX(3deg)}}@keyframes au-fl2{from{transform:scaleY(1.08) skewX(2deg)}to{transform:scaleY(.92) skewX(-2deg)}}` +
+      `.au-sc{transform-box:fill-box;transform-origin:center;animation:au-sc 2.75s ease-in-out infinite${REPRISE_AURA};opacity:0}@keyframes au-sc{0%,55%,100%{transform:scale(0);opacity:0}72%{transform:scale(1);opacity:1}}`
+    : '') +
+  (svg.includes('class="au-braise') ? `.au-braise{animation:au-braise 2.75s ease-out infinite${REPRISE_AURA};opacity:0}@keyframes au-braise{0%{transform:translateY(0);opacity:0}15%{opacity:1}100%{transform:translateY(-36px);opacity:0}}` : '') +
+  // (le décalage de ses étincelles et de ses braises, l'une après l'autre : après leurs animations, qu'il complète)
+  (svg.includes(' au-k1"') ? [1, 2, 3, 4].map(k => `.au-k${k}{animation-delay:${delaiAura(-k * 0.55)}}`).join('') : '') +
+  decalagesOrbes(svg) +
+  (svg.includes('class="au-iris"') ? `.au-iris{animation:au-iris 8s linear infinite${REPRISE_AURA}}@keyframes au-iris{to{filter:hue-rotate(360deg)}}` : '')
 
 /** Sa tenue lui met-elle quelque chose de plus (visière, sueur, insigne) ? Un mini n'a que la visière */
 const enTenue = () => visiere || (!enMini && (sueur > 0 || insigne !== null || flamme > 0))
@@ -423,7 +596,7 @@ function corps(p: Pose = {}): string {
     // sa sueur, à l'arrière de sa tête
     if (sueur && !enMini) s += goutte(vue === 'cote' ? x0 + 40 : x0 + 26, y0 + 1)
     s += R(x0 + (vue === 'cote' ? 30 : 30), y0 + 16, 12, 10, PAL.o!)
-    return s + chapeau(x0 + 36, y0)
+    return sonAura('d', x0 - X0, y0 - Y0) + s + chapeau(x0 + 36, y0) + sonAura('v', x0 - X0, y0 - Y0)
   }
 
   // ses pattes restent au sol ; au calme, le reste (buste, bras, visage) respire au-dessus
@@ -455,7 +628,8 @@ function corps(p: Pose = {}): string {
   if (p.d === 'devant') s += R(x0 + 44, y0 + 22, 16, 8, PAL.o!)
   s += chapeau(x0 + 36, y0)
   s = p.calme && vue === 'face' && POSE_TRANQUILLE.includes(j) ? `<g class="souffle">${s}</g>` : s
-  return pese(pattes + s, p)
+  // son aura l'entoure : derrière lui, et ce qui en passe devant
+  return pese(sonAura('d', x0 - X0, y0 - Y0) + pattes + s + sonAura('v', x0 - X0, y0 - Y0), p)
 }
 
 /**
@@ -499,7 +673,9 @@ const separeOmbre = (img: string): [string, string] => {
 function profil(pas: '' | 'vite' | 'lent' = 'vite', canne = true): string {
   const r = (x: number, y: number, w: number, h: number) => `<rect x="${x}" y="${y}" width="${w}" height="${h}"/>`
   const patte = (x: number) => r(x, 91, 7, 4) + r(x + 4, 95, 7, 7) + r(x, 95, 4, 3)
+  // (son aura autour de son corps de profil, un peu plus à droite et plus bas que de face)
   return (
+    sonAura('d', 4, 2) +
     `<g transform="translate(${X0 - 25.7} 7.5) scale(.857)"><g class="${pas}">` +
     (canne ? `<g fill="${PAL.G}">${r(10, 80, 3, 8)}${r(13, 84, 4, 7)}${r(16, 88, 4, 3)}${r(17, 91, 7, 4)}${r(21, 95, 7, 3)}${r(24, 98, 22, 4)}</g>` : '') +
     `<g class="corps"><g fill="${PAL.O}">${r(49, 53, 43, 38)}${r(38, 70, 11, 14)}</g>` +
@@ -507,7 +683,8 @@ function profil(pas: '' | 'vite' | 'lent' = 'vite', canne = true): string {
     `${enTenue() ? `<use href="#${idTenue(true)}"/>` : ''}<g fill="${PAL.K}" class="cligne">${r(49, 62, 7, 7)}${r(76, 62, 7, 7)}</g>${visageProfil()}${chapeau(77.5, 53, 3.5)}</g>` +
     `<g class="pA"><g fill="${PAL.O}">${patte(49)}${patte(85)}</g></g>` +
     `<g class="pB"><g fill="${PAL.O}">${patte(63)}</g><g fill="${PAL.o}">${patte(98)}</g></g>` +
-    `</g></g>`
+    `</g></g>` +
+    sonAura('v', 4, 2)
   )
 }
 
@@ -2760,7 +2937,7 @@ function vivant(): string {
  */
 const VIVANT = vivant()
 const vit = (svg: string) =>
-  (/class="(?:souffle|cligne)"/.test(svg) ? VIVANT : '') + (svg.includes('class="goutte') ? CSS_GOUTTE : '') + (svg.includes('class="brille"') ? CSS_BRILLE : '') + (svg.includes('class="flamme-a"') ? CSS_FLAMME : '')
+  (/class="(?:souffle|cligne)"/.test(svg) ? VIVANT : '') + (svg.includes('class="goutte') ? CSS_GOUTTE : '') + (svg.includes('class="brille"') ? CSS_BRILLE : '') + (svg.includes('class="flamme-a"') ? CSS_FLAMME : '') + cssAura(svg)
 
 const CSS = `
 .flotte{animation:flotte 3s ease-in-out infinite}
@@ -2858,6 +3035,16 @@ const FILTRE =
   `<feMorphology in="SourceAlpha" operator="dilate" radius="1" result="epais"/>` +
   `<feFlood class="contour"/><feComposite in2="epais" operator="in"/>` +
   `<feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>`
+/**
+ * Le même quand son aura l'entoure : son trait ne se pose que sur ce qui est tout à fait opaque (ses pixels), pas sur sa
+ * lumière translucide, qu'il ferait virer au marron (ce qui s'efface en fondu y perd son trait le temps de son fondu)
+ */
+const FILTRE_LUMIERE = FILTRE.replace(
+  '<feMorphology in="SourceAlpha"',
+  '<feComponentTransfer in="SourceAlpha" result="plein"><feFuncA type="linear" slope="1000" intercept="-999"/></feComponentTransfer><feMorphology in="plein"',
+)
+/** Son filtre, le temps d'un dessin (`deguiseEn`) : celui qui laisse sa lumière en paix s'il a une aura */
+const filtre = () => (aura ? FILTRE_LUMIERE : FILTRE)
 
 const OMBRE = `<rect class="ombre" x="${X0 + 8}" y="${Y0 + 48}" width="56" height="2"/>`
 
@@ -2906,6 +3093,10 @@ const reutilises = (contenu: string, deja = '') => {
   const apres = { visiere: () => VISIERE_DEF, 'visiere-cote': () => VISIERE_COTE_DEF, goutte: () => GOUTTE_DEF, joues: () => JOUES_DEF }
   for (const [id, def] of Object.entries(apres)) if (repris(id)) defs.push(def())
   for (const i of INSIGNES) if (repris(`i${i[0]}`)) defs.push(insigneDef(i))
+  // son aura, d'après le nom de chaque dessin repris (`sonAura`)
+  const auras = new Set([contenu, ...defs].flatMap(t => [...t.matchAll(ID_AURA)].map(m => m[1]!)))
+  for (const id of auras) if (!deja.includes(`id="${id}"`)) defs.push(auraDef(id))
+  if (auras.size && !deja.includes('id="aug-o"')) defs.push(DEFS_AURA)
   return defs.length ? `<defs>${defs.join('')}</defs>` : ''
 }
 
@@ -3345,12 +3536,14 @@ export const dureeRetour = (x: number, vers = 0) => +Math.max(0.5, Math.abs(vers
 const dessinsFaits = new Map<string, string>()
 /**
  * Le poids d'une scène précédée de son trajet, au plus (octets de SVG). Une
- * scène seule reste sous 40 Ko (sa règle) ; son trajet (lui de profil, ses
+ * scène seule reste sous 40 Ko (sa règle, sans aura) ; son trajet (lui de profil, ses
  * cartons qui s'effacent) en ajoute jusqu'à 7. Les plus lourdes (la pause, le
  * réveil, la délivrance) le gardent ainsi : l'app redessine sans peine des
- * images bien plus grosses (ses numéros), et un saut se verrait.
+ * images bien plus grosses (ses numéros), et un saut se verrait. Son aura
+ * (passé Légende) a sa part en plus : elle ne lui coûte jamais son trajet.
  */
 const POIDS_MAX = 56 * 1024
+const POIDS_AURA = 12 * 1024
 
 /**
  * Le SVG complet d'une scène : images en flipbook + effets continus, et les
@@ -3371,7 +3564,7 @@ export function svgScene(anim: ClawdAnim, copains: readonly Mini[] = [], deja = 
       // alors sans lui)
       const seule = dessineScene(anim, copains, couleur, rapporteur, bulle)
       const avecRetour = rentreChezLui(seule, enPlace, couleur)
-      return avecRetour.length < POIDS_MAX ? avecRetour : seule
+      return avecRetour.length < POIDS_MAX + (aura ? POIDS_AURA : 0) ? avecRetour : seule
     })
     dessinsFaits.set(cle, svg)
     if (dessinsFaits.size > 8) dessinsFaits.delete(dessinsFaits.keys().next().value!)
@@ -3381,9 +3574,9 @@ export function svgScene(anim: ClawdAnim, copains: readonly Mini[] = [], deja = 
 
 /** Les scènes où il porte son bonnet de nuit */
 const SOUS_LE_BONNET: readonly ClawdAnim[] = ['dodo', 'nuit', 'reveil']
-/** Ce qu'il porte dans cette scène : sous son bonnet de nuit, ni chapeau, ni visière, ni sueur (il garde son insigne) */
+/** Ce qu'il porte dans cette scène : sous son bonnet de nuit, ni chapeau, ni visière, ni sueur (il garde son insigne et son aura) */
 const sonDeguisement = (anim: ClawdAnim, d?: Deguisement | Tenue): Deguisement | Tenue | undefined =>
-  !SOUS_LE_BONNET.includes(anim) ? d : typeof d === 'object' && d.insigne ? { insigne: d.insigne } : {}
+  !SOUS_LE_BONNET.includes(anim) ? d : typeof d === 'object' ? { ...(d.insigne ? { insigne: d.insigne } : {}), ...(d.aura ? { aura: d.aura } : {}) } : {}
 
 /**
  * Dessine avec cette tenue (le temps de ce dessin seulement). Une tenue
@@ -3392,7 +3585,7 @@ const sonDeguisement = (anim: ClawdAnim, d?: Deguisement | Tenue): Deguisement |
  * visage : il garde sa sueur et son insigne.
  */
 function deguiseEn<T>(d: Deguisement | Tenue | undefined, dessine: () => T): T {
-  const avant = { deguisement, visiere, sueur, insigne, regardVers, flamme }
+  const avant = { deguisement, visiere, sueur, insigne, regardVers, flamme, aura }
   if (typeof d === 'object') {
     deguisement = d.deguise ?? null
     visiere = d.visiere === true
@@ -3400,6 +3593,7 @@ function deguiseEn<T>(d: Deguisement | Tenue | undefined, dessine: () => T): T {
     insigne = d.insigne ?? null
     regardVers = d.regard ?? null
     flamme = d.flamme ?? 0
+    aura = d.aura ?? 0
   } else {
     deguisement = d ?? null
     visiere = false
@@ -3407,7 +3601,7 @@ function deguiseEn<T>(d: Deguisement | Tenue | undefined, dessine: () => T): T {
   try {
     return dessine()
   } finally {
-    ;({ deguisement, visiere, sueur, insigne, regardVers, flamme } = avant)
+    ;({ deguisement, visiere, sueur, insigne, regardVers, flamme, aura } = avant)
   }
 }
 
@@ -3422,7 +3616,7 @@ function dessineScene(anim: ClawdAnim, copains: readonly Mini[], couleur: Teinte
     const c = choreographie(anim, s, bulle ? dessinBulle(bulle) : '')
     return recolore(
       entete() +
-        `<style>${CSS}${vit(reutilises(c.svg) + c.svg)}${THEME}${bulle ? CSS_BULLE : ''}${c.css}</style>${FILTRE}${reutilises(c.svg)}${c.ombre}` +
+        `<style>${CSS}${vit(reutilises(c.svg) + c.svg)}${THEME}${bulle ? CSS_BULLE : ''}${c.css}</style>${filtre()}${reutilises(c.svg)}${c.ombre}` +
         `<g filter="url(#contour)">${c.svg}${s.fx ?? ''}</g></svg>`,
       couleur,
     )
@@ -3470,7 +3664,7 @@ function dessineScene(anim: ClawdAnim, copains: readonly Mini[], couleur: Teinte
   const ici = (svg: string) => (enPlace && enPlace.x !== 0 ? `<g transform="translate(${+enPlace.x.toFixed(1)} 0)">${svg}</g>` : svg)
   return (
     entete() +
-    `<style>${css}${minis.css}${vit(reutilises(minis.svg + images + defs + decor) + minis.svg + images + defs + decor + (s.fx ?? ''))}</style>${FILTRE}${defs}${reutilises(minis.svg + images + defs + decor)}${ici(ombres)}` +
+    `<style>${css}${minis.css}${vit(reutilises(minis.svg + images + defs + decor) + minis.svg + images + defs + decor + (s.fx ?? ''))}</style>${filtre()}${defs}${reutilises(minis.svg + images + defs + decor)}${ici(ombres)}` +
     `<g filter="url(#contour)">${decor}${ici(`${s.minis ? `<g class="${s.minis}">${minis.svg}</g>` : minis.svg}<g class="${s.cls ?? ''}" style="animation-delay:${delai()}">${recolore(images, peinture)}</g>${recolore(s.fx ?? '', peinture)}`)}</g></svg>`
   )
 }
@@ -3552,7 +3746,7 @@ function rentreChezLui(svg: string, { x, decor, vers = 0, avance = 0 }: EnPlace,
   const pas = recolore(deProfil(vers > x ? 'd' : 'g', 'vite'), couleur)
   // (ses cartons, et ce que sa tenue lui met de profil, s'ils ne sont pas déjà dans sa scène ; sa sueur qui perle)
   const defs = reutilises(decor + pas, scene)
-  const tenueCss = (defs.includes('class="goutte') && !scene.includes('@keyframes goutte') ? CSS_GOUTTE : '') + (defs.includes('class="brille"') && !scene.includes('@keyframes brille') ? CSS_BRILLE : '')
+  const tenueCss = (defs.includes('class="goutte') && !scene.includes('@keyframes goutte') ? CSS_GOUTTE : '') + (defs.includes('class="brille"') && !scene.includes('@keyframes brille') ? CSS_BRILLE : '') + (defs.includes('class="au-taille') && !scene.includes('@keyframes au-taille') ? cssAura(defs) : '')
   const retour = `${defs}<g class="rentre-pas">${OMBRE}</g><g filter="url(#contour)"><g class="rentre-range">${decor}</g><g class="rentre-pas">${pas}</g></g>`
   const tete = scene.slice(0, i).replace('style="--t0:0s"', `style="--t0:0s;--tm:calc(var(--t0,0s) + ${reste}s)"`)
   return `${tete}${css}${tenueCss}</style>${retour}<g class="rentre-scene">${scene.slice(i + '</style>'.length)}</g></svg>`
@@ -3678,7 +3872,8 @@ function imagesFixes(anim: ClawdAnim): string[] {
   const s = SCENES[anim]()
   return s.images.map(i => {
     const [sienne, img] = sauts(s) ? separeOmbre(i) : ['', i]
-    return entete() + `<style>${THEME}</style>${FILTRE}${s.defs ?? ''}${reutilises(img + (s.defs ?? ''))}${ombre(s) || sienne}<g filter="url(#contour)">${img}${s.fx ?? ''}</g></svg>`
+    // (son aura, posée par son style : ses orbes sur leur anneau)
+    return entete() + `<style>${THEME}${cssAura(reutilises(img) + img)}</style>${filtre()}${s.defs ?? ''}${reutilises(img + (s.defs ?? ''))}${ombre(s) || sienne}<g filter="url(#contour)">${img}${s.fx ?? ''}</g></svg>`
   })
 }
 
@@ -3715,4 +3910,4 @@ export const ACTIVITES: readonly ClawdAnim[] = [
  * Ses pinceaux, pour la grande scène (bande.ts) : son corps, son profil, ses
  * accessoires et ses effets, et de quoi les animer image par image.
  */
-export const PINCEAUX = { PAL, X0, Y0, VUE, CSS, vit, THEME, FILTRE, OMBRE, corps, profil, miroir, A, art, effets, fenetres, reutilises, recolore, deguiseEn, enPetit, caractere }
+export const PINCEAUX = { filtre, PAL, X0, Y0, VUE, CSS, vit, THEME, FILTRE, OMBRE, corps, profil, miroir, A, art, effets, fenetres, reutilises, recolore, deguiseEn, enPetit, caractere }

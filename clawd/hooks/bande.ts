@@ -27,7 +27,9 @@ import type { ClawdNumero, ElementBande } from '../types'
 import { PINCEAUX, TAILLE, TEINTES } from './sprite'
 import type { Deguisement, Teinte, Tenue } from './sprite'
 
-const { PAL, VUE, CSS, vit, THEME, FILTRE, OMBRE, corps, profil, miroir, effets, fenetres, reutilises, recolore, deguiseEn, enPetit } = PINCEAUX
+const { PAL, VUE, CSS, vit, THEME, OMBRE, corps, profil, miroir, effets, fenetres, reutilises, recolore, deguiseEn, enPetit } = PINCEAUX
+// (son filtre : celui qui laisse sa lumière en paix quand son aura l'entoure)
+const { filtre } = PINCEAUX
 /** La teinte d'un modèle d'après sa couleur (celle d'une pastille de sous-agent), si c'en est une */
 const teinteDe = (c: string | undefined): Teinte | undefined => Object.values(TEINTES).find(t => t.O.toLowerCase() === c?.toLowerCase())
 
@@ -1962,7 +1964,10 @@ const emboite = (classes: readonly string[], contenu: string) => classes.reduceR
 type AuDessin = Pick<ClawdNumero, 'nom' | 'elements' | 'largeur' | 'depart' | 'variante' | 'vise' | 'figurants' | 'minis'> & { cibles?: readonly ElementBande[]; colonnes?: number }
 
 export function svgNumero(n: AuDessin, couleur: Teinte, deguise?: Deguisement | Tenue): string {
-  return avecDeguisement(deguise, () => dessineNumero(n, couleur))
+  const svg = avecDeguisement(deguise, () => dessineNumero(n, couleur))
+  // trop lourd avec son aura (ses numéros les plus chargés, en tenue complète) : il le joue sans elle plutôt que pas du tout
+  if (svg.length > MAX_SVG && typeof deguise === 'object' && deguise.aura) return svgNumero(n, couleur, { ...deguise, aura: undefined })
+  return svg
 }
 
 function dessineNumero(n: AuDessin, couleur: Teinte): string {
@@ -2074,7 +2079,7 @@ function dessineNumero(n: AuDessin, couleur: Teinte): string {
   // (ses minis devant lui : ils sortent de leurs cases, devant la sienne)
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="${HAUTEUR}" style="--t0:0s">` +
-    recolore(`<style>${CSS}${vit(reutilises(images) + images)}${THEME}${css}</style>${FILTRE}${reutilises(images)}`, couleur) +
+    recolore(`<style>${CSS}${vit(reutilises(images) + images)}${THEME}${css}</style>${filtre()}${reutilises(images)}`, couleur) +
     `${decor}${derriere}${lui.ombre}${minis.map(x => x.ombre).join('')}${lui.corps}${minis.map(x => x.corps).join('')}${devant}</svg>`
   )
 }

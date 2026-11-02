@@ -21,6 +21,7 @@ import { HUMEUR_DEPART, choisit, decrit as decritHumeur, ecartRepos, estHumeur, 
 import type { Humeur } from './humeur'
 import { ACTIVITES, BAILLE_S, BONBON_S, CLAWD_TEXTE, DANSES, EMOJI, EN_BULLE, JEUX_CARTONS, RAPPORT_S, SORTIES, TAILLE, avecT0, bulleDedans, dureeBoulot, dureeRetour, dureeScene, estChoregraphie, etatBoulot, etatScene, minisAPart, svgBulle, svgDecor, svgMinis, svgScene, teinte, teinteConnue, tenueDe } from './sprite'
 import type { Bulle, Deguisement, EnPlace, Insigne, Mini, Sortie, Tenue } from './sprite'
+import type { Aura } from './sprite'
 import { FAITS, GRADES, gradeDe, nouveauxFaits, prochainGrade } from './grades'
 import type { Fait } from './grades'
 import { svgCarte, texteCarte } from './carte'
@@ -579,6 +580,12 @@ export function niveauDe(points: number): number {
  */
 export const insigneDe = (n: number): Insigne | undefined =>
   n >= 50 ? 'soleil' : n >= 40 ? 'laurier' : n >= 30 ? 'double' : n >= 20 ? 'etoile' : n >= 10 ? 'or' : n >= 5 ? 'argent' : n >= 3 ? 'ruban' : n >= 1 ? 'bronze' : undefined
+/**
+ * Son aura, une fois Légende (niveau 50) : un halo et des flammes de lumière,
+ * des orbes qui gravitent autour de lui ; une couronne d'orbes et des flammes
+ * plus hautes au 60, le cœur blanc au 75, l'arc-en-ciel et des braises au 100
+ */
+export const auraDe = (n: number): Aura | undefined => (n >= 100 ? 4 : n >= 75 ? 3 : n >= 60 ? 2 : n >= 50 ? 1 : undefined)
 let xp = 0
 /** Ce qu'il a gagné depuis que c'est noté : ajouté au total gardé (relu), pas écrit par-dessus */
 let xpANoter = 0
@@ -662,19 +669,25 @@ async function feteNiveau($: EngineInterface) {
   // tomber : elle ne se rejouera pas)
   await scene($, anim, dureeScene(anim) * 1000, false, 5 * 60_000)
   try {
-    $.ui.toast(grade ? `🎖 Clawd devient ${grade}, au niveau ${nv} !` : `⭐ Clawd passe au niveau ${nv} !`, { timeoutMs: 6000 })
+    // son aura qui naît (Légende) ou qui s'intensifie, dite avec le reste
+    const avant = auraDe(typeof fete === 'number' ? fete : 0)
+    const aura = auraDe(nv) !== avant ? (avant ? ' Son aura s’intensifie ✨' : ' Une aura l’entoure ✨') : ''
+    $.ui.toast((grade ? `🎖 Clawd devient ${grade}, au niveau ${nv} !` : `⭐ Clawd passe au niveau ${nv} !`) + aura, { timeoutMs: 6000 })
   } catch {
     // pas de toast ici : son étoile suffit
   }
 }
 
-/** Ce que la session lui fait porter (sa visière, sa sueur, son insigne) ; son déguisement du jour s'y ajoute */
+/** Ce que la session lui fait porter (sa visière, sa sueur, son insigne, sa flamme de série, son aura) ; son déguisement du jour s'y ajoute */
 async function tenueSession($: EngineInterface): Promise<Tenue> {
   const s = await read($, transpire)
-  const i = insigneDe(await read($, niveau))
+  // (son niveau lu une fois : son insigne et son aura disent le même)
+  const nv = await read($, niveau)
+  const i = insigneDe(nv)
   const n = await read($, serieVivante)
   const flamme = n >= 30 ? 3 : n >= 7 ? 2 : n >= 2 ? 1 : 0
-  return { visiere: (await read($, pilote)) === true, ...(s === 1 || s === 2 ? { sueur: s } : {}), ...(i ? { insigne: i } : {}), ...(flamme ? { flamme } : {}) }
+  const a = auraDe(nv)
+  return { visiere: (await read($, pilote)) === true, ...(s === 1 || s === 2 ? { sueur: s } : {}), ...(i ? { insigne: i } : {}), ...(flamme ? { flamme } : {}), ...(a ? { aura: a } : {}) }
 }
 
 // ------------------------------------------------------ ses visiteurs

@@ -219,6 +219,11 @@ puis repart, chaque fois d'une autre façon.
   portrait en grand, son grade, son expérience, ses performances, ses
   qualités en étoiles, son humeur et ses hauts faits, dans un cadre qui suit
   son grade (holographique pour une Légende). Aussi : `/clawd carte`.
+- Son aura de Légende : au niveau 50, une lumière douce l'entoure (un halo
+  qui respire, des flammes floues) et des orbes gravitent autour de lui,
+  devant son ventre et derrière son dos. Elle s'accentue avec ses niveaux :
+  une couronne d'orbes au 60, le cœur blanc au 75, l'arc-en-ciel et des
+  braises qui montent au 100.
 
 <table>
 <tr>

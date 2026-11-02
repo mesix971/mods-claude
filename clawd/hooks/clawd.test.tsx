@@ -4,6 +4,7 @@
 import { expect, mock, test } from 'claude-code/testing'
 import { ACTIVITES, BONBON_S, CLASSES_QUI_DEPLACENT, CLIGNEMENTS, DANSES, EMOJI, JEUX_CARTONS, RAPPORT_S, SORTIES, SOUFFLES, TEINTES, VIVANT_S, avecT0, classeDe, dureeScene, etatBoulot, etatScene, imagesScene, svgMinis, svgScene, tenueDe } from './sprite'
 import { autreQue, deToi, deguisementDu, insigneDe, niveauDe, seuilNiveau, sueurDe, visiteur } from './register'
+import { auraDe } from './register'
 import { COIN_VIDE, EXEMPLE, MAX_SVG, NUMEROS, departDe, prepareNumero, svgNumero } from './bande'
 import { FAITS, GRADES, gradeDe, nouveauxFaits, prochainGrade } from './grades'
 import { QUALITES, etoiles, svgCarte, texteCarte } from './carte'
@@ -2775,6 +2776,115 @@ test('🔥 sa flamme de série : sur son ventre, elle vacille et grandit (2 jour
   // de profil aussi (en marchant), et jamais sur un mini
   expect(svgScene('balade', [], 0, TEINTES.opus, undefined, undefined, { flamme: 1 })).toContain('class="flamme-a"')
   expect(svgMinis('chef', [{ fait: 'cherche' }], TEINTES.opus, 0, { flamme: 3 }) ?? '').not.toContain('flamme-a')
+})
+
+test('✨ son aura, passé Légende : elle gravite autour de lui et s’accentue avec ses niveaux ; légère, jamais sur ses minis', () => {
+  expect([0, 49, 50, 59, 60, 74, 75, 99, 100, 250].map(auraDe)).toEqual([undefined, undefined, 1, 1, 2, 2, 3, 3, 4, 4])
+  const avec = (aura: 1 | 2 | 3 | 4, anim: Parameters<typeof svgScene>[0] = 'repos') => svgScene(anim, [], 0, TEINTES.opus, undefined, undefined, { insigne: 'soleil', aura })
+  const poids: number[] = []
+  for (const aura of [1, 2, 3, 4] as const) {
+    const d = avec(aura)
+    // derrière lui et devant lui (son anneau passe devant son ventre), chaque dessin repris défini
+    expect(d).toContain(`href="#aud${aura}"`)
+    expect(d).toContain(`href="#auv${aura}"`)
+    for (const m of d.matchAll(/(?:href="#|url\(#)([^")]+)/g)) expect(d).toContain(`id="${m[1]}"`)
+    expect(d).toContain('@keyframes au-taille')
+    expect(d).toContain('@keyframes au-taille-v')
+    expect(d).not.toContain('<text')
+    expect(avec(aura)).toBe(d)
+    poids.push(d.length)
+  }
+  // une lumière lisse et translucide : pas les bords nets de ses pixels, et son trait sombre ne se pose que sur ce qui
+  // est plein (sans aura, son contour reste celui de toujours)
+  expect(avec(1)).toContain('shape-rendering="geometricPrecision"')
+  expect(avec(1)).toContain('<feFuncA type="linear" slope="1000" intercept="-999"/>')
+  expect(svgScene('repos', [], 0, TEINTES.opus, undefined, undefined, { insigne: 'soleil' })).not.toContain('feComponentTransfer')
+  for (const o of avec(4).matchAll(/(?:stop-opacity|fill-opacity)="([\d.]+)"/g)) expect(Number(o[1])).toBeLessThan(1)
+  // de plus en plus forte : halo, flammes et orbes dès le 50 ; sa couronne au 60 ; le blanc au cœur au 75 ; l'arc-en-ciel
+  // et ses braises au 100
+  expect(poids).toEqual([...poids].sort((a, b) => a - b))
+  expect(avec(1)).toContain('class="au-pulse"')
+  expect(avec(1)).toContain('class="au-fl1"')
+  expect(avec(1)).not.toContain('class="au-couronne')
+  expect(avec(2)).toContain('class="au-couronne')
+  expect(avec(2)).not.toContain('url(#aug-c)')
+  expect(avec(3)).toContain('url(#aug-c)')
+  expect(avec(3)).not.toContain('class="au-iris"')
+  expect(avec(4)).toContain('class="au-iris"')
+  expect(avec(4)).toContain('class="au-braise"')
+  // il la garde endormi (sous son bonnet de nuit) et en marchant ; jamais sur ses minis, ni sans aura
+  expect(avec(2, 'dodo')).toContain('href="#aud2"')
+  expect(avec(3, 'balade')).toContain('href="#aud3"')
+  expect(svgMinis('chef', [{ fait: 'cherche' }], TEINTES.opus, 0, { aura: 4 }) ?? '').not.toContain('#au')
+  expect(svgScene('repos', [], 0, TEINTES.opus, undefined, undefined, { insigne: 'soleil' })).not.toMatch(/#au|au-taille/)
+  expect(tenueDe({ aura: 3 })).toEqual({ aura: 3 })
+  // légère : sur toutes ses scènes, sa tenue la plus chargée et son aura au plus fort restent sous 60 Ko
+  const TOUT_AURA = { visiere: true, sueur: 2, insigne: 'soleil', flamme: 3, aura: 4, deguise: 'citrouille' } as const
+  for (const anim of Object.keys(EMOJI) as (keyof typeof EMOJI)[]) {
+    const dessin = svgScene(anim, [], 0, TEINTES.sonnet, undefined, undefined, TOUT_AURA)
+    expect(dessin.length).toBeLessThan(60 * 1024)
+    for (const m of dessin.matchAll(/(?:href="#|url\(#)([^")]+)/g)) expect(dessin).toContain(`id="${m[1]}"`)
+  }
+  // son trajet à pied avant ses plus lourdes scènes : son aura ne le lui coûte pas
+  for (const anim of ['pause', 'reveil', 'delivrance', 'boulot', 'retrouvailles'] as const) {
+    const retour = svgScene(anim, [], 0, TEINTES.sonnet, undefined, undefined, TOUT_AURA, { x: -60, decor: '', rentre: true })
+    expect(retour).toContain('class="rentre-pas"')
+    for (const m of retour.matchAll(/(?:href="#|url\(#)([^")]+)/g)) expect(retour).toContain(`id="${m[1]}"`)
+  }
+  // tout suit `--t0` : recréée, son image ne repart pas de zéro (son arc-en-ciel, son halo, ses flammes, ses étincelles)
+  const style = avec(4)
+  for (const regle of ['.au-iris{', '.au-pulse{', '.au-fl1,.au-fl2{', '.au-sc{', '.au-braise{', '.au-k1{', '.au-t7-1{'])
+    expect(style.slice(style.indexOf(regle), style.indexOf('}', style.indexOf(regle)))).toContain('var(--t0, 0s)')
+  // ses orbes réparties sur leur nombre réel, à chaque palier (4 orbes : un quart de son tour de 6 s entre chacune)
+  expect(avec(1)).toContain('.au-t4-1{animation-delay:calc(var(--t0, 0s) - 1.500s)}')
+  expect(avec(1)).not.toContain('.au-t7-')
+  expect(avec(4)).toContain('.au-c5-4{animation-delay:calc(var(--t0, 0s) - 3.200s)}')
+  // ses étincelles scintillent sur place : posées par leur groupe, pas par le x/y de leur <use> (Blink y ferait grandir
+  // l'étincelle depuis le coin de la toile)
+  expect(avec(1)).not.toMatch(/<use href="#aus" x=/)
+  expect(avec(1)).toContain('<g transform="translate(44 48)"><use href="#aus" class="au-sc"/></g>')
+  // en rentrant chez lui à pied, son aura tourne avec lui (sa scène attend son arrivée, `--tm` ; elle, non)
+  const rentre = svgScene('coucou', [], 0, TEINTES.opus, undefined, undefined, { aura: 2 }, { x: -60, decor: '', rentre: true })
+  expect(rentre).toContain('--tm:')
+  expect(rentre).not.toMatch(/\.au-[^{]*\{[^}]*--tm/)
+})
+
+test('✨ Légende : une aura l’entoure ; au 60, elle s’intensifie (dit avec son niveau) ; et elle est sur lui dans sa bande', async ($, on) => {
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  const { stockage, horloge } = moteur(on)
+  const toasts: string[] = []
+  on('ui.toast', ($, e) => {
+    toasts.push(e.text)
+    return { value: undefined }
+  })
+  on('tool.call', { tool: 'Glob' }, () => ({ result: { filenames: [] }, text: '' }) as never)
+  // juste avant le niveau 50, le 49 déjà fêté
+  stockage.set('xp', seuilNiveau(50) - 1)
+  stockage.set('niveauFete', 49)
+  await $.session.start({ cwd: '/projet', surface: 'desktop', isInteractive: true })
+  const ui = await $.ui.mount({ ...BAND(), surface: 'desktop' })
+  await $.tool.call({ tool: 'Glob', pattern: '*.ts' } as never)
+  expect(await guette(ui, horloge, 'ceremonie', 40)).toContain('ceremonie')
+  expect(toasts.filter(t => t === '🎖 Clawd devient Légende, au niveau 50 ! Une aura l’entoure ✨')).toHaveLength(1)
+  expect(String((await svg(ui as never)).source)).toContain('href="#aud1"')
+  // le niveau 60 : son étoile, et son aura plus forte
+  stockage.set('xp', seuilNiveau(60) - 1)
+  stockage.set('niveauFete', 59)
+  await horloge.advance(60_000)
+  await $.session.start({ cwd: '/projet', surface: 'desktop', isInteractive: true })
+  await $.tool.call({ tool: 'Glob', pattern: '*.ts' } as never)
+  expect(await guette(ui, horloge, 'niveau', 40)).toContain('niveau')
+  expect(toasts.filter(t => t === '⭐ Clawd passe au niveau 60 ! Son aura s’intensifie ✨')).toHaveLength(1)
+  expect(String((await svg(ui as never)).source)).toContain('href="#aud2"')
+  // un niveau sans palier nouveau : rien de plus
+  stockage.set('xp', seuilNiveau(61) - 1)
+  stockage.set('niveauFete', 60)
+  await horloge.advance(60_000)
+  await $.session.start({ cwd: '/projet', surface: 'desktop', isInteractive: true })
+  await $.tool.call({ tool: 'Glob', pattern: '*.ts' } as never)
+  expect(await guette(ui, horloge, 'niveau', 40)).toContain('niveau')
+  expect(toasts.filter(t => t.startsWith('⭐ Clawd passe au niveau 61'))).toEqual(['⭐ Clawd passe au niveau 61 !'])
+  await ui.unmount()
 })
 
 test('🔥 sa série ne recule jamais, et une session se compte à l’heure où on la voit', async ($, on) => {

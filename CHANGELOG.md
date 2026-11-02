@@ -43,6 +43,16 @@
 
 ## clawd
 
+- **0.15.0** — 2026-11-02 — Son aura de Légende.
+  - Au niveau 50, une lumière douce et translucide l'entoure : un halo qui
+    respire, des flammes floues qui ondulent, des orbes qui gravitent autour
+    de lui (devant son ventre, derrière son dos) et des étincelles. Elle le
+    suit partout : de face, de profil, en sautant, endormi, dans ses numéros
+    et sur sa carte. Jamais sur ses minis. Son trait sombre ne se pose plus
+    que sur ses pixels pleins, pour ne pas la ternir.
+  - Elle s'accentue : une couronne d'orbes et des flammes plus hautes au 60,
+    le cœur blanc au 75, l'arc-en-ciel et des braises au 100. Le toast de son
+    niveau le dit (« Une aura l'entoure ✨ », « Son aura s'intensifie ✨ »).
 - **0.14.0** — 2026-11-02 — Sa carte, et ses mots en entier.
   - ⭐ au survol (ou `/clawd carte`) : sa carte à collectionner, dans un
     panneau. On y voit son portrait vivant en grand, son grade et son modèle,

@@ -344,6 +344,16 @@ test('le poids : avec trois minis, leurs figurants et des dessins d’atelier r�
       expect(svg.length).toBeLessThan(MAX_SVG)
       // et pas un mot : lui ne parle pas
       expect(svg).not.toContain('<text')
+      // son aura au plus fort le suit dans ses numéros, en tenue complète, sans dépasser ce que l'app redessine : trop
+      // lourd avec elle, il le joue sans elle (jamais plus de numéro refusé à cause d'elle)
+      for (const tenue of [{ insigne: 'soleil', flamme: 3 }, { insigne: 'soleil', flamme: 3, visiere: true, sueur: 2, deguise: 'citrouille' }] as const) {
+        const sans = svgNumero({ nom, elements: bande, cibles: prep.cibles, largeur: LARGEUR, variante, figurants }, TEINTES.opus, tenue)
+        const fort = svgNumero({ nom, elements: bande, cibles: prep.cibles, largeur: LARGEUR, variante, figurants }, TEINTES.opus, { ...tenue, aura: 4 })
+        if (sans.length < MAX_SVG) expect(fort.length).toBeLessThan(MAX_SVG)
+        if (fort.length === sans.length) expect(fort).toBe(sans)
+        else expect(fort).toContain('href="#aud4"')
+        for (const m of fort.matchAll(/(?:href="#|url\(#)(au[^")]+)/g)) expect(fort).toContain(`id="${m[1]}"`)
+      }
     }
   }
 })
