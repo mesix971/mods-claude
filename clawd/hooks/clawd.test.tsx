@@ -7,6 +7,7 @@ import { autreQue, deToi, deguisementDu, insigneDe, niveauDe, seuilNiveau, sueur
 import { auraDe } from './register'
 import { activitesAuRepos } from './register'
 import { AU_FEU } from './sprite'
+import { svgMot } from './sprite'
 import { COIN_VIDE, EXEMPLE, MAX_SVG, NUMEROS, departDe, prepareNumero, svgNumero } from './bande'
 import { FAITS, GRADES, gradeDe, nouveauxFaits, prochainGrade } from './grades'
 import { QUALITES, etoiles, svgCarte, texteCarte } from './carte'
@@ -26,6 +27,8 @@ function moteur(
   on: On,
   sortieBash: { isError: boolean; text: string; attente?: number | ((cmd: string) => number); plante?: boolean; enFond?: boolean; interrompu?: boolean; refus?: string; selon?: (cmd: string) => { isError: boolean; text: string } | undefined } = { isError: false, text: 'ok' },
   debut?: number,
+  /** les clés que sa mémoire refuse d'écrire (une écriture qui rate) */
+  refuse?: (cle: string) => boolean,
 ) {
   const stockage = new Map<string, unknown>()
   const horloge = debut === undefined ? mock.clock(on as never) : mock.clock(on as never, { now: debut })
@@ -35,6 +38,7 @@ function moteur(
   })
   on('store.get', ($, e) => ({ value: stockage.get(e.key) }))
   on('store.set', ($, e) => {
+    if (refuse?.(e.key)) throw new Error('mémoire occupée')
     stockage.set(e.key, e.value)
     return { value: undefined }
   })
@@ -3051,6 +3055,69 @@ test('💬 son mot de la nuit se lit en entier (sa carte, ses mots) ; là où l�
   await presse(ui, 'ranger-carte')
   expect(await texteVu(ui, 'fin.')).toBeUndefined()
   expect(await ui.find({ key: 'ranger-carte' })).toBeUndefined()
+  await ui.unmount()
+})
+
+/** Son mot de la nuit posé (la version perso le lit dans son dépôt), jusqu'à ce qu'il l'efface : `lu()` le dit */
+function motPose(on: On, message = 'J’ai appris à faire griller des guimauves.') {
+  let efface = false
+  on('state.get', ($, e, next) => (!efface && e.plugin === 'clawd' && e.key === 'mot' ? { value: { value: { id: 'm1', date: '2026-11-03', message }, version: 1 } } : next(e)) as never)
+  on('state.set', ($, e, next) => {
+    if ((e as { key: string; value: unknown }).key === 'mot' && (e as { value: unknown }).value === null) efface = true
+    return next(e)
+  })
+  return { lu: () => efface }
+}
+const libelle = async (ui: unknown, cle: string) => ((await (ui as Monte).find({ key: cle })) as { props?: { label?: string } } | undefined)?.props?.label
+
+test('💬 sur le bureau, sa bulle de parole en pixel art flotte, ses trois points s’allument (un bouton sans dessin par-dessus pour la lire) ; au terminal, l’emoji', async ($, on) => {
+  moteur(on)
+  motPose(on)
+  const bureau = await $.ui.mount({ ...BAND(), surface: 'desktop' })
+  const dessins = (await (bureau as unknown as { findAll: (q: unknown) => Promise<{ props: { alt?: string; source?: string } }[]> }).findAll({ type: 'Svg' })).map(x => x.props)
+  const bulle = dessins.find(d => d.alt === 'Son mot de la nuit, à lire')
+  expect(bulle?.source).toContain('class="mot"')
+  expect(bulle?.source).toContain('@keyframes mot-flotte')
+  expect(bulle?.source).toContain('class="mot-p mot-p3"')
+  expect(bulle?.source).not.toContain('<text')
+  // le même dessin à chaque rendu : l'app n'a rien à recréer, sa scène ne redémarre pas
+  expect(svgMot()).toBe(bulle?.source)
+  // le bouton pour la lire, sans dessin à lui (l'emoji ne bougeait pas)
+  expect(await libelle(bureau, 'lire-mot')).toBe('\u2800\u2800')
+  await bureau.unmount()
+  const terminal = await $.ui.mount({ ...BAND(), surface: 'terminal' })
+  expect(await libelle(terminal, 'lire-mot')).toBe('💬')
+  await terminal.unmount()
+})
+
+test('💬 un clic efface toujours sa bulle, même quand sa mémoire refuse d’écrire (deux sessions qui y écrivent en même temps)', async ($, on) => {
+  const { stockage } = moteur(on, undefined, undefined, cle => cle === 'mot-vu')
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  const mot = motPose(on)
+  const ui = await $.ui.mount({ ...BAND(), surface: 'desktop' })
+  await presse(ui, 'lire-mot')
+  expect(mot.lu()).toBe(true)
+  expect(stockage.get('mot-vu')).toBeUndefined()
+  await ui.unmount()
+  const apres = await $.ui.mount({ ...BAND(), surface: 'desktop' })
+  expect(await apres.find({ key: 'lire-mot' })).toBeUndefined()
+  await apres.unmount()
+})
+
+test('💬 lu dans une autre session : sa bulle s’en va ici aussi, au tic suivant', async ($, on) => {
+  const { stockage, horloge } = moteur(on)
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  const mot = motPose(on)
+  await $.session.start({ cwd: '/projet', surface: 'desktop', isInteractive: true })
+  const ui = await $.ui.mount({ ...BAND(), surface: 'desktop' })
+  expect(await libelle(ui, 'lire-mot')).toBeDefined()
+  // pas lu ailleurs : elle reste
+  await horloge.advance(8000)
+  expect(mot.lu()).toBe(false)
+  // lu dans une autre session (sa mémoire le garde pour toutes) : elle s'en va ici aussi
+  stockage.set('mot-vu', 'm1')
+  await horloge.advance(4100)
+  expect(mot.lu()).toBe(true)
   await ui.unmount()
 })
 

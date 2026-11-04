@@ -43,6 +43,15 @@
 
 ## clawd
 
+- **0.16.2** — 2026-11-04 — Sa bulle 💬 (son mot de la nuit à lire).
+  - Sur le bureau, une bulle de parole en pixel art qui flotte, trois points
+    qui s'allument l'un après l'autre, au lieu d'un emoji figé ; un bouton
+    sans dessin par-dessus pour la lire. Au terminal, l'emoji reste.
+  - Un clic l'efface toujours : sa bulle s'en va d'abord, puis le mot est
+    retenu comme lu (une écriture ratée réessaie). Avant, une écriture ratée
+    la laissait à l'écran.
+  - Lue dans une session, elle s'en va aussi des autres sessions ouvertes au
+    tic suivant ; avant, elle y restait.
 - **0.16.1** — 2026-11-02 — Ses numéros sur la bande ne le font plus sauter.
   Une cible qui quitte la bande en route (un plan vidé en fin de tour) ne
   coupe plus son numéro : coupé, il passait d'un coup de la bande à son coin.

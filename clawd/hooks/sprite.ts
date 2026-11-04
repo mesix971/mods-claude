@@ -4008,6 +4008,34 @@ export function svgBulle(anim: ClawdAnim, bulle: Bulle, deja = 0): string {
   )
 }
 
+// Son mot de la nuit, pas encore lu : une bulle de parole en pixel art, en haut à droite de son coin (là où l'on clique
+// pour le lire), qui flotte doucement ; trois points s'y allument l'un après l'autre : il a quelque chose à te dire
+const PAROLE = [
+  '..GGGGGGGGGG..',
+  '.GWWWWWWWWWWG.',
+  'GWWWWWWWWWWWWG',
+  'GWWWWWWWWWWWWG',
+  'GWWWWWWWWWWWWG',
+  '.GWWWWWWWWWWG.',
+  '..GGWGGGGGGG..',
+  '..GWG.........',
+  '..G...........',
+]
+const CSS_MOT =
+  `.mot{animation:mot-flotte 2.4s ease-in-out infinite}@keyframes mot-flotte{50%{transform:translateY(-2px)}}` +
+  `.mot-p{animation:mot-point 1.5s steps(1,end) infinite;opacity:.3}.mot-p2{animation-delay:.5s}.mot-p3{animation-delay:1s}` +
+  `@keyframes mot-point{0%{opacity:1}33%,100%{opacity:.3}}`
+/**
+ * Sa bulle de parole (son mot de la nuit à lire), dans le cadre de sa scène, collée en haut à droite : posée par-dessus
+ * dans son propre dessin, elle ne fait pas redémarrer sa scène, et ne change jamais (l'app n'a rien à recréer)
+ */
+export function svgMot(): string {
+  const x = VUE.x + VUE.w - PAROLE[0]!.length * 3 - 1
+  const y = VUE.y + 1
+  const points = [0, 1, 2].map(k => `<g class="mot-p mot-p${k + 1}">${R(x + 12 + 9 * k, y + 9, 3, 3, PAL.K!)}</g>`).join('')
+  return entete() + `<style>${THEME}${CSS_MOT}</style>${FILTRE}<g filter="url(#contour)"><g class="mot">${art(PAROLE, x, y, 3)}${points}</g></g></svg>`
+}
+
 /** Chaque image d'une scène en SVG figé (planche-contact pour vérifier le dessin). */
 export function imagesScene(anim: ClawdAnim, deguise?: Deguisement | Tenue): string[] {
   return deguiseEn(sonDeguisement(anim, deguise), () => imagesFixes(anim))

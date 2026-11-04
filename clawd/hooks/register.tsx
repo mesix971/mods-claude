@@ -22,6 +22,7 @@ import type { Humeur } from './humeur'
 import { ACTIVITES, BAILLE_S, BONBON_S, CLAWD_TEXTE, DANSES, EMOJI, EN_BULLE, JEUX_CARTONS, RAPPORT_S, SORTIES, TAILLE, avecT0, bulleDedans, dureeBoulot, dureeRetour, dureeScene, estChoregraphie, etatBoulot, etatScene, minisAPart, svgBulle, svgDecor, svgMinis, svgScene, teinte, teinteConnue, tenueDe } from './sprite'
 import type { Bulle, Deguisement, EnPlace, Insigne, Mini, Sortie, Tenue } from './sprite'
 import type { Aura } from './sprite'
+import { svgMot } from './sprite'
 import { AU_FEU } from './sprite'
 import { FAITS, GRADES, gradeDe, nouveauxFaits, prochainGrade } from './grades'
 import type { Fait } from './grades'
@@ -1022,11 +1023,20 @@ export async function poseMot($: EngineInterface, m: { id: string; date: string;
 export async function motLu($: EngineInterface) {
   const m = await read($, motNonLu)
   if (!m) return null
-  await $.store.set('mot-vu', m.id)
+  // sa bulle s'en va d'abord : une mémoire qui rate (deux sessions qui y écrivent en même temps) ne la laissait plus à
+  // l'écran après ton clic
   await update($, motNonLu, () => null)
   // sa carte le garde, en entier (ses mots)
   await update($, motGarde, () => ({ date: m.date, message: m.message }))
+  // lu pour toutes ses sessions (une écriture ratée réessaie une fois)
+  await $.store.set('mot-vu', m.id).catch(() => $.store.set('mot-vu', m.id)).catch(() => {})
   return m
+}
+
+/** Son mot lu dans une autre session (sa mémoire le dit) : sa bulle s'en va ici aussi */
+async function motLuAilleurs($: EngineInterface) {
+  const m = await read($, motNonLu)
+  if (m && (await $.store.get('mot-vu').catch(() => null)) === m.id) await update($, motNonLu, () => null)
 }
 
 /** Il joue déjà un numéro */
@@ -2079,6 +2089,8 @@ export const register: Register = on => {
       void (async () => {
         const maintenant = await $.clock.now()
         tic++
+        // son mot lu dans une autre session : sa bulle s'en va ici aussi (pas de bulle, pas de lecture)
+        await motLuAilleurs($).catch(() => {})
         // un niveau atteint quand on ne le voyait pas : il le fête maintenant qu'on le voit
         if (niveauAFeter !== null && dessine) await feteNiveau($)
         if (faitsAFeter.length && dessine) await feteFaits($)
@@ -2615,9 +2627,18 @@ export const register: Register = on => {
       await motLu($)
       await montreCarte($, 'mots').catch(() => {})
     }
+    // (sur le bureau, sa bulle de parole en pixel art flotte dans son propre dessin : un bouton ne s'anime pas ; le bouton,
+    // sans dessin, est posé dessus pour la lire ; au terminal, l'emoji)
+    const SvgMot = e.surface === 'desktop' ? $.ui.resolve(e).Svg : null
+    const bureauMot = mot !== null && SvgMot !== null
+    const dessinMot = bureauMot && SvgMot && (
+      <Box key="mot-dessin" position="absolute" top={0} left={0}>
+        <SvgMot source={svgMot()} alt="Son mot de la nuit, à lire" width={TAILLE.largeur} height={TAILLE.hauteur} />
+      </Box>
+    )
     const bulleMot = mot && (
       <Box key="mot" position="absolute" top={0} right={0}>
-        <Button key="lire-mot" label="💬" plain onPress={lireMot} />
+        <Button key="lire-mot" label={bureauMot ? '\u2800\u2800' : '💬'} plain onPress={lireMot} />
       </Box>
     )
     // son niveau, au survol : sa carte (son grade, son expérience, ses performances, ses qualités, ses hauts faits) ;
@@ -2669,6 +2690,7 @@ export const register: Register = on => {
               </Box>
             )}
             {boutons}
+            {dessinMot}
             {bulleMot}
           </Box>
           {gs && !atelierPose && (
