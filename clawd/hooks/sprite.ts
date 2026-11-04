@@ -270,28 +270,29 @@ const FLAMMES_SERIE: Record<1 | 2 | 3, [string[], string[]]> = {
   2: [['..R..', '.RRR.', 'RRYRR', 'RYYYR', '.RYR.'], ['.R...', '.RR.R', 'RRYRR', 'RYYYR', '.RYR.']],
   3: [['..R...', '.RR.R.', '.RRRR.', 'RRYYRR', 'RYYYYR', 'RYWWYR', '.RYYR.'], ['...R..', '.R.RR.', '.RRRR.', 'RRYYRR', 'RYYYYR', 'RYWWYR', '.RYYR.']],
 }
-/** Une flamme douce, son pied en (0, 0) et sa pointe en `t` (de côté) : une goutte renversée, au pied arrondi */
+/** Une flamme douce, son pied en (0, 0) et sa pointe en `t` (de côté) : ronde et pleine, large d'épaules, la pointe arrondie */
 const goutteFlamme = (w: number, h: number, t: number) => {
   const f = (n: number) => +n.toFixed(1)
-  return `M${f(-w / 2)} 0C${f(-w / 2)} ${f(-h * 0.42)} ${f(t - w * 0.14)} ${f(-h * 0.62)} ${f(t)} ${f(-h)}C${f(t + w * 0.14)} ${f(-h * 0.62)} ${f(w / 2)} ${f(-h * 0.42)} ${f(w / 2)} 0Q0 ${f(h * 0.14)} ${f(-w / 2)} 0Z`
+  const c = (...v: number[]) => v.map(f).join(' ')
+  return `M${c(-w / 2, -h * 0.25)}C${c(-w / 2, -h * 0.7, t - w * 0.22, -h * 0.76, t, -h)}C${c(t + w * 0.22, -h * 0.76, w / 2, -h * 0.7, w / 2, -h * 0.25)}C${c(w / 2, -h * 0.05, w * 0.25, 0, 0, 0)}C${c(-w * 0.25, 0, -w / 2, -h * 0.05, -w / 2, -h * 0.25)}Z`
 }
-/** Une forme (`k`, il y en a deux qui alternent) de sa flamme douce de `w` sur `h`, son pied en (`cx`, `bas`) : le rouge, le jaune
- * au milieu, un cœur blanc ; flous sur leurs bords, translucides (le trait de contour ne s'y pose pas) */
+/** Une forme (`k`, il y en a deux qui alternent) de sa flamme douce de `w` sur `h`, son pied en (`cx`, `bas`) : le rouge dehors,
+ * le jaune au cœur ; flous sur leurs bords, translucides (le trait de contour ne s'y pose pas) */
 const formeFlamme = (k: 0 | 1, cx: number, bas: number, w: number, h: number) => {
-  const hh = k ? h * 0.9 : h
-  const t = k ? w * 0.16 : -w * 0.14
+  const hh = k ? h * 0.93 : h
+  const t = k ? w * 0.12 : -w * 0.1
   return (
-    `<g class="doux" shape-rendering="geometricPrecision" transform="translate(${cx} ${bas})" opacity=".93" filter="url(#fd)">` +
-    `<path d="${goutteFlamme(w, hh, t)}" fill="${PAL.R}"/>` +
-    `<path d="${goutteFlamme(w * 0.62, hh * 0.68, t * 0.6)}" fill="${PAL.Y}"/>` +
-    `<path d="${goutteFlamme(w * 0.3, hh * 0.36, t * 0.3)}" fill="${PAL.W}" fill-opacity=".9"/></g>`
+    `<g class="doux" shape-rendering="geometricPrecision" transform="translate(${cx} ${bas})" opacity=".95" filter="url(#fd)">` +
+    `<path d="${goutteFlamme(w, hh, t)}" fill="url(#fg)"/>` +
+    `<path d="${goutteFlamme(w * 0.54, hh * 0.68, t * 0.6)}" fill="url(#fi)" transform="translate(0 ${f1(-hh * 0.04)})"/></g>`
   )
 }
-/** Sa lueur dorée au pied de la flamme, diffuse */
+const f1 = (n: number) => +n.toFixed(1)
+/** Sa lueur chaude au pied de la flamme, diffuse */
 const lueurFeu = (cx: number, bas: number, w: number, h: number) =>
-  `<ellipse class="doux" cx="${cx}" cy="${+(bas - h * 0.35).toFixed(1)}" rx="${+(w * 0.95).toFixed(1)}" ry="${+(h * 0.6).toFixed(1)}" fill="${PAL.Y}" fill-opacity=".22" filter="url(#fh)"/>`
+  `<ellipse class="doux" cx="${cx}" cy="${+(bas - h * 0.3).toFixed(1)}" rx="${+(w * 0.8).toFixed(1)}" ry="${+(h * 0.5).toFixed(1)}" fill="#FF9A3C" fill-opacity=".15" filter="url(#fh)"/>`
 /** La taille de sa flamme de série : un jour, quelques jours, un mois */
-const TAILLE_FLAMME: Record<1 | 2 | 3, [number, number]> = { 1: [8, 11], 2: [12, 15], 3: [15, 20] }
+const TAILLE_FLAMME: Record<1 | 2 | 3, [number, number]> = { 1: [9, 12], 2: [12, 16], 3: [15, 21] }
 /** La flamme de son feu, centrée sur `cx`, son pied sur `bas` : ses deux formes se fondent l'une dans l'autre (`.flamme-a`, `.flamme-b`) */
 const dessinFlamme = (n: number, cx: number, bas: number) => {
   const [w, h] = TAILLE_FLAMME[(n === 3 ? 3 : n === 2 ? 2 : 1) as 1 | 2 | 3]
@@ -301,10 +302,11 @@ const dessinFlamme = (n: number, cx: number, bas: number) => {
 const bucheLisse = (x: number, y: number, l = 14) =>
   `<g class="doux" shape-rendering="geometricPrecision" opacity=".95"><rect x="${x}" y="${y}" width="${l}" height="4.4" rx="2.2" fill="${PAL.N}"/><rect x="${x + 1}" y="${y + 2.2}" width="${l - 2}" height="2.2" rx="1.1" fill="${PAL.n}"/></g>`
 const bucheCroisees = (cx: number, sol: number) =>
-  `<g class="doux" shape-rendering="geometricPrecision" opacity=".95">` +
-  `<rect x="${cx - 7.5}" y="${sol - 5.4}" width="15" height="3.8" rx="1.9" fill="${PAL.N}" transform="rotate(-9 ${cx} ${sol - 3.5})"/>` +
-  `<rect x="${cx - 7.5}" y="${sol - 5.4}" width="15" height="3.8" rx="1.9" fill="${PAL.n}" transform="rotate(9 ${cx} ${sol - 3.5})"/>` +
-  `<circle cx="${cx - 9}" cy="${sol - 2.2}" r="2.2" fill="${PAL.G}"/><circle cx="${cx + 9}" cy="${sol - 2.2}" r="2.2" fill="${PAL.G}"/></g>`
+  `<g class="doux" shape-rendering="geometricPrecision" opacity=".96">` +
+  `<rect x="${cx - 8}" y="${sol - 5.4}" width="16" height="4.8" rx="2.2" fill="${PAL.N}"/>` +
+  `<rect x="${cx - 6.5}" y="${sol - 5.2}" width="13" height="1.6" rx=".8" fill="#C48A52" fill-opacity=".75"/>` +
+  `<rect x="${cx - 2.6}" y="${sol - 3.4}" width="5.2" height="2.2" rx=".9" fill="${PAL.n}"/>` +
+  `<rect x="${cx - 12.2}" y="${sol - 2.8}" width="3.8" height="2.4" rx=".8" fill="#8A817A"/><rect x="${cx + 8.4}" y="${sol - 2.8}" width="3.8" height="2.4" rx=".8" fill="#8A817A"/></g>`
 /** Où brûle son feu : à sa droite, au sol (hors de ses bras, et dans le cadre de son portrait sur sa carte) */
 const FEU = { cx: X0 + 84, sol: Y0 + 48 }
 /**
@@ -1848,7 +1850,7 @@ const CENDRES = ['..w.g..', '.gwgwg.', 'gwgggwg']
 /** Une flambée sur son feu (la flamme de son mois, en grand : de la taille `p`), forme `k` (les deux alternent d'une image à l'autre) */
 function flambee(k: 0 | 1, p = 3): string {
   const w = 5 * p
-  const h = 6.7 * p
+  const h = 7.6 * p
   const bas = FEU.sol - 2
   return lueurFeu(FEU.cx, bas, w, h) + formeFlamme(k, FEU.cx, bas, w, h)
 }
@@ -3216,6 +3218,8 @@ const FILTRE_LUMIERE = FILTRE.replace(
 const FILTRE_DOUX = FILTRE_LUMIERE.replace(
   '</defs>',
   `<filter id="fd" x="-.3" y="-.3" width="1.6" height="1.6"><feGaussianBlur stdDeviation=".5"/></filter>` +
+    `<linearGradient id="fg" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#F5702A"/><stop offset="1" stop-color="#D8352C"/></linearGradient>` +
+    `<linearGradient id="fi" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#FFE98A"/><stop offset="1" stop-color="#FFC93C"/></linearGradient>` +
     `<filter id="fh" x="-.6" y="-.6" width="2.2" height="2.2"><feGaussianBlur stdDeviation="3"/></filter></defs>`,
 )
 /** Son filtre, le temps d'un dessin (`deguiseEn`) : celui qui laisse sa lumière en paix s'il a une aura, et celui des formes

@@ -2778,7 +2778,6 @@ test('🔥 sa série : un feu de camp à côté de lui, chez lui, qui vacille et
     expect(d).not.toContain('<text')
     expect(d.length).toBeLessThan(40 * 1024)
     // ses bûches croisées au sol à sa droite (sous ses pieds), douces, pas sur son ventre : sa tenue n'a que sa médaille
-    expect(d).toMatch(/rotate\(-9 \d+ /)
     expect(d).toContain('id="fh"')
     expect(d).toContain('href="#tno"')
     expect(d).not.toMatch(/tn[^"]*f\d/)

@@ -43,6 +43,10 @@
 
 ## clawd
 
+- **0.16.5** — 2026-11-04 — Son feu de camp, plus joli.
+  - Une flamme ronde et pleine (rouge dehors, jaune au cœur, dégradé doux),
+    posée sur un tas de bûches clair avec son creux, entre deux pierres,
+    plus lisible que la flamme effilée de la 0.16.4.
 - **0.16.4** — 2026-11-04 — Son étoile et son feu, tout en douceur.
   - Plus de bords nets : son étoile (niveau 20) n'a plus de trait sombre, ses
     branches sont arrondies et floues, une ombre brune diffuse la détache de
