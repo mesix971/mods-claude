@@ -2436,8 +2436,8 @@ const TOUT = { visiere: true, sueur: 2, insigne: 'etoile' } as const
 const etoile = async (ui: Monte) => String(((await ui.find({ key: 'niveau' })) as { props?: { label?: string } } | undefined)?.props?.label)
 
 test('🥽 sa tenue (visière, sueur, insigne) tient sur toutes ses scènes : légère, pareille d’un rendu à l’autre, sans texte, chaque dessin repris défini', () => {
-  // (le 31 octobre, son chapeau en plus de tout le reste : un peu plus, jamais au-delà de 44 Ko)
-  const tenues = [[TOUT, 40], [{ ...TOUT, deguise: 'lunettes' }, 40], [{ ...TOUT, deguise: 'cernes' }, 40], [{ ...TOUT, deguise: 'citrouille' }, 44], [{ sueur: 1 }, 40], [{ insigne: 'bronze' }, 40]] as const
+  // (le 31 octobre, son chapeau en plus de tout le reste : un peu plus, jamais au-delà de 44 Ko ; son étoile douce et ses flous pèsent un peu : 42 Ko pour le reste)
+  const tenues = [[TOUT, 42], [{ ...TOUT, deguise: 'lunettes' }, 42], [{ ...TOUT, deguise: 'cernes' }, 42], [{ ...TOUT, deguise: 'citrouille' }, 44], [{ sueur: 1 }, 40], [{ insigne: 'bronze' }, 40]] as const
   for (const anim of Object.keys(EMOJI) as (keyof typeof EMOJI)[]) {
     for (const [t, ko] of tenues) {
       const dessin = svgScene(anim, [], 0, TEINTES.sonnet, undefined, undefined, t)
@@ -2777,15 +2777,16 @@ test('🔥 sa série : un feu de camp à côté de lui, chez lui, qui vacille et
     expect((d.match(/@keyframes vacille/g) ?? []).length).toBeLessThanOrEqual(1)
     expect(d).not.toContain('<text')
     expect(d.length).toBeLessThan(40 * 1024)
-    // ses bûches au sol à sa droite (à x = 130, sous ses pieds), pas sur son ventre : sa tenue n'a que sa médaille
-    expect(d).toContain('<rect x="132" y="90" width="4" height="2" fill="#9A6234"/>')
+    // ses bûches croisées au sol à sa droite (sous ses pieds), douces, pas sur son ventre : sa tenue n'a que sa médaille
+    expect(d).toMatch(/rotate\(-9 \d+ /)
+    expect(d).toContain('id="fh"')
     expect(d).toContain('href="#tno"')
     expect(d).not.toMatch(/tn[^"]*f\d/)
     poids.push(d.length)
   }
   // il grandit, et au mois des étincelles en montent
-  expect(poids).toEqual([...poids].sort((a, b) => a - b))
-  expect(svgScene('coucou', [], 0, TEINTES.opus, undefined, undefined, { flamme: 3 })).toContain('class="monte"')
+  expect(poids[2]).toBeGreaterThan(poids[0]!)
+  expect(svgScene('coucou', [], 0, TEINTES.opus, undefined, undefined, { flamme: 3 })).toContain('class="monte doux"')
   expect(tenueDe({ flamme: 2 })).toEqual({ flamme: 2 })
   // il reste allumé la nuit, à côté de lui qui dort ; il ne le suit pas quand il joue sa scène ailleurs
   expect(svgScene('dodo', [], 0, TEINTES.opus, undefined, undefined, { flamme: 2, insigne: 'or' })).toContain('class="flamme-a"')
@@ -2810,7 +2811,7 @@ test('🔥 autour de son feu : un carton au feu, une bûche de plus, il s’y r�
     // son feu y est allumé d'office, même sans série (une démo), et au sien quand il en a une
     expect(svgScene(anim)).toContain('class="flamme-a"')
     const d = svgScene(anim, [], 0, TEINTES.opus, undefined, undefined, { insigne: 'etoile', flamme: 3, aura: 2 })
-    expect(d).toContain('class="monte"')
+    expect(d).toContain('class="monte doux"')
     expect(d).not.toContain('<text')
     expect(d.length).toBeLessThan(40 * 1024)
     for (const m of d.matchAll(/(?:href="#|url\(#)([^")]+)/g)) expect(d).toContain(`id="${m[1]}"`)

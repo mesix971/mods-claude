@@ -43,6 +43,13 @@
 
 ## clawd
 
+- **0.16.4** — 2026-11-04 — Son étoile et son feu, tout en douceur.
+  - Plus de bords nets : son étoile (niveau 20) n'a plus de trait sombre, ses
+    branches sont arrondies et floues, une ombre brune diffuse la détache de
+    son corps. Son feu de camp aussi : flammes en gouttes lisses (rouge,
+    jaune, cœur blanc) qui se fondent l'une dans l'autre au lieu de
+    clignoter, lueur dorée, bûches arrondies, pierres, étincelles rondes.
+    Ses scènes autour du feu (carton, bûche) suivent.
 - **0.16.3** — 2026-11-04 — Son étoile du torse (niveau 20), lisse.
   - Une vraie étoile à cinq branches, plus grande, au liseré foncé et au
     reflet blanc, à la place de ses petits carrés : on la voit bien, sur

@@ -222,12 +222,16 @@ const CSS_GOUTTE =
 // qui brille de temps en temps
 const MEDAILLE = (c: string, liseré: string) => ['.rr.', 'rcWr', 'rccr', '.rr.'].map(l => l.replaceAll('c', c).replaceAll('r', liseré))
 const METAUX: Record<'bronze' | 'argent' | 'or', [string, string]> = { bronze: ['Z', 'z'], argent: ['w', 'G'], or: ['Y', 'y'] }
-/** Son étoile de niveau 20, lisse (et non en pixels) pour qu'on la voie bien : cinq branches arrondies, liseré foncé qui la
- * détache de son corps, reflet blanc sur sa branche du haut */
+/** Son étoile de niveau 20, douce (et non en pixels) pour qu'on la voie bien : cinq branches arrondies et floues sur leurs
+ * bords, sans trait net, une ombre brune diffuse dessous qui la détache de son corps, un reflet blanc sur sa branche du
+ * haut (`doux` : le trait de contour ne s'y pose pas) */
 const ETOILE_LISSE = '4,-3.6 6.17,1.61 11.8,2.07 7.52,5.74 8.82,11.23 4,8.3 -0.82,11.23 0.48,5.74 -3.8,2.07 1.83,1.61'
 const etoileLisse = () =>
-  `<g shape-rendering="geometricPrecision"><polygon points="${ETOILE_LISSE}" fill="${PAL.Y}" stroke="${PAL.z}" stroke-width="1.4" stroke-linejoin="round"/>` +
-  `<polygon points="4,-1.4 5.2,1.9 3.4,2.5 2.9,1.6" fill="${PAL.W}" fill-opacity=".85"/></g>`
+  `<g class="doux" shape-rendering="geometricPrecision"><defs><polygon id="iep" points="${ETOILE_LISSE}"/></defs>` +
+  `<use href="#iep" fill="${PAL.z}" fill-opacity=".45" x=".4" y=".9" filter="url(#fh)"/>` +
+  `<g opacity=".93" filter="url(#fd)" stroke-linejoin="round"><use href="#iep" fill="${PAL.y}" stroke="${PAL.y}" stroke-width="1.6"/>` +
+  `<use href="#iep" fill="${PAL.Y}" stroke="${PAL.Y}" transform="translate(1.8 2) scale(.55)" stroke-width="2.2"/></g>` +
+  `<ellipse cx="3.6" cy="1.2" rx="1" ry="1.5" fill="${PAL.W}" fill-opacity=".75" filter="url(#fd)"/></g>`
 // Plus haut encore : un ruban rouge sur sa médaille de bronze (niveau 3), deux étoiles (30), l'étoile dans une couronne
 // de lauriers (40), puis ses lauriers rayonnent comme un soleil (50) : jamais un long palier sans rien de neuf
 const RUBAN = ['R..R', '.RR.']
@@ -266,15 +270,41 @@ const FLAMMES_SERIE: Record<1 | 2 | 3, [string[], string[]]> = {
   2: [['..R..', '.RRR.', 'RRYRR', 'RYYYR', '.RYR.'], ['.R...', '.RR.R', 'RRYRR', 'RYYYR', '.RYR.']],
   3: [['..R...', '.RR.R.', '.RRRR.', 'RRYYRR', 'RYYYYR', 'RYWWYR', '.RYYR.'], ['...R..', '.R.RR.', '.RRRR.', 'RRYYRR', 'RYYYYR', 'RYWWYR', '.RYYR.']],
 }
-/** La flamme de son feu (pixels de 2), centrée sur `cx`, son pied sur `bas` : ses deux formes alternent (`.flamme-a`, `.flamme-b`) */
-const dessinFlamme = (n: number, cx: number, bas: number) => {
-  const [a, b] = FLAMMES_SERIE[(n === 3 ? 3 : n === 2 ? 2 : 1) as 1 | 2 | 3]
-  const x = cx - a[0]!.length
-  const y = bas - a.length * 2
-  return `<g class="flamme-a">${art(a, x, y, 2)}</g><g class="flamme-b">${art(b, x, y, 2)}</g>`
+/** Une flamme douce, son pied en (0, 0) et sa pointe en `t` (de côté) : une goutte renversée, au pied arrondi */
+const goutteFlamme = (w: number, h: number, t: number) => {
+  const f = (n: number) => +n.toFixed(1)
+  return `M${f(-w / 2)} 0C${f(-w / 2)} ${f(-h * 0.42)} ${f(t - w * 0.14)} ${f(-h * 0.62)} ${f(t)} ${f(-h)}C${f(t + w * 0.14)} ${f(-h * 0.62)} ${f(w / 2)} ${f(-h * 0.42)} ${f(w / 2)} 0Q0 ${f(h * 0.14)} ${f(-w / 2)} 0Z`
 }
-// Ses bûches croisées, cerclées de deux pierres (pixels de 2)
-const BUCHES = ['.NNnnNN.', 'GnNNNNnG']
+/** Une forme (`k`, il y en a deux qui alternent) de sa flamme douce de `w` sur `h`, son pied en (`cx`, `bas`) : le rouge, le jaune
+ * au milieu, un cœur blanc ; flous sur leurs bords, translucides (le trait de contour ne s'y pose pas) */
+const formeFlamme = (k: 0 | 1, cx: number, bas: number, w: number, h: number) => {
+  const hh = k ? h * 0.9 : h
+  const t = k ? w * 0.16 : -w * 0.14
+  return (
+    `<g class="doux" shape-rendering="geometricPrecision" transform="translate(${cx} ${bas})" opacity=".93" filter="url(#fd)">` +
+    `<path d="${goutteFlamme(w, hh, t)}" fill="${PAL.R}"/>` +
+    `<path d="${goutteFlamme(w * 0.62, hh * 0.68, t * 0.6)}" fill="${PAL.Y}"/>` +
+    `<path d="${goutteFlamme(w * 0.3, hh * 0.36, t * 0.3)}" fill="${PAL.W}" fill-opacity=".9"/></g>`
+  )
+}
+/** Sa lueur dorée au pied de la flamme, diffuse */
+const lueurFeu = (cx: number, bas: number, w: number, h: number) =>
+  `<ellipse class="doux" cx="${cx}" cy="${+(bas - h * 0.35).toFixed(1)}" rx="${+(w * 0.95).toFixed(1)}" ry="${+(h * 0.6).toFixed(1)}" fill="${PAL.Y}" fill-opacity=".22" filter="url(#fh)"/>`
+/** La taille de sa flamme de série : un jour, quelques jours, un mois */
+const TAILLE_FLAMME: Record<1 | 2 | 3, [number, number]> = { 1: [8, 11], 2: [12, 15], 3: [15, 20] }
+/** La flamme de son feu, centrée sur `cx`, son pied sur `bas` : ses deux formes se fondent l'une dans l'autre (`.flamme-a`, `.flamme-b`) */
+const dessinFlamme = (n: number, cx: number, bas: number) => {
+  const [w, h] = TAILLE_FLAMME[(n === 3 ? 3 : n === 2 ? 2 : 1) as 1 | 2 | 3]
+  return lueurFeu(cx, bas, w, h) + `<g class="flamme-a">${formeFlamme(0, cx, bas, w, h)}</g><g class="flamme-b">${formeFlamme(1, cx, bas, w, h)}</g>`
+}
+/** Ses bûches croisées et leurs deux pierres, douces (la bûche qu'il porte : `bucheLisse`) */
+const bucheLisse = (x: number, y: number, l = 14) =>
+  `<g class="doux" shape-rendering="geometricPrecision" opacity=".95"><rect x="${x}" y="${y}" width="${l}" height="4.4" rx="2.2" fill="${PAL.N}"/><rect x="${x + 1}" y="${y + 2.2}" width="${l - 2}" height="2.2" rx="1.1" fill="${PAL.n}"/></g>`
+const bucheCroisees = (cx: number, sol: number) =>
+  `<g class="doux" shape-rendering="geometricPrecision" opacity=".95">` +
+  `<rect x="${cx - 7.5}" y="${sol - 5.4}" width="15" height="3.8" rx="1.9" fill="${PAL.N}" transform="rotate(-9 ${cx} ${sol - 3.5})"/>` +
+  `<rect x="${cx - 7.5}" y="${sol - 5.4}" width="15" height="3.8" rx="1.9" fill="${PAL.n}" transform="rotate(9 ${cx} ${sol - 3.5})"/>` +
+  `<circle cx="${cx - 9}" cy="${sol - 2.2}" r="2.2" fill="${PAL.G}"/><circle cx="${cx + 9}" cy="${sol - 2.2}" r="2.2" fill="${PAL.G}"/></g>`
 /** Où brûle son feu : à sa droite, au sol (hors de ses bras, et dans le cadre de son portrait sur sa carte) */
 const FEU = { cx: X0 + 84, sol: Y0 + 48 }
 /**
@@ -289,11 +319,11 @@ function feuDeCamp(dOffice = false): string {
   // (au mois, trois étincelles en montent, l'une après l'autre)
   const etincelles =
     n === 3
-      ? [[-4, -18, 0], [3, -22, 0.7], [0, -26, 1.3]].map(([dx, dy, d]) => `<g class="monte" style="animation-delay:-${d}s">${R(cx + dx!, sol + dy!, 2, 2, PAL.Y!)}</g>`).join('')
+      ? [[-4, -18, 0], [3, -22, 0.7], [0, -26, 1.3]].map(([dx, dy, d]) => `<g class="monte doux" style="animation-delay:-${d}s"><circle cx="${cx + dx! + 1}" cy="${sol + dy! + 1}" r="1.3" fill="${PAL.Y}" fill-opacity=".9"/></g>`).join('')
       : ''
-  return dessinFlamme(n, cx, sol - 2) + art(BUCHES, cx - 8, sol - 4, 2) + etincelles
+  return dessinFlamme(n, cx, sol - 2) + bucheCroisees(cx, sol) + etincelles
 }
-const CSS_FLAMME = `.flamme-a{animation:flamme-vacille .5s steps(1,end) infinite}.flamme-b{animation:flamme-vacille .5s steps(1,end) infinite;animation-delay:-.25s}@keyframes flamme-vacille{0%{opacity:1}50%,100%{opacity:0}}`
+const CSS_FLAMME = `.flamme-a{animation:flamme-vacille .5s ease-in-out infinite}.flamme-b{animation:flamme-vacille .5s ease-in-out infinite;animation-delay:-.25s}@keyframes flamme-vacille{0%,10%{opacity:1}40%,60%{opacity:0}90%,100%{opacity:1}}`
 
 // Son aura, passé Légende (niveau 50) : une lumière douce et translucide, à l'opposé de ses pixels. Un halo qui respire
 // derrière lui, des flammes de lumière qui ondulent, des orbes qui gravitent autour de lui sur un anneau qui passe devant
@@ -1815,14 +1845,15 @@ const roussi = (lignes: readonly string[], degre: 1 | 2) =>
   lignes.map(l => (degre === 1 ? l.replace(/[HSC]/g, 'N').replace(/[cD]/g, 'n') : l.replace(/[HSC]/g, 'g').replace(/[cD]/g, 'K')))
 // ce qu'il reste du carton ; la bûche qu'il remet (pixels de 2)
 const CENDRES = ['..w.g..', '.gwgwg.', 'gwgggwg']
-const BUCHE = ['nNNNNNn', 'NNnNNnN']
-/** Une flambée sur son feu (la flamme de son mois, en grand : pixels de `p`), forme `k` (les deux alternent d'une image à l'autre) */
+/** Une flambée sur son feu (la flamme de son mois, en grand : de la taille `p`), forme `k` (les deux alternent d'une image à l'autre) */
 function flambee(k: 0 | 1, p = 3): string {
-  const l = FLAMMES_SERIE[3][k]
-  return art(l, FEU.cx - (l[0]!.length * p) / 2, FEU.sol - 2 - l.length * p, p)
+  const w = 5 * p
+  const h = 6.7 * p
+  const bas = FEU.sol - 2
+  return lueurFeu(FEU.cx, bas, w, h) + formeFlamme(k, FEU.cx, bas, w, h)
 }
 /** Une étincelle qui saute du feu (repère de son corps) */
-const etincelleFeu = (dx: number, dy: number) => R(X0 + dx, Y0 + dy, 2, 2, PAL.Y!)
+const etincelleFeu = (dx: number, dy: number) => `<circle class="doux" cx="${X0 + dx + 1}" cy="${Y0 + dy + 1}" r="1.3" fill="${PAL.Y}" fill-opacity=".9"/>`
 
 const SCENES: Record<ClawdAnim, () => Scene> = {
   // ------------------------------------------------------------- repos
@@ -2195,14 +2226,14 @@ const SCENES: Record<ClawdAnim, () => Scene> = {
   // Une bûche de plus : il la brandit au-dessus de sa tête, la lance dans le feu, qui repart en crépitant (des
   // étincelles sautent), et s'époussette les pattes, fier de son feu
   buche: () => {
-    const posee = A(BUCHE, 77, 40, 2)
+    const posee = bucheLisse(X0 + 77, Y0 + 40)
     return {
       duree: 6,
       images: [
-        corps({ g: 'ciel', d: 'ciel', yeux: 'haut' }) + A(BUCHE, 29, -16, 2),
-        corps({ g: 'ciel', d: 'ciel', yeux: 'droite' }) + A(BUCHE, 29, -16, 2),
-        corps({ d: 'tendu', yeux: 'droite' }) + A(BUCHE, 66, 6, 2),
-        corps({ d: 'tendu', yeux: 'droite', bouche: 'o' }) + A(BUCHE, 77, 26, 2),
+        corps({ g: 'ciel', d: 'ciel', yeux: 'haut' }) + bucheLisse(X0 + 29, Y0 + -16),
+        corps({ g: 'ciel', d: 'ciel', yeux: 'droite' }) + bucheLisse(X0 + 29, Y0 + -16),
+        corps({ d: 'tendu', yeux: 'droite' }) + bucheLisse(X0 + 66, Y0 + 6),
+        corps({ d: 'tendu', yeux: 'droite', bouche: 'o' }) + bucheLisse(X0 + 77, Y0 + 26),
         corps({ yeux: 'droite' }) + posee + flambee(0, 2) + etincelleFeu(78, 22) + etincelleFeu(90, 18),
         corps({ g: 'haut', d: 'haut', yeux: 'heureux' }) + posee + flambee(1, 2) + etincelleFeu(84, 14) + etincelleFeu(76, 10),
         corps({ g: 'devant', d: 'devant', yeux: 'heureux' }) + posee + flambee(0, 2),
@@ -3181,8 +3212,15 @@ const FILTRE_LUMIERE = FILTRE.replace(
   '<feMorphology in="SourceAlpha"',
   '<feComponentTransfer in="SourceAlpha" result="plein"><feFuncA type="linear" slope="1000" intercept="-999"/></feComponentTransfer><feMorphology in="plein"',
 )
-/** Son filtre, le temps d'un dessin (`deguiseEn`) : celui qui laisse sa lumière en paix s'il a une aura */
-const filtre = () => (aura ? FILTRE_LUMIERE : FILTRE)
+/** Le même, avec de quoi flouter ses formes douces (son étoile, son feu) : un léger flou sur leurs bords, un plus large pour leur lueur */
+const FILTRE_DOUX = FILTRE_LUMIERE.replace(
+  '</defs>',
+  `<filter id="fd" x="-.3" y="-.3" width="1.6" height="1.6"><feGaussianBlur stdDeviation=".5"/></filter>` +
+    `<filter id="fh" x="-.6" y="-.6" width="2.2" height="2.2"><feGaussianBlur stdDeviation="3"/></filter></defs>`,
+)
+/** Son filtre, le temps d'un dessin (`deguiseEn`) : celui qui laisse sa lumière en paix s'il a une aura, et celui des formes
+ * douces si le dessin (`contenu`) en porte (`class="doux"`) */
+const filtre = (contenu = '') => (contenu.includes('class="doux"') ? FILTRE_DOUX : aura ? FILTRE_LUMIERE : FILTRE)
 
 const OMBRE = `<rect class="ombre" x="${X0 + 8}" y="${Y0 + 48}" width="56" height="2"/>`
 
@@ -3762,7 +3800,7 @@ function dessineScene(anim: ClawdAnim, copains: readonly Mini[], couleur: Teinte
     const feu = feuDeCamp(AU_FEU.includes(anim))
     return recolore(
       entete() +
-        `<style>${CSS}${vit(reutilises(c.svg) + c.svg + feu)}${THEME}${bulle ? CSS_BULLE : ''}${c.css}</style>${filtre()}${reutilises(c.svg)}${c.ombre}` +
+        `<style>${CSS}${vit(reutilises(c.svg) + c.svg + feu)}${THEME}${bulle ? CSS_BULLE : ''}${c.css}</style>${filtre(reutilises(c.svg) + c.svg + feu)}${reutilises(c.svg)}${c.ombre}` +
         `<g filter="url(#contour)">${feu}${c.svg}${s.fx ?? ''}</g></svg>`,
       couleur,
     )
@@ -3812,7 +3850,7 @@ function dessineScene(anim: ClawdAnim, copains: readonly Mini[], couleur: Teinte
   const feu = feuDeCamp(AU_FEU.includes(anim))
   return (
     entete() +
-    `<style>${css}${minis.css}${vit(reutilises(minis.svg + images + defs + decor) + minis.svg + images + defs + decor + feu + (s.fx ?? ''))}</style>${filtre()}${defs}${reutilises(minis.svg + images + defs + decor)}${ici(ombres)}` +
+    `<style>${css}${minis.css}${vit(reutilises(minis.svg + images + defs + decor) + minis.svg + images + defs + decor + feu + (s.fx ?? ''))}</style>${filtre(reutilises(minis.svg + images + defs + decor) + minis.svg + images + defs + decor + feu)}${defs}${reutilises(minis.svg + images + defs + decor)}${ici(ombres)}` +
     `<g filter="url(#contour)">${feu}${decor}${ici(`${s.minis ? `<g class="${s.minis}">${minis.svg}</g>` : minis.svg}<g class="${s.cls ?? ''}" style="animation-delay:${delai()}">${recolore(images, peinture)}</g>${recolore(s.fx ?? '', peinture)}`)}</g></svg>`
   )
 }
@@ -4051,7 +4089,7 @@ function imagesFixes(anim: ClawdAnim): string[] {
   return s.images.map(i => {
     const [sienne, img] = sauts(s) ? separeOmbre(i) : ['', i]
     // (son aura, posée par son style : ses orbes sur leur anneau)
-    return entete() + `<style>${THEME}${cssAura(reutilises(img) + img)}</style>${filtre()}${s.defs ?? ''}${reutilises(img + (s.defs ?? ''))}${ombre(s) || sienne}<g filter="url(#contour)">${img}${s.fx ?? ''}</g></svg>`
+    return entete() + `<style>${THEME}${cssAura(reutilises(img) + img)}</style>${filtre(reutilises(img + (s.defs ?? '')) + img + (s.defs ?? ''))}${s.defs ?? ''}${reutilises(img + (s.defs ?? ''))}${ombre(s) || sienne}<g filter="url(#contour)">${img}${s.fx ?? ''}</g></svg>`
   })
 }
 

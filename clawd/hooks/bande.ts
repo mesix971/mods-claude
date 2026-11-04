@@ -2079,7 +2079,7 @@ function dessineNumero(n: AuDessin, couleur: Teinte): string {
   // (ses minis devant lui : ils sortent de leurs cases, devant la sienne)
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="${HAUTEUR}" style="--t0:0s">` +
-    recolore(`<style>${CSS}${vit(reutilises(images) + images)}${THEME}${css}</style>${filtre()}${reutilises(images)}`, couleur) +
+    recolore(`<style>${CSS}${vit(reutilises(images) + images)}${THEME}${css}</style>${filtre(reutilises(images) + images)}${reutilises(images)}`, couleur) +
     `${decor}${derriere}${lui.ombre}${minis.map(x => x.ombre).join('')}${lui.corps}${minis.map(x => x.corps).join('')}${devant}</svg>`
   )
 }
