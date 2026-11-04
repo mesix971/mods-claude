@@ -222,7 +222,12 @@ const CSS_GOUTTE =
 // qui brille de temps en temps
 const MEDAILLE = (c: string, liseré: string) => ['.rr.', 'rcWr', 'rccr', '.rr.'].map(l => l.replaceAll('c', c).replaceAll('r', liseré))
 const METAUX: Record<'bronze' | 'argent' | 'or', [string, string]> = { bronze: ['Z', 'z'], argent: ['w', 'G'], or: ['Y', 'y'] }
-const ETOILE_INSIGNE = ['..Y..', '.YYY.', 'YYWYY', '.YYY.', '.Y.Y.']
+/** Son étoile de niveau 20, lisse (et non en pixels) pour qu'on la voie bien : cinq branches arrondies, liseré foncé qui la
+ * détache de son corps, reflet blanc sur sa branche du haut */
+const ETOILE_LISSE = '4,-3.6 6.17,1.61 11.8,2.07 7.52,5.74 8.82,11.23 4,8.3 -0.82,11.23 0.48,5.74 -3.8,2.07 1.83,1.61'
+const etoileLisse = () =>
+  `<g shape-rendering="geometricPrecision"><polygon points="${ETOILE_LISSE}" fill="${PAL.Y}" stroke="${PAL.z}" stroke-width="1.4" stroke-linejoin="round"/>` +
+  `<polygon points="4,-1.4 5.2,1.9 3.4,2.5 2.9,1.6" fill="${PAL.W}" fill-opacity=".85"/></g>`
 // Plus haut encore : un ruban rouge sur sa médaille de bronze (niveau 3), deux étoiles (30), l'étoile dans une couronne
 // de lauriers (40), puis ses lauriers rayonnent comme un soleil (50) : jamais un long palier sans rien de neuf
 const RUBAN = ['R..R', '.RR.']
@@ -235,7 +240,7 @@ function dessinInsigne(i: Insigne): string {
   const scintille = (x: number, y: number) => `<g class="brille">${R(x, y, 2, 2, PAL.W!)}</g>`
   switch (i) {
     case 'etoile':
-      return artGroupe(ETOILE_INSIGNE, -1, -1, 2, 'Y') + scintille(7, -3)
+      return etoileLisse() + scintille(7, -5)
     case 'ruban':
       return artGroupe(RUBAN, 0, -4, 2, 'R') + artGroupe(MEDAILLE(...METAUX.bronze), 0, 0, 2, 'z')
     case 'double':
@@ -2267,7 +2272,7 @@ const SCENES: Record<ClawdAnim, () => Scene> = {
   // Un grade (Compagnon, Artisan, Maître…) : sa cérémonie. Les confettis tombent, une grande médaille descend du ciel jusqu'à
   // son cou, il la regarde, salue bien bas, et lève les bras ; plus solennelle que l'étoile d'un niveau ordinaire
   ceremonie: () => {
-    const medaille = (dy: number) => artGroupe(RUBAN, X0 + 30, Y0 + dy - 6, 3, 'R') + artGroupe(ETOILE_INSIGNE, X0 + 29, Y0 + dy, 3, 'Y')
+    const medaille = (dy: number) => artGroupe(RUBAN, X0 + 30, Y0 + dy - 6, 3, 'R') + `<g transform="translate(${X0 + 29} ${Y0 + dy + 1}) scale(1.9)">${etoileLisse()}</g>`
     return {
       duree: 5.6,
       fx: effets.confettis(),

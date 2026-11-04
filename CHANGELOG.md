@@ -43,6 +43,10 @@
 
 ## clawd
 
+- **0.16.3** — 2026-11-04 — Son étoile du torse (niveau 20), lisse.
+  - Une vraie étoile à cinq branches, plus grande, au liseré foncé et au
+    reflet blanc, à la place de ses petits carrés : on la voit bien, sur
+    toutes ses couleurs. Elle sert aussi à la médaille de sa cérémonie.
 - **0.16.2** — 2026-11-04 — Sa bulle 💬 (son mot de la nuit à lire).
   - Sur le bureau, une bulle de parole en pixel art qui flotte, trois points
     qui s'allument l'un après l'autre, au lieu d'un emoji figé ; un bouton
