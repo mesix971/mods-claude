@@ -2801,6 +2801,20 @@ test('🔥 sa série : un feu de camp à côté de lui, chez lui, qui vacille et
   expect(svgScene('coucou', [], 0, TEINTES.opus, undefined, undefined, { insigne: 'or' })).not.toContain('flamme-a')
 })
 
+test('🔥 son déménagement quand son feu brûle : lui et ses cartons passent derrière le feu, le carton resté juste derrière roussit petit à petit', () => {
+  const d = svgScene('boulot', [], 0, TEINTES.opus, undefined, undefined, { flamme: 2 })
+  // son feu dessiné après la scène : devant elle
+  expect(d.lastIndexOf('class="flamme-a"')).toBeGreaterThan(d.lastIndexOf('class="ch-boulot"'))
+  // trois degrés de brûlure, chacun à son tour, puis le carton brûlé part avec la pile
+  for (const k of [1, 2, 3]) expect(d).toContain(`id="bru${k}"`)
+  expect((d.match(/href="#bru3"/g) ?? []).length).toBeGreaterThan(1)
+  // (son déménagement est sa plus longue chorégraphie : avec son feu et ses brûlures, comme sa tenue complète, 42 Ko)
+  expect(d.length).toBeLessThan(42 * 1024)
+  for (const m of d.matchAll(/(?:href="#|url\(#)([^")]+)/g)) expect(d).toContain(`id="${m[1]}"`)
+  // sans feu, rien ne brûle
+  expect(svgScene('boulot')).not.toContain('bru')
+})
+
 test('🔥 autour de son feu : un carton au feu, une bûche de plus, il s’y réchauffe, il y grille une guimauve ; tirées seulement quand son feu brûle', () => {
   // au repos, ces scènes ne se tirent que quand son feu brûle (sa série)
   expect(activitesAuRepos(false)).toEqual(ACTIVITES)

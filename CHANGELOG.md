@@ -43,6 +43,11 @@
 
 ## clawd
 
+- **0.16.6** — 2026-11-08 — Son déménagement ne passe plus dans son feu.
+  - Son feu est dessiné devant ses chorégraphies : lui et ses cartons passent
+    derrière, jamais dedans. Le carton posé juste derrière le feu roussit
+    petit à petit (une tache brune qui s'étend, un cœur noirci, un filet de
+    fumée), et il part ainsi avec la pile qu'il pousse.
 - **0.16.5** — 2026-11-04 — Son feu de camp, plus joli.
   - Une flamme ronde et pleine (rouge dehors, jaune au cœur, dégradé doux),
     posée sur un tas de bûches clair avec son creux, entre deux pierres,

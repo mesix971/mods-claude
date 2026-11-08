@@ -1144,7 +1144,29 @@ const VIDE = 52
  * scènes le laissent : il s'y met et s'en va sans sauter d'un bout à l'autre,
  * et jamais il ne rapporte ce qu'il vient de déménager.
  */
-function etapesBoulot(): Etape[] {
+/**
+ * La brûlure d'un carton resté derrière son feu (son bord gauche en `dx`, repère de son corps), qui s'étend petit à petit
+ * (`degre` 1 à 3) : une tache brune diffuse là où les flammes le lèchent, plus large et plus sombre, puis un cœur noirci et un
+ * filet de fumée. Douce (`doux`) comme son feu
+ */
+const brulure = (dx: number, degre: number) => (degre ? `<use href="#bru${degre}" x="${X0 + dx}" y="${Y0}"/>` : '')
+/** Le dessin d'une brûlure (`bru1` à `bru3`), repris : son coin en haut à gauche du carton, au niveau de sa tête */
+function brulureDef(degre: number): string {
+  const [rx, ry, op] = degre === 1 ? [4, 6, 0.35] : degre === 2 ? [6, 9, 0.55] : [8, 11, 0.7]
+  const flou = 'filter="url(#fd)"'
+  return (
+    `<g id="bru${degre}" class="doux" shape-rendering="geometricPrecision"><ellipse cx="6" cy="36" rx="${rx}" ry="${ry}" fill="#3A2414" fill-opacity="${op}" ${flou}/>` +
+    (degre === 3
+      ? `<ellipse cx="4" cy="38" rx="3" ry="5" fill="${PAL.n}" fill-opacity=".6" ${flou}/><circle cx="8" cy="12" r="2.4" fill="${PAL.G}" fill-opacity=".35" ${flou}/><circle cx="12" cy="5" r="3" fill="${PAL.G}" fill-opacity=".22" ${flou}/>`
+      : '') +
+    `</g>`
+  )
+}
+/** Quand le carton posé juste derrière son feu (`ici2`) en est à quel degré de brûlure, après `t` secondes là */
+const degreBrulure = (t: number) => (t >= 10 ? 3 : t >= 6 ? 2 : t >= 2.5 ? 1 : 0)
+
+/** `brule` : le degré de brûlure du carton de droite de sa pile quand il la pousse (son feu brûle, voir `brulure`) */
+function etapesBoulot(brule = 0): Etape[] {
   const f = corps
   // un demi-tour : une image toutes les 0,1 s
   const demiTour = (de: Orientation, vers: Orientation, avecCarton: boolean): Etape => {
@@ -1205,7 +1227,7 @@ function etapesBoulot(): Etape[] {
   ]
   const aller: Etape[] = [demiTour('f', 'g', false), { duree: (xRepos - xLabas) / VIDE, images: [deProfil('g', 'vite')], de: xRepos, a: xLabas }]
   // la pile de chez lui, dessinée par rapport à lui (`rel` : le bord gauche du carton du sol le plus proche)
-  const pile = (rel: number) => ombreSol(rel, 34) + ombreSol(rel + 34, 34) + carton(rel, 18) + carton(rel + 34, 18) + carton(rel + 17, -12)
+  const pile = (rel: number) => ombreSol(rel, 34) + ombreSol(rel + 34, 34) + carton(rel, 18) + carton(rel + 34, 18) + brulure(rel + 34, brule) + carton(rel + 17, -12)
   const pousse = (rel: number) => deProfil('d') + pile(rel) + pince('d', 2, 24)
   // la livraison : il recule contre la pile, la pousse, lui donne un dernier élan, et elle sort du cadre à droite
   const xContre = PLACES.ici1.dx - DEVANT.d - 8
@@ -1906,9 +1928,14 @@ const SCENES: Record<ClawdAnim, () => Scene> = {
   // Au travail : son déménagement (voir `etapesBoulot`), en boucle ; chaque place
   // n'est dessinée que quand un carton y repose
   boulot: () => {
-    const etapes = etapesBoulot()
-    const vu = occupation(etapes)
-    return choreo(etapes, { decor: (Object.keys(PLACES) as Place[]).map(p => ({ svg: posePlace(p), visible: vu[p] })) })
+    const vu = occupation(etapesBoulot())
+    // son feu brûle : le carton posé juste derrière (`ici2`) roussit petit à petit, et il le pousse ainsi avec la pile
+    const [deb, fin] = flamme ? (vu.ici2[0] ?? [0, 0]) : [0, 0]
+    const etapes = etapesBoulot(degreBrulure(fin - deb))
+    const brulures = ([[2.5, 6, 1], [6, 10, 2], [10, Infinity, 3]] as const)
+      .filter(() => flamme)
+      .map(([a, b, d]) => ({ svg: brulure(PLACES.ici2.dx, d), visible: [[deb + a, Math.min(fin, deb + b)]] as [number, number][] }))
+    return choreo(etapes, { decor: [...(Object.keys(PLACES) as Place[]).map(p => ({ svg: posePlace(p), visible: vu[p] })), ...brulures] })
   },
   coucou: () => ({
     duree: 1.6,
@@ -3266,7 +3293,7 @@ const reutilises = (contenu: string, deja = '') => {
   const repris = (id: string) => !deja.includes(`id="${id}"`) && (contenu.includes(`href="#${id}"`) || defs.some(d => d.includes(`href="#${id}"`)))
   // dans l'ordre : son profil peut lui-même reprendre son chapeau, et ce que sa tenue lui met (sa visière, sa sueur,
   // son insigne), d'après le nom de chaque variante reprise (`idTenue`)
-  const avant = { carton: () => CARTON_DEF, 'carton-ouvert': () => CARTON_OUVERT_DEF, profil: profilDef, leve: leveDef, citrouille: () => CITROUILLE_DEF, lunettes: () => LUNETTES_DEF, cernes: () => CERNES_DEF }
+  const avant = { carton: () => CARTON_DEF, 'carton-ouvert': () => CARTON_OUVERT_DEF, bru1: () => brulureDef(1), bru2: () => brulureDef(2), bru3: () => brulureDef(3), profil: profilDef, leve: leveDef, citrouille: () => CITROUILLE_DEF, lunettes: () => LUNETTES_DEF, cernes: () => CERNES_DEF }
   for (const [id, def] of Object.entries(avant)) if (repris(id)) defs.push(def())
   const tenues = new Set([contenu, ...defs].flatMap(t => [...t.matchAll(ID_TENUE)].map(m => m[1]!)))
   for (const id of tenues) if (!deja.includes(`id="${id}"`)) defs.push(tenueDef(id))
@@ -3805,7 +3832,8 @@ function dessineScene(anim: ClawdAnim, copains: readonly Mini[], couleur: Teinte
     return recolore(
       entete() +
         `<style>${CSS}${vit(reutilises(c.svg) + c.svg + feu)}${THEME}${bulle ? CSS_BULLE : ''}${c.css}</style>${filtre(reutilises(c.svg) + c.svg + feu)}${reutilises(c.svg)}${c.ombre}` +
-        `<g filter="url(#contour)">${feu}${c.svg}${s.fx ?? ''}</g></svg>`,
+        // (son feu devant : lui et ses cartons passent derrière, jamais dedans)
+        `<g filter="url(#contour)">${c.svg}${s.fx ?? ''}${feu}</g></svg>`,
       couleur,
     )
   }
