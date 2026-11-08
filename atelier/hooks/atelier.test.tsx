@@ -40,6 +40,19 @@ const CWD = 'C:/proj'
 // 01/10/2026 01:52:28 heure de Paris (CEST, UTC+2)
 const APK_MTIME = Date.UTC(2026, 8, 30, 23, 52, 28)
 
+/**
+ * Une heure telle que le bandeau l'écrit, dans le fuseau de la machine (« 01:52 », « jeu. 01:52 ») : les
+ * commentaires donnent l'heure de Paris, mais les tests tournent aussi ailleurs (le contrôle du matin, en UTC)
+ */
+const JOURS = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.']
+const hh = (ms: number) => {
+  const d = new Date(ms)
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+const jourHh = (ms: number) => `${JOURS[new Date(ms).getDay()]} ${hh(ms)}`
+/** Un texte attendu, en regex (ses points échappés) */
+const texte = (t: string) => new RegExp(t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+
 const GRADLE = `
 android {
     // des globs dans des chaînes : elles n'ouvrent pas de commentaire
@@ -67,6 +80,13 @@ const DIRS: Record<string, { name: string; kind: 'file' | 'dir'; mtimeMs: number
   [`${CWD}/app/build/outputs/apk/debug`]: [{ name: 'MonApp-5.7.0-debug.apk', kind: 'file', mtimeMs: APK_MTIME }],
   [`${CWD}/app/build/outputs/apk/release`]: [{ name: 'MonApp-5.7.0.apk', kind: 'file', mtimeMs: APK_MTIME - 13_000_000 }],
 }
+
+/**
+ * Un chemin tel que le moteur le passe aux events `fs.*`, ramené à la forme des tables : à la Windows
+ * (`C:\proj\app\…`) sous Windows ; ailleurs, un `C:/…` n'est pas absolu et le moteur le colle au dossier
+ * courant (`/home/x/C:/proj/…`) : on repart du lecteur
+ */
+const chemin = (p: string) => p.replace(/\\/g, '/').replace(/^.*?\/(?=[A-Za-z]:\/)/, '')
 
 const ok = (stdout: string) => ({ exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false })
 
@@ -111,7 +131,7 @@ test('bandeau : APK plus récent que le tel, git en avance, quota 5 h', async ($
   })
   on('session.cwd', () => ({ value: CWD }))
   // le moteur passe les chemins à la Windows (C:\proj\app\...)
-  const norm = (p: string) => p.replace(/\\/g, '/')
+  const norm = chemin
   on('fs.exists', ($, e) => ({ value: norm(e.path) in FILES || norm(e.path) in DIRS || norm(e.path) === ADB }))
   on('fs.read', ($, e) => {
     const t = FILES[norm(e.path)]
@@ -151,9 +171,10 @@ test('bandeau : APK plus récent que le tel, git en avance, quota 5 h', async ($
     expect(await ui.find({ key: 'install' })).toBeDefined()
     expect(await ui.find({ key: 'commit' })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /📱 5\.7\.0 \(30\)/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /APK 5\.7\.0-debug jeu\. 01:52/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: texte(`APK 5.7.0-debug ${jourHh(APK_MTIME)}`) })).toBeDefined()
     // installé le 30/09, vu le 03/10 : le jour avec l'heure (sinon on le lirait comme aujourd'hui)
-    expect(await ui.find({ type: 'Text', text: /tel 5\.7\.0-debug mer\. 22:11 ⚠ pas à jour/ })).toBeDefined()
+    // installé à 22:11:49 à l'heure du tel (UTC+2, d'après sa paire `shell date`)
+    expect(await ui.find({ type: 'Text', text: texte(`tel 5.7.0-debug ${jourHh(Date.UTC(2026, 8, 30, 20, 11, 49))} ⚠ pas à jour`) })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /2 commits non poussés/ })).toBeDefined()
     // ↻ et Masquer au bout de la ligne git, courte : la ligne des quotas ne passe plus à la ligne
     expect(JSON.stringify((await ui.find({ key: 'ligne-git' }))?.children)).toContain('Masquer')
@@ -161,8 +182,8 @@ test('bandeau : APK plus récent que le tel, git en avance, quota 5 h', async ($
     // quotas en jauges : dessin sur desktop (son texte alternatif dit tout), blocs ▰▱ en terminal
     if (surface === 'desktop') {
       const alt = String((await ui.find({ type: 'Svg' }))?.props?.alt ?? '')
-      expect(alt).toContain('5 h 82 % → 23:10 (attention)')
-      expect(alt).toContain('7 j 81 % → ven. 07:30 (attention)')
+      expect(alt).toContain(`5 h 82 % → ${hh(Date.UTC(2026, 9, 3, 21, 10))} (attention)`)
+      expect(alt).toContain(`7 j 81 % → ${jourHh(Date.UTC(2026, 9, 9, 5, 30))} (attention)`)
       expect(alt).toContain('contexte 45 %')
       // interactif : le survol d'une jauge dit sa projection (4 h sur 5 écoulées pour 82 % : la limite tombe avant le reset)
       const jaugesSvg = await ui.find({ type: 'Svg' })
@@ -190,7 +211,7 @@ test('bandeau : APK plus récent que le tel, git en avance, quota 5 h', async ($
       expect(await ui.find({ key: 'cadre-install' })).toBeUndefined()
       expect((await ui.find({ key: 'install' }))?.props?.plain).toBeUndefined()
       expect((await ui.find({ key: 'install' }))?.props?.variant).toBe('primary')
-      expect(await ui.find({ type: 'Text', text: /5 h ▰{7}▱ 82 % → 23:10/ })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: new RegExp(`5 h ▰{7}▱ 82 % → ${hh(Date.UTC(2026, 9, 3, 21, 10))}`) })).toBeDefined()
     }
     // ce que les autres mods (clawd) dessinent sous le bandeau reste visible
     expect(await ui.find({ type: 'Text', text: /moteur/ })).toBeDefined()
@@ -300,7 +321,7 @@ function shellStubs(on: Parameters<Parameters<typeof test>[1] extends infer F ? 
   const ran: string[] = []
   const asked: string[] = []
   const lances: string[][] = []
-  const norm = (p: string) => p.replace(/\\/g, '/')
+  const norm = chemin
   on('session.cwd', () => ({ value: CWD }))
   on('ui.toast', () => ({ value: undefined }))
   on('prompt.submit', ($, e) => ({ text: e.text }))
@@ -556,15 +577,15 @@ test('ligne 📱 : ses textes tels que le bandeau les écrit, Installer seulemen
   const perime = ligneAndroid(a, maintenant, false)
   expect(perime).toEqual({
     version: '📱 5.7.0 (30)',
-    apk: '  · APK 5.7.0-debug jeu. 01:52',
-    tel: '  · tel 5.6.0 lun. 01:52 ⚠ pas à jour ',
+    apk: `  · APK 5.7.0-debug ${jourHh(APK_MTIME)}`,
+    tel: `  · tel 5.6.0 ${jourHh(APK_MTIME - 3 * 86_400_000)} ⚠ pas à jour `,
     couleurTel: 'yellow',
     installer: 'jaune',
     lancer: true,
   })
   // à jour : plus d'Installer ; pas installée : Installer en jaune, rien à lancer ; pas de tel, ou une installation en cours : aucun bouton
   const aJour = { ...a, installed: { ...a.installed!, versionName: '5.7.0-debug', updatedMs: APK_MTIME + 60_000 }, isPhoneStale: false }
-  expect(ligneAndroid(aJour, maintenant, false)).toMatchObject({ tel: '  · tel 5.7.0-debug jeu. 01:53 ✓ ', couleurTel: 'green', installer: null, lancer: true })
+  expect(ligneAndroid(aJour, maintenant, false)).toMatchObject({ tel: `  · tel 5.7.0-debug ${jourHh(APK_MTIME + 60_000)} ✓ `, couleurTel: 'green', installer: null, lancer: true })
   // à peine plus ancien que l'APK (sous la marge de 2 min) : on ne peut pas l'affirmer, Installer discret
   expect(ligneAndroid({ ...aJour, installed: { ...aJour.installed, updatedMs: APK_MTIME - 60_000 } }, maintenant, false).installer).toBe('discret')
   expect(ligneAndroid({ ...a, installed: null }, maintenant, false)).toMatchObject({ tel: '  · pas installée sur Pixel 8 ', couleurTel: 'yellow', installer: 'jaune', lancer: false })
@@ -720,7 +741,7 @@ android {
   mock.clock(on as never)
   mock.env(on as never, { LOCALAPPDATA })
   on('session.cwd', () => ({ value: CWD }))
-  const norm = (p: string) => p.replace(/\\/g, '/')
+  const norm = chemin
   on('fs.exists', ($, e) => ({ value: norm(e.path) in fichiers || norm(e.path) === ADB }))
   on('fs.read', ($, e) => {
     const f = fichiers[norm(e.path)]
