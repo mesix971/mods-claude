@@ -19,7 +19,7 @@ import type { ClawdAnim, ClawdCopain, ElementBande } from '../types'
 import { CELLULE, COIN_VIDE, HAUTEUR as HAUTEUR_BANDE, LARGEUR_BANDE, MARGE, MAX_SVG, NUMEROS, RETENUE, departDe, diagnostic, estNumero, numerosAvecMinis, numerosJouables, prepareNumero, reactionA, svgNumero } from './bande'
 import { HUMEUR_DEPART, choisit, decrit as decritHumeur, ecartRepos, estHumeur, estNuit, vecu, vit } from './humeur'
 import type { Humeur } from './humeur'
-import { ACTIVITES, BAILLE_S, BONBON_S, CLAWD_TEXTE, DANSES, EMOJI, EN_BULLE, JEUX_CARTONS, RAPPORT_S, SORTIES, TAILLE, avecT0, bulleDedans, dureeBoulot, dureeRetour, dureeScene, estChoregraphie, etatBoulot, etatScene, minisAPart, svgBulle, svgDecor, svgMinis, svgScene, teinte, teinteConnue, tenueDe } from './sprite'
+import { ACTIVITES, BAILLE_S, BONBON_S, CLAWD_TEXTE, DANSES, EMOJI, EN_BULLE, JEUX_CARTONS, RAPPORT_S, SORTIES, TAILLE, TEINTES, avecT0, bulleDedans, dureeBoulot, dureeRetour, dureeScene, estChoregraphie, etatBoulot, etatScene, minisAPart, svgBulle, svgDecor, svgMinis, svgScene, teinte, teinteConnue, tenueDe } from './sprite'
 import type { Bulle, Deguisement, EnPlace, Insigne, Mini, Sortie, Tenue } from './sprite'
 import type { Aura } from './sprite'
 import { svgMot } from './sprite'
@@ -1301,11 +1301,45 @@ async function commandeDeBase($: EngineInterface, args: string) {
 const CARTE = 'carte'
 
 /**
- * Ce que la version perso ajoute à sa carte (posé par elle, à l'ouverture et
- * quand il a du nouveau) : une ligne (ses leçons, ses diplômes), et ses
- * nouvelles, à lire en entier (sa leçon, son rêve, son dernier mot)
+ * Une leçon qu'il a apprise, pour l'onglet 🎓 de sa carte : sa date (AAAA-MM-JJ),
+ * ce qu'elle lui a appris, et de quoi la revoir en direct, une scène (avec le
+ * déguisement qui va avec) ou un numéro sur toute la bande. Sans l'une ni
+ * l'autre, elle se voit en situation seulement.
  */
-export const carteEnPlus: { savoirs?: string; nouvelles: { titre: string; texte: string }[] } = { nouvelles: [] }
+export type LeconCarte = { id: string; date: string; titre: string; texte: string; scene?: ClawdAnim; deguise?: Deguisement; numero?: string }
+
+/**
+ * Ce que la version perso ajoute à sa carte (posé par elle, à l'ouverture et
+ * quand il a du nouveau) : une ligne (ses leçons, ses diplômes), ses
+ * nouvelles, à lire en entier (sa leçon, son rêve, son dernier mot), et ses
+ * leçons, la plus récente d'abord (`surRejeu` : prévenue de chaque scène
+ * qu'il rejoue pour te la montrer, pas du vécu)
+ */
+export const carteEnPlus: {
+  savoirs?: string
+  nouvelles: { titre: string; texte: string }[]
+  lecons?: LeconCarte[]
+  surRejeu?: (anim: ClawdAnim) => void
+} = { nouvelles: [] }
+
+/** Sa vue de la carte ouverte : son portrait, ses mots ou ses leçons */
+type VueCarte = 'carte' | 'mots' | 'lecons'
+const lesLecons = () => carteEnPlus.lecons ?? []
+
+/** Il rejoue une leçon sur sa bande : sa scène (en entier si c'est une chorégraphie), ou son numéro ; false s'il n'y a rien à jouer, ou s'il ne peut pas */
+async function joueLeconIci($: EngineInterface, l: LeconCarte): Promise<boolean> {
+  if (l.numero) return joueNumero($, l.numero)
+  if (!l.scene) return false
+  carteEnPlus.surRejeu?.(l.scene)
+  const s = dureeScene(l.scene) * 1000
+  await scene($, l.scene, estChoregraphie(l.scene) ? Math.min(45_000, s) : Math.min(15_000, Math.max(4000, s)), true, 60_000)
+  return true
+}
+
+/** Sa date, courte, pour la pastille de la leçon (« 08/11 ») */
+const dateCourte = (d: string) => (/^\d{4}-(\d{2})-(\d{2})$/.exec(d) ? `${d.slice(8, 10)}/${d.slice(5, 7)}` : d)
+/** Ses mini-Clawds pour une démo qui en a besoin (le sifflet du chef) */
+const MINIS_DEMO: Mini[] = [{ fait: 'marche', couleur: TEINTES.haiku }, { fait: 'cherche', couleur: TEINTES.sonnet }, { fait: 'ecrit', couleur: TEINTES.fable }]
 
 /** Ce que sa carte montre de lui, d'après ce qu'il garde */
 async function ficheDe($: EngineInterface): Promise<Fiche> {
@@ -1350,7 +1384,7 @@ async function nouvellesDe($: EngineInterface) {
  * bande, au-dessus de lui, là où l'app n'en ouvre pas. Déjà ouverte, elle
  * passe à cette vue ; `bascule` : déjà ouverte sur cette vue, elle se range.
  */
-export async function montreCarte($: EngineInterface, vue: 'carte' | 'mots', bascule = false): Promise<'panneau' | 'bande' | 'rangee'> {
+export async function montreCarte($: EngineInterface, vue: VueCarte, bascule = false): Promise<'panneau' | 'bande' | 'rangee'> {
   const avant = await read($, carteOuverte)
   const enPanneau = (await $.ui.panes().catch(() => [])).some(p => p.id === CARTE)
   if (avant !== null && (avant.enBande || enPanneau)) {
@@ -1379,7 +1413,7 @@ export async function montreCarte($: EngineInterface, vue: 'carte' | 'mots', bas
  */
 async function rafraichitCarte($: EngineInterface) {
   if ((await read($, carteOuverte)) === null) return
-  const empreinte = [...texteCarte(await ficheDe($)), ...(await nouvellesDe($)).map(n => `${n.titre}|${n.texte}`)].join('\n')
+  const empreinte = [...texteCarte(await ficheDe($)), ...(await nouvellesDe($)).map(n => `${n.titre}|${n.texte}`), ...lesLecons().map(l => l.id)].join('\n')
   if ((await read($, carteAJour)) !== empreinte) await update($, carteAJour, () => empreinte)
 }
 
@@ -1389,9 +1423,9 @@ export async function rangeCarte($: EngineInterface) {
   await $.ui.close({ id: CARTE }).catch(() => {})
 }
 
-/** /clawd carte (ou mots : ce qu'il t'a dit, en entier) : sa carte, et où elle s'est ouverte */
-export async function ouvreCarteParCommande($: EngineInterface, vue: 'carte' | 'mots') {
-  const quoi = vue === 'mots' ? '💬 Ses mots sont ouverts' : '🪪 Sa carte est ouverte'
+/** /clawd carte (ou mots : ce qu'il t'a dit, en entier ; ou leçons : ce qu'il a appris) : sa carte, et où elle s'est ouverte */
+export async function ouvreCarteParCommande($: EngineInterface, vue: VueCarte) {
+  const quoi = vue === 'mots' ? '💬 Ses mots sont ouverts' : vue === 'lecons' ? '🎓 Ses leçons sont ouvertes' : '🪪 Sa carte est ouverte'
   return (await montreCarte($, vue)) === 'bande' ? `${quoi}, au-dessus de lui dans sa bande (✕ pour la ranger).` : `${quoi}.`
 }
 
@@ -1402,21 +1436,75 @@ export async function ouvreCarteParCommande($: EngineInterface, vue: 'carte' | '
  * l'a en mots.
  */
 async function vueCarte($: EngineInterface, e: ResolveInput<'Pane' | 'AbovePrompt'>, cases: number, enBande: boolean) {
-  const vue = (await read($, carteOuverte))?.vue === 'mots' ? 'mots' : 'carte'
+  const ouverte = await read($, carteOuverte)
+  const lecons = lesLecons()
+  const vue: VueCarte = ouverte?.vue === 'mots' ? 'mots' : ouverte?.vue === 'lecons' && lecons.length ? 'lecons' : 'carte'
   // (lu ici : ce qu'elle montre a changé, elle se redessine)
   await read($, carteAJour)
   const f = await ficheDe($)
   const nouvelles = await nouvellesDe($)
   const { Box, Text, Button } = $.ui.resolve(e)
-  const versVue = (v: 'carte' | 'mots') => () => void montreCarte($, v).catch(() => {})
-  const onglets = nouvelles.length > 0 || vue === 'mots'
+  const versVue = (v: VueCarte) => () => void montreCarte($, v).catch(() => {})
+  const onglets = nouvelles.length > 0 || lecons.length > 0 || vue !== 'carte'
   const haut = (
-    <Box key="carte-haut" flexDirection="row" gap={1}>
+    <Box key="carte-haut" flexDirection="row" gap={1} flexWrap="wrap">
       {onglets && <Button key="vue-carte" label="🪪 Sa carte" variant={vue === 'carte' ? 'primary' : 'secondary'} onPress={versVue('carte')} />}
       {onglets && <Button key="vue-mots" label={`💬 Ses mots (${nouvelles.length})`} variant={vue === 'mots' ? 'primary' : 'secondary'} onPress={versVue('mots')} />}
+      {lecons.length > 0 && <Button key="vue-lecons" label={`🎓 Ses leçons (${lecons.length})`} variant={vue === 'lecons' ? 'primary' : 'secondary'} onPress={versVue('lecons')} />}
       {enBande && <Button key="ranger-carte" label="✕" plain onPress={() => void rangeCarte($).catch(() => {})} />}
     </Box>
   )
+  if (vue === 'lecons') {
+    // la leçon choisie (une date cliquée), sinon la plus récente
+    const l = lecons.find(x => x.id === ouverte?.lecon) ?? lecons[0]!
+    const choisit = (id: string) => () => void update($, carteOuverte, c => (c ? { ...c, lecon: id } : c)).catch(() => {})
+    const rejoue = () =>
+      void (async () => {
+        const ok = await joueLeconIci($, l)
+        $.ui.toast(
+          ok
+            ? `👀 Regarde-le sur sa bande : ${l.titre}`
+            : l.numero
+              ? '✋ Ce numéro a besoin de la bande d’atelier (ou il finit ce qu’il fait) : réessaie dans un instant.'
+              : '🎓 Rien à rejouer : cette leçon se voit en situation.',
+          { timeoutMs: 6000 },
+        )
+      })().catch(() => {})
+    let direct = null
+    if (e.surface === 'desktop' && l.scene) {
+      const { Svg } = $.ui.resolve(e)
+      // sa scène en direct, en boucle, avec le déguisement qui va avec (et ses minis pour le sifflet du chef)
+      const minis = l.scene === 'sifflet' || l.scene === 'chef' ? MINIS_DEMO : []
+      const largeur = Math.min(Math.floor(cases * CELLULE), 464)
+      direct = (
+        <Svg
+          key="lecon-direct"
+          source={svgScene(l.scene, minis, 0, teinte((await read($, modele)) ?? (await $.session.model().catch(() => null))), undefined, undefined, l.deguise)}
+          alt={`${EMOJI[l.scene] ?? ''} ${l.titre}`.trim()}
+          width={largeur}
+          height={Math.round((TAILLE.hauteur * largeur) / TAILLE.largeur)}
+        />
+      )
+    }
+    return (
+      <Box key="carte" flexDirection="column" gap={1}>
+        {haut}
+        <Box key="lecon-dates" flexDirection="row" flexWrap="wrap" columnGap={1}>
+          {lecons.map(x => (
+            <Button key={`lecon-${x.id}`} label={dateCourte(x.date)} variant={x.id === l.id ? 'primary' : 'secondary'} onPress={choisit(x.id)} />
+          ))}
+        </Box>
+        {direct}
+        <Box key="lecon-texte" flexDirection="column">
+          <Text bold color={f.couleur.O}>{`🎓 ${dateCourte(l.date)} · ${l.titre}`}</Text>
+          <Text wrap="wrap">{l.texte}</Text>
+          {!l.scene && !l.numero && <Text dimColor>Rien à rejouer : elle se voit en situation.</Text>}
+          {l.numero && !direct && <Text dimColor>Un numéro sur toute la bande : il le joue en vrai, au-dessus de son coin.</Text>}
+        </Box>
+        {(l.scene || l.numero) && <Button key="lecon-joue" label="▶ Qu’il la joue sur sa bande" onPress={rejoue} />}
+      </Box>
+    )
+  }
   if (vue === 'mots') {
     return (
       <Box key="carte" flexDirection="column" gap={1}>

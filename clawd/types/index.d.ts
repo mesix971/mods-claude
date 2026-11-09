@@ -221,8 +221,8 @@ declare module 'claude-code' {
       sueur: 0 | 1 | 2
       /** Son niveau, d'après son expérience (gardée d'une session à l'autre) : l'insigne sur son ventre en dépend */
       niveau: number
-      /** Sa carte, ouverte : sa vue (sa carte, ou ses mots en entier), et si elle est posée dans sa bande (l'app n'a pas ouvert de panneau) ; null : rangée */
-      carte: { vue: 'carte' | 'mots'; enBande: boolean } | null
+      /** Sa carte, ouverte : sa vue (sa carte, ses mots en entier, ou ses leçons et celle choisie), et si elle est posée dans sa bande (l'app n'a pas ouvert de panneau) ; null : rangée */
+      carte: { vue: 'carte' | 'mots' | 'lecons'; enBande: boolean; lecon?: string } | null
       /** Son dernier mot lu (sa bulle 💬) : sa carte le garde, en entier */
       motGarde: { date: string; message: string } | null
       /** Ce que sa carte ouverte montre, résumé : quand ça change, elle se redessine */

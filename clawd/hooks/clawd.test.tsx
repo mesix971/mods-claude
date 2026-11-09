@@ -3082,6 +3082,17 @@ test('💬 son mot de la nuit se lit en entier (sa carte, ses mots) ; là où l�
   await ui.unmount()
 })
 
+test('🎓 sans leçon (la version publique) : pas d’onglet', async ($, on) => {
+  moteur(on)
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  const ui = await $.ui.mount({ ...BAND(), surface: 'desktop' })
+  await presse(ui, 'niveau')
+  const panneau = await $.ui.mount(PANNEAU('desktop'))
+  expect(await panneau.find({ key: 'vue-lecons' })).toBeUndefined()
+  await panneau.unmount()
+  await ui.unmount()
+})
+
 /** Son mot de la nuit posé (la version perso le lit dans son dépôt), jusqu'à ce qu'il l'efface : `lu()` le dit */
 function motPose(on: On, message = 'J’ai appris à faire griller des guimauves.') {
   let efface = false

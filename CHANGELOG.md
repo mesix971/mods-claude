@@ -43,6 +43,13 @@
 
 ## clawd
 
+- **0.18.0** — 2026-11-09 — Un onglet 🎓 pour ses leçons, dans sa carte.
+  - Quand une version qui le fait apprendre lui en fournit (`carteEnPlus.lecons`),
+    sa carte gagne l'onglet « 🎓 Ses leçons » : une pastille par date, la plus
+    récente d'abord ; la leçon choisie se rejoue en direct dans la carte (sa
+    scène, avec le déguisement qui va avec), et « ▶ Qu'il la joue sur sa
+    bande » la lui fait jouer en vrai (une scène ou un numéro sur toute la
+    bande). Sans leçon, rien ne change.
 - **0.17.0** — 2026-11-09 — Une Clawdette lui rend visite.
   - Une nouvelle visite rare au repos, une sur trois, de jour comme de
     nuit : une petite Clawdette rose, un nœud rouge sur la tête, arrive en
