@@ -48,6 +48,9 @@ const PAL: Record<string, string> = {
   z: '#6E3F17',
   // le verre de sa visière de pilote automatique (translucide : ses yeux se voient au travers)
   T: '#4FC3F7',
+  // la Clawdette, sa visiteuse : rose pâle, et son ombré (ses pattes)
+  E: '#F29BB0',
+  e: '#D9809A',
 }
 
 // Toile : 180×96, Clawd posé au milieu, de la place au-dessus pour les
@@ -1854,6 +1857,100 @@ function visiteFilante(): Scene {
   )
 }
 
+// La Clawdette : de sa famille, en plus petite (des cases de 4 px au lieu de 6), rose pâle, un nœud rouge sur la tête et
+// des cils. Sa couleur est la sienne (E, e dans la palette) : elle ne prend jamais la teinte de Clawd (son modèle)
+type PoseClawdette = { yeux?: 'normal' | 'droite' | 'heureux' | 'ferme'; salut?: boolean; jambes?: 'normal' | 'pasA' | 'pasB' | 'assise' }
+/**
+ * Son dessin, en quelques grands aplats (elle reste légère, même dans ses scènes les plus chargées) : son corps de 32 × 24
+ * et ses bras, ses quatre pattes, son nœud, puis son visage par-dessus. Posée au sol au bord gauche de la toile de Clawd,
+ * décalée de `dx` ; un cœur qui monte au-dessus d'elle si `coeur`
+ */
+function clawdetteSvg(p: PoseClawdette = {}, dx = 0, coeur = false): string {
+  const x = X0 + dx
+  const y = Y0 + (p.jambes === 'assise' ? 22 : 16)
+  const r = (u: number, v: number, w: number, h: number, c: string) => R(x + u, y + v, w, h, PAL[c]!)
+  const j = p.jambes ?? 'normal'
+  // ses pattes : assise, à peine visibles ; en marchant, une sur deux levée
+  const pattes = [8, 16, 28, 36]
+    .map((u, k) => r(u, 24, 4, j === 'assise' ? 2 : (j === 'pasA' && k % 2 === 0) || (j === 'pasB' && k % 2 === 1) ? 4 : 8, 'e'))
+    .join('')
+  // son bras gauche (à l'écran) le long du corps, ou levé pour te saluer ; le droit, vers Clawd
+  const corps = r(8, 0, 32, 24, 'E') + r(0, p.salut ? 0 : 8, 8, 8, 'E') + r(40, 8, 8, 8, 'E')
+  const noeud = r(30, -6, 4, 6, 'R') + r(36, -6, 4, 6, 'R') + r(34, -4, 2, 2, 'P')
+  const yeux = p.yeux ?? 'normal'
+  const regard =
+    yeux === 'heureux'
+      ? [12, 34].map(u => r(u, 4, 2, 2, 'K') + r(u - 2, 6, 2, 2, 'K') + r(u + 2, 6, 2, 2, 'K')).join('')
+      : yeux === 'ferme'
+        ? r(12, 6, 4, 2, 'K') + r(32, 6, 4, 2, 'K')
+        : r(12 + (yeux === 'droite' ? 2 : 0), 4, 4, 4, 'K') + r(32 + (yeux === 'droite' ? 2 : 0), 4, 4, 4, 'K')
+  // ses cils, et ses joues roses
+  const visage = r(10, 2, 2, 2, 'K') + r(36, 2, 2, 2, 'K') + regard + r(10, 10, 4, 2, 'P') + r(34, 10, 4, 2, 'P')
+  return pattes + corps + noeud + visage + (coeur ? `<g class="monte">${A(COEUR, 42 + dx, -2, 2)}</g>` : '')
+}
+
+/**
+ * Une Clawdette lui rend visite (une visite rare, de jour comme de nuit).
+ * Elle arrive de la gauche en trottinant ; Clawd la voit, ouvre de grands yeux
+ * et rougit. Elle le salue, ils s'assoient côte à côte, un cœur monte entre eux,
+ * et elle se penche lui faire un bisou : il en a des cœurs dans les yeux. Puis
+ * elle se relève, lui fait au revoir et repart par où elle est venue ; il la
+ * salue de la patte jusqu'à ce qu'elle disparaisse, et soupire, ravi.
+ */
+function visiteClawdette(): Scene {
+  const f = corps
+  // ses joues rouges, par-dessus son visage (son corps décalé de `dy`)
+  const rougit = (dy = 0) => `<rect x="${X0 + 14}" y="${Y0 + 16 + dy}" width="6" height="2" fill="${PAL.P}" fill-opacity=".8"/><rect x="${X0 + 52}" y="${Y0 + 16 + dy}" width="6" height="2" fill="${PAL.P}" fill-opacity=".8"/>`
+  const assis = (p: Pose = {}) => f({ jambes: 'assis', dy: 8, ...p }) + rougit(8)
+  // ses places : loin à gauche (cachée), puis contre lui
+  const [loin, pres] = [-180, -50]
+  // à 40 px/s : 3,25 s pour venir, autant pour repartir
+  const [entre, arrive, assiseA, bisou, releve, salue, repart, partie, T] = [1.2, 4.45, 5.4, 8.6, 9.4, 9.9, 10.5, 13.75, 15]
+  // en trottinant, ses pattes vont et viennent tous les quarts de seconde
+  const pas = (a: number, b: number, k: 0 | 1): [number, number][] => {
+    const ws: [number, number][] = []
+    for (let t = a, i = 0; t < b - 1e-6; t += 0.25, i++) if (i % 2 === k) ws.push([t, Math.min(b, t + 0.25)])
+    return ws
+  }
+  const elle = passant('clawdette', T, [
+    [0, loin, 0], [entre, loin, 0], [arrive, pres, 0], [repart, pres, 0], [partie, loin, 0], [T, loin, 0],
+  ], [
+    [clawdetteSvg({ jambes: 'pasA', yeux: 'droite' }), [...pas(entre, arrive, 0), ...pas(repart, partie, 1)]],
+    [clawdetteSvg({ jambes: 'pasB', yeux: 'droite' }), [...pas(entre, arrive, 1), ...pas(repart, partie, 0)]],
+    // elle le salue en arrivant, et en partant
+    [clawdetteSvg({ yeux: 'heureux', salut: true }), [[arrive, 4.95], [salue, repart]]],
+    [clawdetteSvg({ yeux: 'droite' }), [[4.95, assiseA]]],
+    // assise contre lui, un cœur monte entre eux
+    [clawdetteSvg({ jambes: 'assise', yeux: 'heureux' }, 0, true), [[assiseA, bisou], [releve, salue]]],
+    // elle se penche lui faire un bisou, les yeux fermés
+    [clawdetteSvg({ jambes: 'assise', yeux: 'ferme' }, 4) + A(COEUR, 44, 4, 2), [[bisou, releve]]],
+  ])
+  return choreo(
+    [
+      { duree: 1.2, images: [f(), f(), f({ yeux: 'ferme' }), f()] },
+      // il l'entend venir à gauche, la voit : yeux ronds, bouche bée, et il rougit
+      { duree: 0.8, images: [f({ yeux: 'gauche' })] },
+      { duree: 0.6, images: [f({ yeux: 'grand', bouche: 'o', dy: -2 }) + rougit(-2)] },
+      { duree: 1.85, images: [f({ yeux: 'gauche' }) + rougit(), f({ yeux: 'heureux' }) + rougit()], tours: 2 },
+      // elle le salue : il lui répond
+      { duree: 0.5, images: [f({ yeux: 'heureux', g: 'haut' }) + rougit()] },
+      // ils s'assoient côte à côte
+      { duree: 0.45, images: [f({ jambes: 'replie', dy: 4, yeux: 'gauche' }) + rougit(4)] },
+      { duree: 3.2, tours: 4, images: [assis({ yeux: 'gauche' }), assis({ yeux: 'heureux' })] },
+      // son bisou : des cœurs dans les yeux
+      { duree: 0.8, images: [assis({ yeux: 'coeur' })] },
+      { duree: 0.5, images: [f({ jambes: 'replie', dy: 4, yeux: 'coeur' }) + rougit(4)] },
+      { duree: 0.6, images: [f({ yeux: 'heureux' }) + rougit()] },
+      // elle repart à gauche : il la salue de la patte, puis la regarde encore un peu
+      { duree: 2.4, tours: 3, images: [f({ g: 'haut', yeux: 'gauche' }) + rougit(), f({ g: 'ciel', yeux: 'gauche' }) + rougit()] },
+      { duree: 0.85, images: [f({ yeux: 'gauche' }) + rougit()] },
+      // il soupire, ravi
+      { duree: 1.25, images: [f({ yeux: 'coeur', g: 'devant', d: 'devant' })] },
+    ],
+    { decor: [{ svg: elle.svg }], css: elle.css },
+  )
+}
+
 // ------------------------------------------------------- autour de son feu
 // Quand son feu de camp brûle à côté de lui (sa série), il s'en occupe de temps en temps : il y jette un de ses cartons
 // (qui flambe : il recule, ébloui, puis se réchauffe aux braises), y remet une bûche, s'y réchauffe les pattes, ou y fait
@@ -3069,6 +3166,8 @@ const SCENES: Record<ClawdAnim, () => Scene> = {
   // une visite rare au repos : un chat le jour, une étoile filante le soir
   chat: visiteChat,
   filante: visiteFilante,
+  // et plus rare encore, la Clawdette
+  clawdette: visiteClawdette,
   // il monte de niveau
   niveau,
 }
@@ -4138,7 +4237,7 @@ export const EMOJI: Record<ClawdAnim, string> = {
   question: '❔', deballe: '📥', decourage: '😞', delivrance: '🎆', colis: '🎁', gigogne: '🪆', tambour: '🥁', podium: '🏆',
   pause: '🥛', rapport: '🤝', bonbon: '🍬', detente: '😎', baille: '😪', cache: '🫣', soulage: '😮‍💨', souvenir: '💭', revanche: '💪', attendu: '🤗',
   livraison: '📦', drapeau: '🚩',
-  ceremonie: '🎖', retrouvailles: '🥰', chat: '🐈', filante: '🌠',
+  ceremonie: '🎖', retrouvailles: '🥰', chat: '🐈', filante: '🌠', clawdette: '💕',
   floss: '🕺', orange: '🍊', defaut: '🎶', griddy: '🔥', takel: '🫵', sixseven: '6️⃣7️⃣', niveau: '⭐',
   flambe: '🔥', buche: '🪵', rechauffe: '♨', guimauve: '🍡',
 }

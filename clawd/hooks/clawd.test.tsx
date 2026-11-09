@@ -78,7 +78,7 @@ const svg = async (ui: Monte) => (await ui.find({ type: 'Svg' }))?.props ?? {}
 const toutDessin = async (ui: Monte) => (await (ui as unknown as { findAll: (q: unknown) => Promise<{ props: { source?: unknown } }[]> }).findAll({ type: 'Svg' })).map(s => String(s.props.source)).join('')
 const scene = async (ui: Monte) => String((await svg(ui)).alt ?? '')
 /** Ses visiteurs rares (un chat, une étoile filante) : une activité comme une autre, qui passe parfois à la place de la sienne */
-const VISITEURS = ['chat', 'filante']
+const VISITEURS = ['chat', 'filante', 'clawdette']
 
 test('desktop : SVG transparent, ce qui est à côté reste, boutons au survol', async ($, on) => {
   moteur(on)
@@ -2404,7 +2404,7 @@ test('🥰 ses retrouvailles : une vraie scène, sans texte, légère, et pareil
   expect(dureeScene('retrouvailles')).toBeLessThan(12)
 })
 
-test('🐈 une visite rare : un chat le jour, une étoile filante le soir, pas plus d’une toutes les deux heures', () => {
+test('🐈 une visite rare : un chat le jour, une étoile filante le soir, parfois la Clawdette, pas plus d’une toutes les deux heures', () => {
   const jour = new Date(2026, 9, 27, 15, 0).getTime()
   const soir = new Date(2026, 9, 27, 21, 30).getTime()
   // à peu près une fois sur 120 : un hasard plus grand ne fait venir personne
@@ -2414,8 +2414,11 @@ test('🐈 une visite rare : un chat le jour, une étoile filante le soir, pas p
   expect(visiteur(new Date(2026, 9, 27, 5, 0).getTime(), 0, 0.005)).toBe('filante')
   // un visiteur il y a une heure : personne ; il y a trois heures : il peut revenir
   expect(visiteur(jour, jour - 3_600_000, 0)).toBeNull()
-  expect(visiteur(jour, jour - 3 * 3_600_000, 0)).toBe('chat')
-  for (const anim of ['chat', 'filante'] as const) {
+  expect(visiteur(jour, jour - 3 * 3_600_000, 0.005)).toBe('chat')
+  // une visite sur trois, de jour comme de nuit : la Clawdette
+  expect(visiteur(jour, 0, 0.002)).toBe('clawdette')
+  expect(visiteur(soir, 0, 0.002)).toBe('clawdette')
+  for (const anim of ['chat', 'filante', 'clawdette'] as const) {
     const dessin = svgScene(anim)
     // léger, pareil d'un rendu à l'autre, sans texte, et le visiteur suit `--t0` (repris en route, il est à sa place)
     expect(dessin.length).toBeLessThan(40 * 1024)
@@ -2426,6 +2429,13 @@ test('🐈 une visite rare : un chat le jour, une étoile filante le soir, pas p
   }
   // le chat est gris, et il ne prend pas la teinte de Clawd
   expect(svgScene('chat', [], 0, TEINTES.haiku)).toContain('#8B8B8B')
+  // la Clawdette garde son rose (et son nœud rouge) quelle que soit la teinte de Clawd
+  for (const t of Object.values(TEINTES)) {
+    const dessin = svgScene('clawdette', [], 0, t)
+    expect(dessin).toContain('#F29BB0')
+    expect(dessin).toContain('#E5484D')
+    expect(dessin).toContain(t.O)
+  }
 })
 
 // ------------------------------------------------- sa tenue, son expérience

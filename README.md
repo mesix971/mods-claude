@@ -6,7 +6,7 @@
 
 **[▶ Le film de présentation](https://mesix971.github.io/mods-claude/)** · [Installer](#installation) · [Clawd](#clawd) · [atelier](#atelier) · [In English](#in-english)
 
-<img src="https://img.shields.io/badge/Clawd-82%20sc%C3%A8nes%20anim%C3%A9es-d97758" alt="Clawd : 82 scènes animées"> <img src="https://img.shields.io/badge/mod-Claude%20Code-24292f" alt="Mod Claude Code"> <img src="https://img.shields.io/badge/licence-MIT-4cc38a" alt="Licence MIT">
+<img src="https://img.shields.io/badge/Clawd-83%20sc%C3%A8nes%20anim%C3%A9es-d97758" alt="Clawd : 83 scènes animées"> <img src="https://img.shields.io/badge/mod-Claude%20Code-24292f" alt="Mod Claude Code"> <img src="https://img.shields.io/badge/licence-MIT-4cc38a" alt="Licence MIT">
 
 </div>
 
@@ -16,7 +16,7 @@ Projet perso, fan-made et non officiel, sans lien avec Anthropic.
 
 Two mods for [Claude Code](https://claude.com/claude-code), in the CLI and the desktop app's Code tab:
 
-- **clawd**: a tiny pixel-art Claude who lives above your prompt and silently acts out your session, in 82 animated scenes with no text. He carries boxes while Claude works, and sometimes opens one. He celebrates passing builds and sulks under a rain cloud when they break. Each subagent arrives as a mini-Clawd in its model's color, hands its work back, then leaves in one of five ways. He sweats as the context fills, wears an autopilot visor in auto or bypass mode, and levels up as you work together, up to a Legend wrapped in a glowing aura. Come back day after day and he keeps a campfire going next to him (he tosses a box in, toasts a marshmallow). Hover him and click ⭐ for his collectible card. With atelier loaded, he also plays gags across its band: he steals the loading orb and makes the pills pop like popcorn, then always puts everything back.
+- **clawd**: a tiny pixel-art Claude who lives above your prompt and silently acts out your session, in 83 animated scenes with no text. He carries boxes while Claude works, and sometimes opens one. He celebrates passing builds and sulks under a rain cloud when they break. Each subagent arrives as a mini-Clawd in its model's color, hands its work back, then leaves in one of five ways. He sweats as the context fills, wears an autopilot visor in auto or bypass mode, and levels up as you work together, up to a Legend wrapped in a glowing aura. Come back day after day and he keeps a campfire going next to him (he tosses a box in, toasts a marshmallow). Hover him and click ⭐ for his collectible card. With atelier loaded, he also plays gags across its band: he steals the loading orb and makes the pills pop like popcorn, then always puts everything back.
 - **atelier**: a project band for Android developers:
   - APK and phone versions, with Install and Launch buttons;
   - git status, with Commit, Push and Pull buttons;
@@ -72,7 +72,7 @@ rangée qui couvre la bande, et Clawd y joue ses numéros.
 Le petit Claude orange, en pixel art animé, à droite du bandeau au-dessus du
 prompt. Fond transparent, taille du Clawd de l'app, contour et ombre qui
 suivent ton thème clair ou sombre. Pas un mot : tout passe par ses gestes.
-Chaque image ci-dessous est l'une de ses 82 scènes, telle que le mod la
+Chaque image ci-dessous est l'une de ses 83 scènes, telle que le mod la
 dessine (générée depuis son code par `promo/vitrine.mts`).
 
 ### Au repos, il vit sa vie

@@ -43,6 +43,13 @@
 
 ## clawd
 
+- **0.17.0** — 2026-11-09 — Une Clawdette lui rend visite.
+  - Une nouvelle visite rare au repos, une sur trois, de jour comme de
+    nuit : une petite Clawdette rose, un nœud rouge sur la tête, arrive en
+    trottinant. Il ouvre de grands yeux et rougit ; ils s'assoient côte à
+    côte, un cœur monte entre eux, elle lui fait un bisou (des cœurs dans
+    ses yeux), puis elle repart et il la salue de la patte. Elle garde son
+    rose quelle que soit la teinte de Clawd.
 - **0.16.6** — 2026-11-08 — Son déménagement ne passe plus dans son feu.
   - Son feu est dessiné devant ses chorégraphies : lui et ses cartons passent
     derrière, jamais dedans. Le carton posé juste derrière le feu roussit

@@ -1,7 +1,7 @@
 # Clawd
 
 A tiny pixel-art Claude who lives above your prompt and silently acts out your
-Claude Code session, in 82 animated scenes and no text.
+Claude Code session, in 83 animated scenes and no text.
 
 Unofficial, fan-made project by mesix971. Not affiliated with or endorsed by
 Anthropic.

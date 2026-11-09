@@ -707,11 +707,13 @@ let derniereVisite = 0
 
 /**
  * Le visiteur qui passe sur sa petite scène au lieu de son activité, s'il en
- * vient un : un chat le jour, une étoile filante le soir (de 20 h à 6 h).
- * Le hasard se décide ici, jamais dans le dessin.
+ * vient un : une fois sur trois la Clawdette (à toute heure), sinon un chat
+ * le jour, une étoile filante le soir (de 20 h à 6 h). Le hasard se décide
+ * ici, jamais dans le dessin.
  */
 export function visiteur(maintenant: number, derniere: number, hasard: number): ClawdAnim | null {
   if (maintenant - derniere < VISITE_ECART || hasard >= VISITE_P) return null
+  if (hasard < VISITE_P / 3) return 'clawdette'
   const heure = new Date(maintenant).getHours()
   return heure >= 20 || heure < 6 ? 'filante' : 'chat'
 }

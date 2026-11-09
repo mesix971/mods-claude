@@ -104,6 +104,8 @@ export type ClawdAnim =
   // une visite rare au repos : un chat traverse sa scène (le jour), une étoile filante (le soir)
   | 'chat'
   | 'filante'
+  // la plus rare : une Clawdette lui rend visite, ils s'assoient côte à côte et elle lui fait un bisou
+  | 'clawdette'
   // il monte de niveau : une étoile d'or lui tombe du ciel, il l'attrape, saute de joie, et son insigne change
   | 'niveau'
 
