@@ -1304,9 +1304,10 @@ const CARTE = 'carte'
  * Une leçon qu'il a apprise, pour l'onglet 🎓 de sa carte : sa date (AAAA-MM-JJ),
  * ce qu'elle lui a appris, et de quoi la revoir en direct, une scène (avec le
  * déguisement qui va avec) ou un numéro sur toute la bande. Sans l'une ni
- * l'autre, elle se voit en situation seulement.
+ * l'autre, elle se voit en situation seulement. `rang` : son numéro (n° 12),
+ * sur sa pastille, pour distinguer deux leçons du même jour.
  */
-export type LeconCarte = { id: string; date: string; titre: string; texte: string; scene?: ClawdAnim; deguise?: Deguisement; numero?: string }
+export type LeconCarte = { id: string; date: string; titre: string; texte: string; scene?: ClawdAnim; deguise?: Deguisement; numero?: string; rang?: number }
 
 /**
  * Ce que la version perso ajoute à sa carte (posé par elle, à l'ouverture et
@@ -1413,7 +1414,7 @@ export async function montreCarte($: EngineInterface, vue: VueCarte, bascule = f
  */
 async function rafraichitCarte($: EngineInterface) {
   if ((await read($, carteOuverte)) === null) return
-  const empreinte = [...texteCarte(await ficheDe($)), ...(await nouvellesDe($)).map(n => `${n.titre}|${n.texte}`), ...lesLecons().map(l => l.id)].join('\n')
+  const empreinte = [...texteCarte(await ficheDe($)), ...(await nouvellesDe($)).map(n => `${n.titre}|${n.texte}`), ...lesLecons().map(l => [l.id, l.titre, l.texte, l.scene, l.deguise, l.numero].join('|'))].join('\n')
   if ((await read($, carteAJour)) !== empreinte) await update($, carteAJour, () => empreinte)
 }
 
@@ -1491,7 +1492,7 @@ async function vueCarte($: EngineInterface, e: ResolveInput<'Pane' | 'AbovePromp
         {haut}
         <Box key="lecon-dates" flexDirection="row" flexWrap="wrap" columnGap={1}>
           {lecons.map(x => (
-            <Button key={`lecon-${x.id}`} label={dateCourte(x.date)} variant={x.id === l.id ? 'primary' : 'secondary'} onPress={choisit(x.id)} />
+            <Button key={`lecon-${x.id}`} label={x.rang ? `n° ${x.rang} · ${dateCourte(x.date)}` : dateCourte(x.date)} variant={x.id === l.id ? 'primary' : 'secondary'} onPress={choisit(x.id)} />
           ))}
         </Box>
         {direct}

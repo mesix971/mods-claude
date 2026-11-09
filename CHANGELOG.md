@@ -43,6 +43,10 @@
 
 ## clawd
 
+- **0.18.1** — 2026-11-09 — Ses pastilles de leçons se distinguent.
+  - Deux leçons du même jour ne se confondent plus : chaque pastille porte
+    son numéro (« n° 2 · 15/10 »). Une leçon corrigée (texte, scène) se
+    redessine aussitôt dans la carte ouverte.
 - **0.18.0** — 2026-11-09 — Un onglet 🎓 pour ses leçons, dans sa carte.
   - Quand une version qui le fait apprendre lui en fournit (`carteEnPlus.lecons`),
     sa carte gagne l'onglet « 🎓 Ses leçons » : une pastille par date, la plus
