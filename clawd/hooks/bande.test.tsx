@@ -6,7 +6,7 @@
 import { expect, mock, test } from 'claude-code/testing'
 
 import type { ElementBande } from '../types'
-import { COIN_VIDE, HAUTEUR, MARGE, MAX_DUREE, MAX_SVG, NUMEROS, REACTIONS, RETENUE, numerosAvecMinis, numerosJouables, prepareNumero, reactionA, svgNumero } from './bande'
+import { COIN_VIDE, HAUTEUR, MARGE, MAX_DUREE, MAX_SVG, NUMEROS, REACTIONS, RETENUE, numerosAvecMinis, numerosJouables, prepareNumero, reactionA, svgNumero, svgNumeroDemo } from './bande'
 import type { Numero } from './bande'
 import { TEINTES } from './sprite'
 
@@ -929,4 +929,17 @@ test('rappel : il vient de lui-même quand le bouton apparaît, puis pas avant 1
   expect(rappels()).toHaveLength(2)
   expect(rappels()[1]! - rappels()[0]!).toBeGreaterThanOrEqual(10 * 60_000)
   await ui.unmount()
+})
+
+test('🎓 dans sa carte : chaque numéro se joue sur la bande d’exemple (arrangée pour lui), l’original caché pendant qu’il le tient', () => {
+  for (const nom of Object.keys(NUMEROS)) {
+    const d = svgNumeroDemo(nom, TEINTES.opus)
+    expect(d === null ? `${nom} : rien à viser` : nom).toBe(nom)
+    expect(d!.svg.length).toBeLessThan(MAX_SVG)
+    expect(d!.svg).toContain(`pos-${nom}`)
+    expect(d!.duree).toBeGreaterThan(0)
+  }
+  // ce qu'il emprunte disparaît de la bande pendant qu'il le tient
+  expect(svgNumeroDemo('chipe', TEINTES.opus)!.svg).toMatch(/@keyframes ex-tenu-\d+\{0%\{opacity:1\}[\d.]+%\{opacity:0\}/)
+  expect(svgNumeroDemo('pas-un-numero', TEINTES.opus)).toBeNull()
 })

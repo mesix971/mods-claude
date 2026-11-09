@@ -16,7 +16,7 @@ import type { EngineInterface, Register, ToolCallResult } from 'claude-code'
 import type { ResolveInput } from 'claude-code'
 
 import type { ClawdAnim, ClawdCopain, ElementBande } from '../types'
-import { CELLULE, COIN_VIDE, HAUTEUR as HAUTEUR_BANDE, LARGEUR_BANDE, MARGE, MAX_SVG, NUMEROS, RETENUE, departDe, diagnostic, estNumero, numerosAvecMinis, numerosJouables, prepareNumero, reactionA, svgNumero } from './bande'
+import { CELLULE, COIN_VIDE, HAUTEUR as HAUTEUR_BANDE, LARGEUR_BANDE, MARGE, MAX_SVG, NUMEROS, RETENUE, departDe, diagnostic, estNumero, numerosAvecMinis, numerosJouables, prepareNumero, reactionA, svgNumero, svgNumeroDemo } from './bande'
 import { HUMEUR_DEPART, choisit, decrit as decritHumeur, ecartRepos, estHumeur, estNuit, vecu, vit } from './humeur'
 import type { Humeur } from './humeur'
 import { ACTIVITES, BAILLE_S, BONBON_S, CLAWD_TEXTE, DANSES, EMOJI, EN_BULLE, JEUX_CARTONS, RAPPORT_S, SORTIES, TAILLE, TEINTES, avecT0, bulleDedans, dureeBoulot, dureeRetour, dureeScene, estChoregraphie, etatBoulot, etatScene, minisAPart, svgBulle, svgDecor, svgMinis, svgScene, teinte, teinteConnue, tenueDe } from './sprite'
@@ -1329,7 +1329,18 @@ const lesLecons = () => carteEnPlus.lecons ?? []
 
 /** Il rejoue une leçon sur sa bande : sa scène (en entier si c'est une chorégraphie), ou son numéro ; false s'il n'y a rien à jouer, ou s'il ne peut pas */
 async function joueLeconIci($: EngineInterface, l: LeconCarte): Promise<boolean> {
-  if (l.numero) return joueNumero($, l.numero)
+  if (l.numero) {
+    // ta bande n'a pas ce qu'il lui faut : inutile d'attendre
+    if (bureau && !sondage && !prepareNumero(l.numero, await elementsBande($), largeurBande())) return non('rien')
+    // occupé (une petite scène de repos, une activité) : il la finit, puis il te la joue (une demi-minute au plus)
+    for (let essai = 0; essai < 30; essai++) {
+      if (await joueNumero($, l.numero)) return true
+      if (dernierRefus() !== 'occupe') return false
+      if (essai === 0) $.ui.toast('⏳ Il finit ce qu’il fait, puis il te la joue sur sa bande.', { timeoutMs: 4000 })
+      await new Promise<void>(r => $.clock.after(1000, r))
+    }
+    return false
+  }
   if (!l.scene) return false
   carteEnPlus.surRejeu?.(l.scene)
   const s = dureeScene(l.scene) * 1000
@@ -1459,20 +1470,42 @@ async function vueCarte($: EngineInterface, e: ResolveInput<'Pane' | 'AbovePromp
     // la leçon choisie (une date cliquée), sinon la plus récente
     const l = lecons.find(x => x.id === ouverte?.lecon) ?? lecons[0]!
     const choisit = (id: string) => () => void update($, carteOuverte, c => (c ? { ...c, lecon: id } : c)).catch(() => {})
+    // le numéro sur la bande d'exemple, dans sa carte (ta bande n'a pas toujours ce qu'il lui faut) : sur desktop seulement
+    const demo = e.surface === 'desktop' && l.numero ? svgNumeroDemo(l.numero, teinte((await read($, modele)) ?? (await $.session.model().catch(() => null))), l.deguise) : null
+    const besoin = l.numero ? NUMEROS[l.numero]?.besoin : undefined
+    // (rejouée dans la carte : son dessin change de tour, il repart du début)
+    const revoit = () => update($, carteOuverte, c => (c ? { ...c, tour: (c.tour ?? 0) + 1 } : c))
     const rejoue = () =>
       void (async () => {
         const ok = await joueLeconIci($, l)
+        if (ok) return $.ui.toast(`👀 Regarde-le sur sa bande : ${l.titre}`, { timeoutMs: 6000 })
+        if (!l.numero) return $.ui.toast('🎓 Rien à rejouer : cette leçon se voit en situation.', { timeoutMs: 6000 })
+        const r = dernierRefus()
+        if (demo) await revoit()
         $.ui.toast(
-          ok
-            ? `👀 Regarde-le sur sa bande : ${l.titre}`
-            : l.numero
-              ? '✋ Ce numéro a besoin de la bande d’atelier (ou il finit ce qu’il fait) : réessaie dans un instant.'
-              : '🎓 Rien à rejouer : cette leçon se voit en situation.',
-          { timeoutMs: 6000 },
+          r === 'occupe'
+            ? '✋ Il est encore pris (son travail, ou un numéro en cours) : réessaie quand il aura fini.'
+            : r === 'bureau'
+              ? '✋ Sur sa bande, la grande scène ne se voit que dans l’app de bureau.'
+              : `${demo ? '👀 Rejoué ici, sur une bande d’exemple' : '✋ Pas sur ta bande en ce moment'}${besoin ? ` : sur la tienne, il lui faut ${besoin}.` : '.'}`,
+          { timeoutMs: 8000 },
         )
       })().catch(() => {})
     let direct = null
-    if (e.surface === 'desktop' && l.scene) {
+    if (demo && e.surface === 'desktop') {
+      const { Svg } = $.ui.resolve(e)
+      const largeur = Math.min(Math.floor(cases * CELLULE), demo.largeur)
+      const tour = ouverte?.tour ?? 0
+      direct = (
+        <Svg
+          key={`lecon-direct-${tour}`}
+          source={demo.svg.replace(/<\/svg>$/, `<desc>tour ${tour}</desc></svg>`)}
+          alt={`🎪 ${l.titre}`}
+          width={largeur}
+          height={Math.round((demo.hauteur * largeur) / demo.largeur)}
+        />
+      )
+    } else if (e.surface === 'desktop' && l.scene) {
       const { Svg } = $.ui.resolve(e)
       // sa scène en direct, en boucle, avec le déguisement qui va avec (et ses minis pour le sifflet du chef)
       const minis = l.scene === 'sifflet' || l.scene === 'chef' ? MINIS_DEMO : []
@@ -1501,8 +1534,12 @@ async function vueCarte($: EngineInterface, e: ResolveInput<'Pane' | 'AbovePromp
           <Text wrap="wrap">{l.texte}</Text>
           {!l.scene && !l.numero && <Text dimColor>Rien à rejouer : elle se voit en situation.</Text>}
           {l.numero && !direct && <Text dimColor>Un numéro sur toute la bande : il le joue en vrai, au-dessus de son coin.</Text>}
+          {l.numero && direct && <Text dimColor>{`Ici sur une bande d’exemple${besoin ? ` ; sur la tienne, il lui faut ${besoin}` : ''}.`}</Text>}
         </Box>
-        {(l.scene || l.numero) && <Button key="lecon-joue" label="▶ Qu’il la joue sur sa bande" onPress={rejoue} />}
+        <Box key="lecon-boutons" flexDirection="row" gap={1} flexWrap="wrap">
+          {demo && <Button key="lecon-revoit" label="↻ Revoir ici" variant="secondary" onPress={() => void revoit().catch(() => {})} />}
+          {(l.scene || l.numero) && <Button key="lecon-joue" label="▶ Qu’il la joue sur sa bande" onPress={rejoue} />}
+        </Box>
       </Box>
     )
   }

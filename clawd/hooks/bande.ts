@@ -1897,9 +1897,73 @@ export function svgBandeExemple(elements: readonly ElementBande[], tenus: Readon
   return `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="${HAUTEUR}"><style>${CSS_BANDE}</style>${dessin}</svg>`
 }
 
+/** La largeur de la bande d'exemple où sa carte montre un numéro */
+export const LARGEUR_DEMO = 560
+/** La marge au-dessus de la bande dans la démo : ses bonds et ce qu'il lance dépassent de la bande */
+const MARGE_DEMO = 24
+
+/** Ce qui change sur la bande d'exemple pour qu'un numéro qui réagit à quelque chose y trouve sa cible (et ce qu'il vise) */
+const DEMOS: Record<string, { change?: Record<string, Partial<ElementBande>>; plus?: ElementBande[]; vise?: string }> = {
+  reconcilie: { change: { build: { etat: 'faite' } }, vise: 'build' },
+  retient: { change: { 'jauge-5h': { etat: 'critique' } }, vise: 'jauge-5h' },
+  controle: { change: { 'agent-a1': { etat: 'faite' } }, vise: 'agent-a1' },
+  console: { change: { 'agent-a1': { etat: 'attente' } }, vise: 'agent-a1' },
+  poches: { change: { conso: { etat: 'lourde' } }, vise: 'conso' },
+  rappel: { change: { 'jauge-contexte': { etat: 'critique' } }, plus: [{ id: 'nouvelle', genre: 'bouton', etat: 'a-montrer', x: 0, largeur: 111, ligne: 2 }] },
+  installe: { plus: [{ id: 'installer', genre: 'bouton', etat: 'a-montrer', x: 300, largeur: 64, ligne: 2 }] },
+  presse: { plus: [{ id: 'commit', genre: 'bouton', etat: 'a-montrer', x: 300, largeur: 96, ligne: 2 }] },
+}
+// (saute-mouton, la passe et la pyramide se jouent à plusieurs : deux sous-agents de plus au travail)
+for (const nom of ['mouton', 'passe', 'pyramide'])
+  DEMOS[nom] = {
+    plus: [
+      { id: 'agent-a2', genre: 'agent', etat: 'encours', x: 105, largeur: 17, ligne: 0, teinte: '#7FB2E9' },
+      { id: 'agent-a3', genre: 'agent', etat: 'encours', x: 122, largeur: 17, ligne: 0, teinte: '#A98BE9' },
+    ],
+  }
+
+/** La bande d'exemple, arrangée pour ce numéro */
+function bandeDemo(nom: string): { elements: ElementBande[]; vise?: string } {
+  const d = DEMOS[nom]
+  if (!d) return { elements: EXEMPLE }
+  return { elements: [...EXEMPLE.map(el => ({ ...el, ...(d.change?.[el.id] ?? {}) })), ...(d.plus ?? [])], ...(d.vise ? { vise: d.vise } : {}) }
+}
+
+/**
+ * Un numéro montré dans sa carte (une leçon) : sur la bande d'exemple, pas
+ * la tienne (elle n'a pas toujours ce qu'il lui faut), l'original caché
+ * pendant qu'il le tient, comme atelier le fait ; joué une fois, et il reste
+ * dans son coin au bout. Null : rien à viser, même là.
+ */
+export function svgNumeroDemo(nom: string, couleur: Teinte, deguise?: Deguisement | Tenue): { svg: string; largeur: number; hauteur: number; duree: number } | null {
+  const largeur = LARGEUR_DEMO
+  const { elements, vise } = bandeDemo(nom)
+  const prep = prepareNumero(nom, elements, largeur, 0, vise ? { vise } : {})
+  if (!prep) return null
+  const T = prep.duree
+  const dessus = svgNumero({ nom, elements, cibles: prep.cibles, largeur, ...(vise ? { vise } : {}) }, couleur, deguise)
+  let css = ''
+  const bande = elements.map((el, k) => {
+    const copie = copieDe(el, `ex-e${k}-`, el.x, hautDe(el))
+    const pris = prep.emprunts.filter(e => e.id === el.id)
+    if (!pris.length || T <= 0) return copie
+    // caché pendant qu'il le tient ; rendu à la fin de l'emprunt (s'il le garde jusqu'au bout, sa copie reste à sa place)
+    const cles = pris.map(e => `${pc(e.de, T)}{opacity:0}${e.a < T - 1e-6 ? `${pc(e.a, T)}{opacity:1}` : ''}`).join('')
+    css += `.ex-tenu-${k}{animation:ex-tenu-${k} ${T}s steps(1,end) both}@keyframes ex-tenu-${k}{0%{opacity:1}${cles}}`
+    return `<g class="ex-tenu-${k}">${copie}</g>`
+  }).join('')
+  const hauteur = HAUTEUR + MARGE_DEMO
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 ${-MARGE_DEMO} ${largeur} ${hauteur}" width="${largeur}" height="${hauteur}">` +
+    `<svg x="0" y="0" width="${largeur}" height="${HAUTEUR}" overflow="visible"><style>${CSS_BANDE}${css}</style>${bande}</svg>` +
+    dessus.replace(/^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" width="100%"/, `<svg x="0" y="0" width="${largeur}" overflow="visible"`) +
+    '</svg>'
+  return { svg, largeur, hauteur, duree: T }
+}
+
 // ------------------------------------------------------------- le dessin
 
-const pc = (t: number, T: number) => `${arrondi(Math.min(100, (t / T) * 100), 3)}%`
+const pc =(t: number, T: number) => `${arrondi(Math.min(100, (t / T) * 100), 3)}%`
 
 /** Les cadres de repérage : un trait pointillé autour de chaque élément de la bande */
 const reperes = (els: readonly ElementBande[]) =>

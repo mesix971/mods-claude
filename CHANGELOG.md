@@ -43,6 +43,16 @@
 
 ## clawd
 
+- **0.18.3** — 2026-11-09 — Ses leçons en numéro se voient enfin.
+  - Dans l'onglet 🎓 de sa carte, un numéro se joue en direct sur une bande
+    d'exemple arrangée pour lui. Ta bande n'a pas toujours ce qu'il lui faut :
+    deux étapes pour le jongleur, un build vert pour la réconciliation…
+    Le bouton « ↻ Revoir ici » le relance.
+  - « Qu'il la joue sur sa bande » dit maintenant la vraie raison d'un refus :
+    ce qui manque à ta bande (le numéro est alors rejoué dans la carte).
+  - Occupé par une petite scène, il la finit puis joue le numéro, au lieu de
+    te dire de réessayer.
+
 - **0.18.2** — 2026-11-09 — Plus rien ne sort de sa toile.
   - Une scène qui interrompt son déménagement se jouait là où il s'était
     arrêté, jusqu'à 24 unités à droite ou 100 à gauche de chez lui : ce qu'il
