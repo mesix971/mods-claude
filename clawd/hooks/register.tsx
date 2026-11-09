@@ -1329,6 +1329,8 @@ const lesLecons = () => carteEnPlus.lecons ?? []
 
 /** Il rejoue une leçon sur sa bande : sa scène (en entier si c'est une chorégraphie), ou son numéro ; false s'il n'y a rien à jouer, ou s'il ne peut pas */
 async function joueLeconIci($: EngineInterface, l: LeconCarte): Promise<boolean> {
+  // tu le lui demandes : il se réveille s'il dormait (endormi, il ne jouait pas ce que tu lui demandais)
+  await reveil($)
   if (l.numero) {
     // ta bande n'a pas ce qu'il lui faut : inutile d'attendre
     if (bureau && !sondage && !prepareNumero(l.numero, await elementsBande($), largeurBande())) return non('rien')

@@ -43,6 +43,9 @@
 
 ## clawd
 
+- **0.18.4** — 2026-11-09 — Endormi, il se réveille quand tu lui demandes de
+  rejouer une leçon depuis sa carte.
+
 - **0.18.3** — 2026-11-09 — Ses leçons en numéro se voient enfin.
   - Dans l'onglet 🎓 de sa carte, un numéro se joue en direct sur une bande
     d'exemple arrangée pour lui. Ta bande n'a pas toujours ce qu'il lui faut :
