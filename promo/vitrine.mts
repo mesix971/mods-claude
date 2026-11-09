@@ -56,7 +56,7 @@ const tuiles: Tuile[] = [
   // son aura de Légende, qui s'accentue avec ses niveaux
   ...([[1, 50], [3, 75], [4, 100]] as const).map(([aura, n]) => ({ fichier: `aura-${n}`, anim: 'repos', tenue: { insigne: 'soleil', aura } })),
   // sa journée
-  ...['reveil', 'pause', 'retrouvailles', 'chat', 'filante', 'dodo', 'nuit'].map(anim => ({ fichier: anim, anim })),
+  ...['reveil', 'pause', 'retrouvailles', 'chat', 'filante', 'clawdette', 'dodo', 'nuit'].map(anim => ({ fichier: anim, anim })),
   // ses déguisements du jour
   { fichier: 'halloween', anim: 'bonbon', tenue: { deguise: 'citrouille' } },
   { fichier: 'vendredi', anim: 'detente', tenue: { deguise: 'lunettes' } },

@@ -297,12 +297,12 @@ Survole-le et clique ⭐, ou tape `/clawd carte`. Son cadre suit son grade.
 </tr>
 <tr>
 <td align="center"><img src="promo/vitrine/chat.svg" width="270" alt="Un chat traverse sa scène"><br><sub>Une visite rare : le chat…</sub></td>
-<td align="center"><img src="promo/vitrine/filante.svg" width="270" alt="Une étoile filante"><br><sub>…ou une étoile filante, le soir</sub></td>
-<td align="center"><img src="promo/vitrine/dodo.svg" width="270" alt="Clawd dort"><br><sub>Il dort</sub></td>
+<td align="center"><img src="promo/vitrine/filante.svg" width="270" alt="Une étoile filante"><br><sub>…une étoile filante, le soir…</sub></td>
+<td align="center"><img src="promo/vitrine/clawdette.svg" width="270" alt="Une Clawdette rose s'assoit à côté de Clawd et lui fait un bisou"><br><sub>…ou, plus rare encore, la Clawdette</sub></td>
 </tr>
 <tr>
+<td align="center"><img src="promo/vitrine/dodo.svg" width="270" alt="Clawd dort"><br><sub>Il dort</sub></td>
 <td align="center"><img src="promo/vitrine/nuit.svg" width="270" alt="Clawd te dit d'aller dormir"><br><sub>Passé 1 h du matin : va dormir</sub></td>
-<td></td>
 <td></td>
 </tr>
 </table>
