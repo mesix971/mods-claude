@@ -2191,7 +2191,8 @@ const SCENES: Record<ClawdAnim, () => Scene> = {
   },
   yoyo: () => ({
     duree: 1.2,
-    images: [6, 18, 30, 18].map(l => corps({ d: 'tendu', yeux: l > 20 ? 'bas' : 'normal' }) + trait([[80, 18], [80, 18 + l]], PAL.w!, 1) + A(YOYO, 76, 16 + l, 3)),
+    // (au plus bas, le yoyo frôle le sol sans passer dessous)
+    images: [6, 16, 24, 16].map(l => corps({ d: 'tendu', yeux: l > 20 ? 'bas' : 'normal' }) + trait([[80, 18], [80, 18 + l]], PAL.w!, 1) + A(YOYO, 76, 16 + l, 3)),
   }),
   guitare: () => ({
     duree: 0.6,
@@ -3500,6 +3501,161 @@ function choreographie(nom: string, s: Scene, dessus = ''): { css: string; svg: 
   return { css, svg: `${decor}<g class="ch-${nom}">${corps}${dessus}</g>`, ombre: `<g class="ch-${nom}">${ombreAuSol}</g>` }
 }
 
+// ------------------------------------------------------- jusqu'où va sa scène
+
+/** Une transformation du plan : x' = a·x + c·y + e, y' = b·x + d·y + f */
+type Affine = readonly [number, number, number, number, number, number]
+const IDENTITE: Affine = [1, 0, 0, 1, 0, 0]
+const compose = (m: Affine, n: Affine): Affine => [
+  m[0] * n[0] + m[2] * n[1],
+  m[1] * n[0] + m[3] * n[1],
+  m[0] * n[2] + m[2] * n[3],
+  m[1] * n[2] + m[3] * n[3],
+  m[0] * n[4] + m[2] * n[5] + m[4],
+  m[1] * n[4] + m[3] * n[5] + m[5],
+]
+const nombres = (t: string) => [...t.matchAll(/-?\d*\.?\d+(?:e-?\d+)?/g)].map(m => +m[0])
+/** L'attribut `transform` d'un groupe (translate, scale, rotate, dans l'ordre où ils s'appliquent) */
+function transformation(t: string): Affine {
+  let m = IDENTITE
+  for (const [, op, args] of t.matchAll(/(translate|scale|rotate)\(([^)]*)\)/g)) {
+    const [p = 0, q, r] = nombres(args!)
+    if (op === 'translate') m = compose(m, [1, 0, 0, 1, p, q ?? 0])
+    else if (op === 'scale') m = compose(m, [p, 0, 0, q ?? p, 0, 0])
+    else {
+      const a = (p * Math.PI) / 180
+      const [cx, cy] = [q ?? 0, r ?? 0]
+      m = compose(compose(compose(m, [1, 0, 0, 1, cx, cy]), [Math.cos(a), Math.sin(a), -Math.sin(a), Math.cos(a), 0, 0]), [1, 0, 0, 1, -cx, -cy])
+    }
+  }
+  return m
+}
+const attr = (a: string, nom: string) => new RegExp(`(?:^|\\s)${nom}="([^"]*)"`).exec(a)?.[1]
+const num = (a: string, nom: string) => +(attr(a, nom) ?? 0) || 0
+type Boite = [number, number, number, number]
+const VIDE_BOITE: Boite = [Infinity, -Infinity, Infinity, -Infinity]
+const unit = (b: Boite, c: Boite): Boite => [Math.min(b[0], c[0]), Math.max(b[1], c[1]), Math.min(b[2], c[2]), Math.max(b[3], c[3])]
+/** La boîte (x min, x max, y min, y max) d'un rectangle une fois transformé */
+function boiteDe(m: Affine, x0: number, y0: number, x1: number, y1: number): Boite {
+  let b = VIDE_BOITE
+  for (const [x, y] of [[x0, y0], [x1, y0], [x0, y1], [x1, y1]] as const) {
+    const [X, Y] = [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]]
+    b = unit(b, [X, X, Y, Y])
+  }
+  return b
+}
+
+/**
+ * Jusqu'où va un dessin (sa boîte, dans le repère de la toile) : ses rectangles, cercles, tracés et ce qu'il reprend
+ * (<use>, d'après `defs`), groupes transformés compris. Ce qui bouge en CSS compte là où il est posé (une note qui
+ * monte, un carton qui part ne comptent qu'à leur départ) ; ce que cachent <defs> ne compte que repris.
+ */
+function etendue(svg: string, defs: string): Boite {
+  const parId = new Map<string, string>()
+  // chaque élément nommé des définitions, avec ce qu'il contient (ses groupes imbriqués compris)
+  for (const m of defs.matchAll(/<(g|path|rect|circle|ellipse|polygon)\b([^>]*\bid="([^"]+)"[^>]*)>/g)) {
+    if (m[0].endsWith('/>')) {
+      parId.set(m[3]!, m[0])
+      continue
+    }
+    let prof = 1
+    const re = new RegExp(`<(/?)${m[1]}\\b[^>]*?(/?)>`, 'g')
+    re.lastIndex = m.index! + m[0].length
+    for (let t = re.exec(defs); t; t = re.exec(defs)) {
+      if (t[2]) continue
+      prof += t[1] ? -1 : 1
+      if (!prof) {
+        parId.set(m[3]!, defs.slice(m.index!, t.index + t[0].length))
+        break
+      }
+    }
+  }
+  const deja = new Map<string, Boite>()
+  const parcours = (s: string, base: Affine, pile: string[]): Boite => {
+    let b = VIDE_BOITE
+    const piles: Affine[] = [base]
+    let cache = 0
+    for (const [, ferme, nom, a] of s.matchAll(/<(\/?)([a-zA-Z]+)([^>]*)>/g)) {
+      const m = piles[piles.length - 1]!
+      const seul = a!.endsWith('/')
+      if (nom === 'defs' || nom === 'style' || nom === 'filter' || nom === 'linearGradient' || nom === 'radialGradient') {
+        if (!seul) cache += ferme ? -1 : 1
+        continue
+      }
+      if (cache) continue
+      if (nom === 'g' || nom === 'svg') {
+        if (ferme) piles.pop()
+        else if (!seul) piles.push(compose(m, transformation(attr(a!, 'transform') ?? '')))
+        continue
+      }
+      if (ferme) continue
+      const t = attr(a!, 'transform')
+      const ici = t ? compose(m, transformation(t)) : m
+      if (nom === 'rect') b = unit(b, boiteDe(ici, num(a!, 'x'), num(a!, 'y'), num(a!, 'x') + num(a!, 'width'), num(a!, 'y') + num(a!, 'height')))
+      else if (nom === 'circle' || nom === 'ellipse') {
+        const [cx, cy] = [num(a!, 'cx'), num(a!, 'cy')]
+        const [rx, ry] = nom === 'circle' ? [num(a!, 'r'), num(a!, 'r')] : [num(a!, 'rx'), num(a!, 'ry')]
+        b = unit(b, boiteDe(ici, cx - rx, cy - ry, cx + rx, cy + ry))
+      } else if (nom === 'path' || nom === 'polygon' || nom === 'polyline') {
+        const n = nombres(attr(a!, nom === 'path' ? 'd' : 'points') ?? '')
+        for (let i = 0; i + 1 < n.length; i += 2) b = unit(b, boiteDe(ici, n[i]!, n[i + 1]!, n[i]!, n[i + 1]!))
+      } else if (nom === 'line') b = unit(b, boiteDe(ici, num(a!, 'x1'), num(a!, 'y1'), num(a!, 'x2'), num(a!, 'y2')))
+      else if (nom === 'text') {
+        const taille = num(a!, 'font-size') || 10
+        b = unit(b, boiteDe(ici, num(a!, 'x'), num(a!, 'y') - taille, num(a!, 'x') + taille * 0.6 * 4, num(a!, 'y')))
+      } else if (nom === 'use') {
+        const id = (attr(a!, 'href') ?? attr(a!, 'xlink:href') ?? '').replace(/^#/, '')
+        const def = parId.get(id)
+        if (!def || pile.includes(id)) continue
+        let propre = deja.get(id)
+        if (!propre) {
+          propre = parcours(def, IDENTITE, [...pile, id])
+          deja.set(id, propre)
+        }
+        if (propre[0] > propre[1]) continue
+        const place = compose(ici, [1, 0, 0, 1, num(a!, 'x'), num(a!, 'y')])
+        b = unit(b, boiteDe(place, propre[0], propre[2], propre[1], propre[3]))
+      }
+    }
+    return b
+  }
+  return parcours(svg, IDENTITE, [])
+}
+
+const bornesFaites = new Map<ClawdAnim, readonly [number, number]>()
+/** De combien sa scène s'étend à gauche et à droite (x min, x max, sur la toile), lui chez lui ; sans son aura ni sa tenue */
+export function bornesScene(anim: ClawdAnim): readonly [number, number] {
+  let b = bornesFaites.get(anim)
+  if (!b) {
+    const s = SCENES[anim]()
+    const contenu = [...s.images, ...(s.calques ?? []).flatMap(c => c.images), s.fx ?? ''].join('')
+    const e = etendue(contenu, `${s.defs ?? ''}${reutilises(contenu)}`)
+    // (et le chemin qu'il y fait : sa promenade l'emmène loin à gauche ; sur une boucle entière de son pas, 9 s au plus,
+    // même quand sa scène est plus courte, comme sa marche)
+    let [aGauche, aDroite] = [0, 0]
+    for (let t = 0; t < Math.max(s.duree, 9); t += 0.25) {
+      const x = etatScene(anim, t).x
+      aGauche = Math.min(aGauche, x)
+      aDroite = Math.max(aDroite, x)
+    }
+    b = e[0] <= e[1] ? [Math.floor(e[0] + aGauche), Math.ceil(e[1] + aDroite)] : [X0 + aGauche, X0 + 72 + aDroite]
+    bornesFaites.set(anim, b)
+  }
+  return b
+}
+
+/**
+ * Où jouer cette scène, interrompant son déménagement là où il était (`x`) : au plus près, là où elle tient tout
+ * entière dans sa toile. Chez lui (0), elle tient toujours (ce qui en sort exprès, comme un carton qui s'en va, en sort
+ * de toute façon). Il marche jusque-là avant de la jouer.
+ */
+export function placeJouable(anim: ClawdAnim, x: number): number {
+  const [g, d] = bornesScene(anim)
+  const min = Math.min(0, VUE.x + 1 - g)
+  const max = Math.max(0, VUE.x + VUE.w - 1 - d)
+  return +Math.min(max, Math.max(min, x)).toFixed(1)
+}
+
 /** Durée naturelle d'une scène au repos : une chorégraphie entière, ou quelques cycles. */
 export function dureeScene(anim: ClawdAnim): number {
   // le rapport d'un mini se joue une fois (son mini repart), pas en boucle ; ses jeux de cartons aussi (le carton s'en
@@ -3833,7 +3989,11 @@ function equipe(copains: readonly Mini[], couleur: Teinte, decale = 0): { css: s
  * qu'il laisse s'efface ; `avance` : où en était déjà ce trajet (s) quand la
  * scène a commencé.
  */
-export type EnPlace = { x: number; decor: string; rentre?: boolean; vers?: number; avance?: number }
+/**
+ * Où il joue sa scène : décalé de `x`, ses cartons posés autour (`decor`). En route (`rentre`) : il marche de `x` à
+ * `vers` avant de la jouer, `avance` s déjà faites ; `garde` : ses cartons restent là (sinon ils s'effacent derrière lui)
+ */
+export type EnPlace = { x: number; decor: string; rentre?: boolean; vers?: number; avance?: number; garde?: boolean }
 
 /** La durée de son trajet à pied (s) de `x` à `vers` : à sa vitesse à vide, une demi-seconde au moins (le temps que ce qu'il laisse s'efface) */
 export const dureeRetour = (x: number, vers = 0) => +Math.max(0.5, Math.abs(vers - x) / VIDE).toFixed(2)
@@ -3868,7 +4028,8 @@ export function svgScene(anim: ClawdAnim, copains: readonly Mini[] = [], deja = 
       if (!enPlace?.rentre) return dessineScene(anim, copains, couleur, rapporteur, bulle, enPlace)
       // son trajet avant la scène (au-delà de POIDS_MAX, ce qui n'arrive pas avec ses scènes actuelles : elle commence
       // alors sans lui)
-      const seule = dessineScene(anim, copains, couleur, rapporteur, bulle)
+      // (ses cartons gardés : sa scène les a autour d'elle, là où il arrive ; une chorégraphie a les siens)
+      const seule = dessineScene(anim, copains, couleur, rapporteur, bulle, enPlace.garde && enPlace.decor && !estChoregraphie(anim) ? { x: enPlace.vers ?? 0, decor: enPlace.decor } : undefined)
       const avecRetour = rentreChezLui(seule, enPlace, couleur)
       return avecRetour.length < POIDS_MAX + (aura ? POIDS_AURA : 0) ? avecRetour : seule
     })
@@ -4046,7 +4207,7 @@ export function etatScene(anim: ClawdAnim, deja: number): EnPlace {
  * il ne saute d'un bout à l'autre en changeant de scène. Une scène qui
  * commence en plein trajet (`avance` s déjà faites) le reprend là où il en est.
  */
-function rentreChezLui(svg: string, { x, decor, vers = 0, avance = 0 }: EnPlace, couleur: Teinte): string {
+function rentreChezLui(svg: string, { x, decor, vers = 0, avance = 0, garde = false }: EnPlace, couleur: Teinte): string {
   const i = svg.indexOf('</style>')
   const fin = svg.lastIndexOf('</svg>')
   if (i < 0 || fin < i) return svg
@@ -4066,7 +4227,7 @@ function rentreChezLui(svg: string, { x, decor, vers = 0, avance = 0 }: EnPlace,
   // son feu de camp reste allumé pendant qu'il rentre (sa scène, cachée jusqu'à son arrivée, a le sien, au même endroit)
   const feu = feuDeCamp()
   const tenueCss = (defs.includes('class="goutte') && !scene.includes('@keyframes goutte') ? CSS_GOUTTE : '') + (defs.includes('class="brille"') && !scene.includes('@keyframes brille') ? CSS_BRILLE : '') + (feu && !scene.includes('@keyframes flamme-vacille') ? CSS_FLAMME : '') + (defs.includes('class="au-taille') && !scene.includes('@keyframes au-taille') ? cssAura(defs) : '')
-  const retour = `${defs}<g class="rentre-pas">${OMBRE}</g><g filter="url(#contour)">${feu}<g class="rentre-range">${decor}</g><g class="rentre-pas">${pas}</g></g>`
+  const retour = `${defs}<g class="rentre-pas">${OMBRE}</g><g filter="url(#contour)">${feu}<g class="${garde ? '' : 'rentre-range'}">${decor}</g><g class="rentre-pas">${pas}</g></g>`
   const tete = scene.slice(0, i).replace('style="--t0:0s"', `style="--t0:0s;--tm:calc(var(--t0,0s) + ${reste}s)"`)
   return `${tete}${css}${tenueCss}</style>${retour}<g class="rentre-scene">${scene.slice(i + '</style>'.length)}</g></svg>`
 }

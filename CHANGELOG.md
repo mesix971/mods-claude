@@ -43,6 +43,14 @@
 
 ## clawd
 
+- **0.18.2** — 2026-11-09 — Plus rien ne sort de sa toile.
+  - Une scène qui interrompt son déménagement se jouait là où il s'était
+    arrêté, jusqu'à 24 unités à droite ou 100 à gauche de chez lui : ce qu'il
+    tient (sa feuille, sa fusée, sa canne à pêche…) sortait de sa toile, coupé.
+    Il fait maintenant quelques pas jusqu'à l'endroit le plus proche où toute
+    sa scène tient, ses cartons restant posés. Jusqu'où va chaque scène est
+    calculé d'après son dessin (vérifié dans un navigateur, scène par scène).
+  - Son yoyo ne descend plus sous le sol.
 - **0.18.1** — 2026-11-09 — Ses pastilles de leçons se distinguent.
   - Deux leçons du même jour ne se confondent plus : chaque pastille porte
     son numéro (« n° 2 · 15/10 »). Une leçon corrigée (texte, scène) se

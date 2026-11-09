@@ -6,7 +6,7 @@ import { ACTIVITES, BONBON_S, CLASSES_QUI_DEPLACENT, CLIGNEMENTS, DANSES, EMOJI,
 import { autreQue, deToi, deguisementDu, insigneDe, niveauDe, seuilNiveau, sueurDe, visiteur } from './register'
 import { auraDe } from './register'
 import { activitesAuRepos } from './register'
-import { AU_FEU } from './sprite'
+import { AU_FEU, bornesScene, placeJouable } from './sprite'
 import { svgMot } from './sprite'
 import { COIN_VIDE, EXEMPLE, MAX_SVG, NUMEROS, departDe, prepareNumero, svgNumero } from './bande'
 import { FAITS, GRADES, gradeDe, nouveauxFaits, prochainGrade } from './grades'
@@ -167,6 +167,31 @@ test('après une grosse réaction, jouée là où il en était (au milieu de ses
   await ui.unmount()
 })
 
+test('📐 jusqu’où va chaque scène : calculé d’après son dessin ; jouée en plein déménagement, elle tient toujours dans sa toile', () => {
+  // (relevé dans un navigateur, à une unité près : son corps seul, ses accessoires à droite, ses notes de part et d'autre)
+  expect(bornesScene('repos')).toEqual([54, 126])
+  expect(bornesScene('push')).toEqual([54, 170])
+  expect(bornesScene('danse')).toEqual([28, 146])
+  // sa promenade compte son chemin (jusqu'à 90 unités à gauche)
+  expect(bornesScene('promenade')[0]).toBeLessThanOrEqual(-54)
+  // là où elle tient : au plus près de là où il était, chez lui toujours possible
+  expect(placeJouable('repos', 24)).toBe(24)
+  expect(placeJouable('push', 24)).toBe(3)
+  expect(placeJouable('push', -100)).toBe(-100)
+  expect(placeJouable('promenade', -100)).toBeGreaterThan(-20)
+  // de -100 (tout à gauche) à +24 (un peu à droite de chez lui) : jamais rien ne déborde, hors ce qui sort exprès
+  for (const anim of Object.keys(EMOJI) as (keyof typeof EMOJI)[]) {
+    const [g, d] = bornesScene(anim)
+    for (const x of [-100, -50, 0, 12, 24]) {
+      const p = placeJouable(anim, x)
+      if (g > -69 && d < 173) {
+        expect(g + p).toBeGreaterThanOrEqual(-69)
+        expect(d + p).toBeLessThanOrEqual(173)
+      } else expect(p === 0 || (g + p >= -69 && d + p <= 173)).toBe(true)
+    }
+  }
+})
+
 test('une scène commencée sur place y reste jusqu’au bout, même si le tour finit pendant ; puis il rentre chez lui', { timeoutMs: 30_000 }, async ($, on) => {
   const { horloge } = moteur(on, { isError: false, text: 'BUILD SUCCESSFUL' })
   on('turn.complete', () => ({ text: '' }) as never)
@@ -176,21 +201,30 @@ test('une scène commencée sur place y reste jusqu’au bout, même si le tour 
   // un build passe : la fête, sur place
   await $.tool.call({ tool: 'Bash', command: './gradlew assembleDebug' })
   ui = await $.ui.mount({ ...BAND(true), surface: 'desktop' })
+  // (à 8 s, il est un peu à droite de chez lui : ses confettis y sortiraient de sa toile, il fait deux pas à gauche,
+  // ses cartons restent posés)
   const ici = etatBoulot(8)
-  expect(String((await svg(ui as never)).source)).toContain(`<g transform="translate(${ici.x} 0)">`)
+  const la = placeJouable('fete', ici.x)
+  expect(ici.x).toBeGreaterThan(la)
+  const fete = String((await svg(ui as never)).source)
+  expect(fete).toContain(`<g transform="translate(${la} 0)">`)
+  expect(fete).toContain(`translateX(${ici.x}px)`)
+  expect(fete).not.toContain('class="rentre-range"')
+  expect(fete).toContain(ici.decor)
   await ui.unmount()
   // le tour finit pendant la fête : elle ne saute pas à son coin en route
   await horloge.advance(1000)
   await $.turn.complete({ answer: 'fait', durationMs: 1000, isAborted: false, turnId: 't' } as never)
   ui = await $.ui.mount({ ...BAND(false), surface: 'desktop' })
   expect(await scene(ui as never)).toContain('fete')
-  expect(String((await svg(ui as never)).source)).toContain(`<g transform="translate(${ici.x} 0)">`)
+  expect(String((await svg(ui as never)).source)).toContain(`<g transform="translate(${la} 0)">`)
   await ui.unmount()
   // la fête finie : il rentre chez lui, ses cartons s'effacent
   await horloge.advance(6000)
   ui = await $.ui.mount({ ...BAND(false), surface: 'desktop' })
   expect(await scene(ui as never)).not.toContain('fete')
-  expect(String((await svg(ui as never)).source)).toContain(`translateX(${ici.x}px)`)
+  expect(String((await svg(ui as never)).source)).toContain(`translateX(${la}px)`)
+  expect(String((await svg(ui as never)).source)).toContain('class="rentre-range"')
   await ui.unmount()
 })
 

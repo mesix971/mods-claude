@@ -22,7 +22,7 @@ import type { Humeur } from './humeur'
 import { ACTIVITES, BAILLE_S, BONBON_S, CLAWD_TEXTE, DANSES, EMOJI, EN_BULLE, JEUX_CARTONS, RAPPORT_S, SORTIES, TAILLE, TEINTES, avecT0, bulleDedans, dureeBoulot, dureeRetour, dureeScene, estChoregraphie, etatBoulot, etatScene, minisAPart, svgBulle, svgDecor, svgMinis, svgScene, teinte, teinteConnue, tenueDe } from './sprite'
 import type { Bulle, Deguisement, EnPlace, Insigne, Mini, Sortie, Tenue } from './sprite'
 import type { Aura } from './sprite'
-import { svgMot } from './sprite'
+import { placeJouable, svgMot } from './sprite'
 import { AU_FEU } from './sprite'
 import { FAITS, GRADES, gradeDe, nouveauxFaits, prochainGrade } from './grades'
 import type { Fait } from './grades'
@@ -779,7 +779,7 @@ function boulotEnPlace(maintenant: number): EnPlace | null {
 function lieuActuel(maintenant: number, faitBoulot = boulotEnCours(maintenant)): EnPlace | null {
   if (retourChez && enRetour(maintenant)) {
     const u = (maintenant - retourChez.debut) / 1000 / dureeTrajet(retourChez)
-    return { x: +(retourChez.etat.x + (retourChez.vers - retourChez.etat.x) * u).toFixed(1), decor: u < 0.5 ? retourChez.etat.decor : '' }
+    return { x: +(retourChez.etat.x + (retourChez.vers - retourChez.etat.x) * u).toFixed(1), decor: retourChez.etat.garde || u < 0.5 ? retourChez.etat.decor : '' }
   }
   if (!coinVu) return null
   if (coinVu.enPlace) return coinVu.enPlace
@@ -2602,13 +2602,15 @@ export const register: Register = on => {
     // une scène qui interrompt son déménagement se joue là où il en était, au milieu de ses cartons (il ne saute plus à
     // son coin, puis de nouveau au milieu en reprenant) ; commencée là, elle y reste jusqu'au bout
     const passee = p !== null && anim === p.anim && anim !== 'boulot'
-    const enPlace = enNumero || !passee
+    const surPlace = enNumero || !passee
       ? null
       : placeDuPassage?.id === p.id
         ? placeDuPassage.place
         : fond === 'boulot' && !estChoregraphie(anim)
           ? boulotEnPlace(maintenant)
           : null
+    // (au plus près de là où il était, là où elle tient tout entière dans sa toile : il y va à pied, ses cartons restent)
+    const enPlace = surPlace ? { ...surPlace, x: placeJouable(anim, surPlace.x) } : null
     if (!enNumero) placeDuPassage = passee && enPlace ? { id: p.id, place: enPlace } : null
     // ses minis ont leur propre dessin (hors chorégraphie et rapport) : un sous-agent qui change d'outil ne recrée pas le sien
     const aPart = minisAPart(anim)
@@ -2639,9 +2641,9 @@ export const register: Register = on => {
       const garde = enPlace !== null || (anim === 'boulot' && !repart)
       const vers = enPlace ? enPlace.x : anim === 'boulot' ? etatBoulot(boulotEnCours(maintenant)).x : etatScene(anim, 0).x
       let rentre: EnPlace | undefined
-      if (!enPlace && ici && (Math.abs(ici.x - vers) > 0.5 || (ici.decor !== '' && !garde))) {
-        // (déjà en route vers là : il continue)
-        if (!(retourChez && enRetour(maintenant) && Math.abs(retourChez.vers - vers) < 0.5)) retourChez = { etat: { x: ici.x, decor: garde ? '' : ici.decor }, vers, debut: maintenant }
+      if (ici && (Math.abs(ici.x - vers) > 0.5 || (ici.decor !== '' && !garde))) {
+        // (déjà en route vers là : il continue ; ses cartons gardés restent posés pendant qu'il marche)
+        if (!(retourChez && enRetour(maintenant) && Math.abs(retourChez.vers - vers) < 0.5)) retourChez = { etat: { x: ici.x, decor: ici.decor, ...(garde ? { garde: true } : {}) }, vers, debut: maintenant }
         rentre = { ...retourChez!.etat, rentre: true, vers, avance: +((maintenant - retourChez!.debut) / 1000).toFixed(2) }
       }
       const reste = rentre ? Math.max(0, dureeTrajet(retourChez!) - rentre.avance!) : 0
@@ -2758,7 +2760,7 @@ export const register: Register = on => {
           </Box>
           <Box key="clawd" flexShrink={0}>
             <Svg
-              source={enNumero ? coin : svgScene(anim, minisDedans, deja, couleur, anim === 'rapport' ? (rapportEnCours ?? undefined) : undefined, undefined, tenue, enPlace ?? rentre ?? undefined)}
+              source={enNumero ? coin : svgScene(anim, minisDedans, deja, couleur, anim === 'rapport' ? (rapportEnCours ?? undefined) : undefined, undefined, tenue, rentre ?? enPlace ?? undefined)}
               alt={`Clawd : ${anim}${equipe.length ? ` (+${equipe.length} copains)` : ''}`}
               width={TAILLE.largeur}
               height={TAILLE.hauteur}
