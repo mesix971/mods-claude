@@ -1961,6 +1961,8 @@ function visiteClawdette(): Scene {
 export const AU_FEU: readonly ClawdAnim[] = ['flambe', 'buche', 'rechauffe', 'guimauve']
 /** Celles qui se jouent une fois (un carton ne brûle qu'une fois, une guimauve ne se croque qu'une fois) */
 const AU_FEU_UNE_FOIS: readonly ClawdAnim[] = ['flambe', 'buche', 'guimauve']
+/** Ses scènes de pensée (sa conscience) : jouées une fois, juste avant ce qu'elles annoncent */
+export const PENSEES: readonly ClawdAnim[] = ['faim', 'soif', 'bougeotte', 'curieux', 'fier', 'inquiet', 'boude', 'guette']
 /** Un carton qui brûle : roussi (1), puis calciné (2) */
 const roussi = (lignes: readonly string[], degre: 1 | 2) =>
   lignes.map(l => (degre === 1 ? l.replace(/[HSC]/g, 'N').replace(/[cD]/g, 'n') : l.replace(/[HSC]/g, 'g').replace(/[cD]/g, 'K')))
@@ -2483,6 +2485,23 @@ const SCENES: Record<ClawdAnim, () => Scene> = {
       ],
     }
   },
+  // Sa conscience (conscience.ts) : avant d'agir, il y pense. Un besoin qui le presse (sa faim, sa soif, l'envie de
+  // bouger, sa curiosité) dans sa bulle, puis il se décide : l'activité qui le comble suit
+  faim: () => yPense(COOKIE, [{ yeux: 'haut' }, { yeux: 'coeur' }, { yeux: 'coeur', d: 'tete' }], { yeux: 'heureux' }),
+  soif: () => yPense(GOBELET, [{ yeux: 'haut' }, { yeux: 'mi', bouche: 'o' }, { yeux: 'haut', d: 'tete' }], { yeux: 'heureux' }),
+  bougeotte: () => yPense(ECLAIR, [{ yeux: 'haut' }, { yeux: 'haut', jambes: 'tape' }, { yeux: 'heureux', jambes: 'tape', g: 'haut' }], { yeux: 'heureux', g: 'haut', d: 'haut' }),
+  curieux: () => yPense(INTERROGATION, [{ yeux: 'haut' }, { yeux: 'gauche', d: 'tete' }, { yeux: 'droite', d: 'tete' }], { yeux: 'grand' }),
+  // … ou une émotion qui dure : sa médaille (il est encore fier), la croix rouge de ce qui rate (il s'inquiète, un œil
+  // vers la bande)
+  fier: () => yPense(MEDAILLE_PENSEE, [{ yeux: 'haut' }, { yeux: 'heureux' }, { yeux: 'heureux', g: 'haut', d: 'haut', dy: -1, masse: 'etire' }], { yeux: 'clin' }),
+  inquiet: () => yPense(CROIX_ROUGE, [{ yeux: 'gauche' }, { yeux: 'mi', bouche: 'o' }, { yeux: 'gauche', d: 'tete' }], { yeux: 'mi' }),
+  // vexé (tu l'as zappé trois fois de suite) : il te tourne le dos, jette un œil par-dessus son épaule, se retourne
+  boude: () => ({
+    duree: 4,
+    images: [corps({ yeux: 'mi' }), corps({ vue: 'cote' }), corps({ vue: 'dos' }), corps({ vue: 'dos' }), corps({ vue: 'dos', dy: 1 }), corps({ vue: 'dos' }), corps({ vue: 'cote' }), corps({ yeux: 'mi' })],
+  }),
+  // ton heure approche (il connaît ton rythme) : l'horloge dans sa bulle, il te cherche des yeux, à gauche, à droite
+  guette: () => yPense(HORLOGE, [{ yeux: 'haut' }, { yeux: 'gauche' }, { yeux: 'droite' }], { yeux: 'haut', d: 'tete' }),
   gratte: () => ({
     duree: 1.6,
     fx: glyphe('?', 70, -10, 16, PAL.Y!, 'scintille'),
@@ -3663,6 +3682,7 @@ export function dureeScene(anim: ClawdAnim): number {
   if (anim === 'rapport') return RAPPORT_S
   const s = SCENES[anim]()
   if (JEUX_CARTONS.includes(anim) || AU_FEU_UNE_FOIS.includes(anim) || anim === 'niveau' || anim === 'ceremonie') return s.duree
+  if (PENSEES.includes(anim)) return s.duree
   if (s.choreo) return s.duree
   const t = Math.min(14, Math.max(8, s.duree * 3))
   // une longue boucle (une petite histoire) que le plafond couperait en plein geste : des tours entiers, au moins un
@@ -4302,6 +4322,21 @@ function pensee(icone: readonly string[]): string {
   return A(PENSEE, 14, -36, 3) + A(icone, 14 + Math.round((45 - w) / 2), -33 + Math.round((24 - h) / 2), 3)
 }
 
+// Ce qui l'occupe, dans sa bulle (sa conscience) : un café fumant (sa soif), l'éclair de l'énergie à dépenser, la
+// question de sa curiosité, sa médaille (il est fier), la croix de ce qui rate (il s'inquiète), ton heure qui approche.
+// Sur le blanc de la bulle : jamais de blanc ni de jaune clair
+const GOBELET = ['..B.B..', '.B.B...', 'GGGGGG.', 'GNNNNGG', 'GNNNNG.', '.GGGG..']
+const ECLAIR = ['...yy', '..yy.', '.yyyy', '..yy.', '.yy..', 'yy...']
+const INTERROGATION = ['.bbb.', 'b...b', '...b.', '..b..', '.....', '..b..']
+const MEDAILLE_PENSEE = ['R...R', '.R.R.', '..R..', '.yYy.', 'yYYYy', '.yYy.']
+const CROIX_ROUGE = ['R...R', '.R.R.', '..R..', '.R.R.', 'R...R']
+const HORLOGE = ['.ggg.', 'g.K.g', 'g.KKg', 'g...g', '.ggg.']
+/** Il y pense : sa bulle au-dessus de lui, ce qui l'occupe dedans, pose après pose ; puis il se décide (`fin`, sans bulle) */
+function yPense(icone: readonly string[], poses: readonly Pose[], fin: Pose): Scene {
+  const bulle = pensee(icone)
+  return { duree: 3.2, images: [...poses.map(p => corps(p) + bulle), corps(fin)] }
+}
+
 /** Les petites réactions qui, au travail, s'affichent en bulle. */
 export type Bulle = keyof typeof ICONES
 export const EN_BULLE = Object.keys(ICONES) as Bulle[]
@@ -4401,6 +4436,7 @@ export const EMOJI: Record<ClawdAnim, string> = {
   ceremonie: '🎖', retrouvailles: '🥰', chat: '🐈', filante: '🌠', clawdette: '💕',
   floss: '🕺', orange: '🍊', defaut: '🎶', griddy: '🔥', takel: '🫵', sixseven: '6️⃣7️⃣', niveau: '⭐',
   flambe: '🔥', buche: '🪵', rechauffe: '♨', guimauve: '🍡',
+  faim: '🤤', soif: '🥤', bougeotte: '🤸', curieux: '🧐', fier: '🏅', inquiet: '😟', boude: '😤', guette: '⏰',
 }
 
 /** Ses danses, pour le bouton 🕺 et ses envies (la danse d'origine, puis les clins d'œil) */

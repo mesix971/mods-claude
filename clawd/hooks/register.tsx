@@ -19,6 +19,8 @@ import type { ClawdAnim, ClawdCopain, ElementBande } from '../types'
 import { CELLULE, COIN_VIDE, HAUTEUR as HAUTEUR_BANDE, LARGEUR_BANDE, MARGE, MAX_SVG, NUMEROS, RETENUE, departDe, diagnostic, estNumero, numerosAvecMinis, numerosJouables, prepareNumero, reactionA, svgNumero, svgNumeroDemo } from './bande'
 import { HUMEUR_DEPART, choisit, decrit as decritHumeur, ecartRepos, estHumeur, estNuit, vecu, vit } from './humeur'
 import type { Humeur } from './humeur'
+import { APPELS_A_TOI, ESPRIT_DEPART, SCENE_BESOIN, SCENE_EMOTION, arrivee, colore, comble, emotionDe, envie as envieDe, espritDe, estRythme, fusionne, jourDe, minuteDuJour, moment, noteVu, parBesoinSeulement, pense, ressent, vieillit } from './conscience'
+import type { Besoin, Esprit, Rythme, Vecu } from './conscience'
 import { ACTIVITES, BAILLE_S, BONBON_S, CLAWD_TEXTE, DANSES, EMOJI, EN_BULLE, JEUX_CARTONS, RAPPORT_S, SORTIES, TAILLE, TEINTES, avecT0, bulleDedans, dureeBoulot, dureeRetour, dureeScene, estChoregraphie, etatBoulot, etatScene, minisAPart, svgBulle, svgDecor, svgMinis, svgScene, teinte, teinteConnue, tenueDe } from './sprite'
 import type { Bulle, Deguisement, EnPlace, Insigne, Mini, Sortie, Tenue } from './sprite'
 import type { Aura } from './sprite'
@@ -95,6 +97,35 @@ const SEUL_MS = 3 * 60_000
 /** La fin de sa sieste (de jour, il se réveille tout seul) ; null : pas de sieste, ou il dort pour la nuit */
 let finSieste: number | null = null
 export const humeurActuelle = () => ({ ...humeur })
+/**
+ * Sa conscience (conscience.ts) : ses besoins et son émotion du moment, relus
+ * à chaque session et notés chaque minute ; ton rythme, jour après jour.
+ */
+let esprit: Esprit = { ...ESPRIT_DEPART, besoins: { ...ESPRIT_DEPART.besoins } }
+let rythme: Rythme = []
+export const espritActuel = (): Esprit => ({ ...esprit, besoins: { ...esprit.besoins } })
+/** Le besoin qui lui a fait choisir ce qu'il fait (il y pense, puis le fait), jusqu'à la fin de son activité */
+let raison: { besoin: Besoin; anim: ClawdAnim; jusqua: number } | null = null
+/** Ton arrivée du jour quand elle sort de tes habitudes : il y pense encore un quart d'heure */
+let arriveeDuJour: { quoi: 'retard' | 'matinal'; heure: number; jusqua: number } | null = null
+/** Quand il a repensé à son émotion, guetté ton heure : il n'y revient que de temps en temps */
+let emotionPensee = 0
+let guetPense = 0
+const EMOTION_MS = 4 * 60_000
+const GUET_MS = 3 * 60_000
+const ATTENTE_MS = 8 * 60_000
+/** Le jour où il a bâillé à ton heure de fin, et celui où il s'est levé tout seul pour te guetter (une fois chacun) */
+let bailleLe = ''
+let leveLe = ''
+/** Levé avant ton heure, il veille jusque-là : la nuit, il ne se rendort pas aussitôt */
+let veilleJusqua = 0
+const VEILLE_MS = 40 * 60_000
+/** Ce qui lui arrive touche sa conscience ; une émotion nouvelle : il y pense dès qu'il le peut */
+function ilRessent(v: Vecu, maintenant: number) {
+  const avant = esprit.emotion
+  esprit = ressent(esprit, v, maintenant)
+  if (esprit.emotion && esprit.emotion !== avant) emotionPensee = 0
+}
 let derniereScene: ClawdAnim | null = null
 /** Au repos il alterne : sa balade entière, puis une activité, puis la balade… */
 let finActivite = 0
@@ -498,6 +529,8 @@ const ENVIE_P = 0.35
 
 /** Il émerge : bâillement, étirement, bonnet jeté, café, et le voilà en forme. */
 function emerge($: EngineInterface) {
+  // (son café du réveil : il n'a plus soif)
+  esprit = comble(esprit, 'cafe')
   return scene($, 'reveil', dureeScene('reveil') * 1000)
 }
 
@@ -524,6 +557,8 @@ async function vitSonHumeur($: EngineInterface, maintenant: number) {
   const dt = humeurVecue ? maintenant - humeurVecue : 0
   humeurVecue = maintenant
   humeur = vit(humeur, dt, { dort: (await read($, dort)) === true, seul: maintenant - derniereActivite > SEUL_MS })
+  // (ses besoins montent, son émotion passée s'efface ; comme son humeur, pas plus de dix minutes d'un coup)
+  esprit = vieillit(esprit, Math.min(dt, 10 * 60_000), { dort: (await read($, dort)) === true }, maintenant)
 }
 
 /** Son feu de camp brûle-t-il (sa série, 2 jours au moins) ? Il s'en occupe alors de temps en temps */
@@ -536,12 +571,82 @@ export const activitesAuRepos = (feu: boolean): readonly ClawdAnim[] => (feu ? [
  * d'affilée) ; le vendredi soir ou le lundi matin, l'envie du moment passe
  * souvent avant.
  */
-function tirage(maintenant: number) {
+function tirage(maintenant: number): { anim: ClawdAnim; puis?: ClawdAnim } {
+  // sa conscience d'abord : ce à quoi il pense passe avant son humeur
+  const pensee = cePenseAvant(maintenant)
+  if (pensee) return pensee
   const d = deguisementDu(maintenant)
   const envie = d ? ENVIE_DU[d] : undefined
-  const anim = envie && envie !== derniereScene && Math.random() < ENVIE_P ? envie : choisit(humeur, activitesAuRepos(feuAllume), derniereScene)
+  // (son émotion colore son humeur : fier, il bouge ; inquiet, il cherche le calme ; vexé, il ne vient pas te chercher)
+  const h = colore(humeur, esprit, maintenant)
+  const vexe = emotionDe(esprit, maintenant)?.nom === 'vexe'
+  // (il ne mange que quand il a faim, ne boit que quand il a soif : ça, c'est son besoin qui en décide, plus haut)
+  const libres = activitesAuRepos(feuAllume).filter(a => !parBesoinSeulement(a))
+  let anim = envie && envie !== derniereScene && Math.random() < ENVIE_P ? envie : choisit(h, libres, derniereScene)
+  for (let i = 0; i < 8 && vexe && APPELS_A_TOI.includes(anim); i++) anim = choisit(h, libres, derniereScene)
   derniereScene = anim
   return { anim }
+}
+
+/**
+ * Ce à quoi il pense avant de s'occuper (sa conscience) : ton heure qui
+ * approche (il te guette), ton heure de fin (il bâille, une fois), une émotion
+ * qui dure (il y repense de temps en temps), un besoin qui presse (il y
+ * pense, puis fait ce qui le comble). Null : rien de tout ça.
+ */
+function cePenseAvant(maintenant: number): { anim: ClawdAnim; puis?: ClawdAnim } | null {
+  const m = moment(rythme, maintenant)
+  if (m && m.quoi !== 'tard' && maintenant - guetPense >= (m.quoi === 'bientot' ? GUET_MS : ATTENTE_MS)) {
+    guetPense = maintenant
+    derniereScene = 'guette'
+    return { anim: 'guette' }
+  }
+  if (m?.quoi === 'tard' && bailleLe !== jourDe(maintenant)) {
+    bailleLe = jourDe(maintenant)
+    derniereScene = 'baille'
+    return { anim: 'baille' }
+  }
+  const emotion = emotionDe(esprit, maintenant)
+  if (emotion && maintenant - emotionPensee >= EMOTION_MS) {
+    emotionPensee = maintenant
+    derniereScene = SCENE_EMOTION[emotion.nom]
+    return { anim: derniereScene }
+  }
+  const e = envieDe(esprit, activitesAuRepos(feuAllume), derniereScene, maintenant)
+  if (!e) return null
+  derniereScene = e.anim
+  const pensee = SCENE_BESOIN[e.besoin]
+  raison = { ...e, jusqua: maintenant + (dureeScene(pensee) + dureeScene(e.anim)) * 1000 }
+  return { anim: pensee, puis: e.anim }
+}
+
+/** Tu es là : il le note dans ton rythme (relu avant d'écrire : une autre session a pu en noter), au plus toutes les cinq minutes */
+async function noteRythme($: EngineInterface, maintenant: number) {
+  const jour = jourDe(maintenant)
+  const m = minuteDuJour(maintenant)
+  const vu = rythme.find(j => j.jour === jour)
+  if (vu && m >= vu.debut && m - vu.fin < 5) return
+  // ton premier signe de la journée, comparé à tes habitudes : en retard, matinal (il y pense un quart d'heure)
+  const a = arrivee(rythme, maintenant)
+  arriveeDuJour = a ? { ...a, jusqua: maintenant + 15 * 60_000 } : arriveeDuJour
+  const garde = await $.store.get('rythme').catch(() => undefined)
+  rythme = noteVu(fusionne(rythme, estRythme(garde) ? garde : []), maintenant)
+  await $.store.set('rythme', rythme).catch(() => {})
+}
+
+/** Ce qu'il pense, là, en une phrase (sa conscience) : pour /clawd, sa carte et son 💭 */
+export async function saPensee($: EngineInterface): Promise<string> {
+  const maintenant = await $.clock.now()
+  return pense(esprit, {
+    maintenant,
+    dort: (await read($, dort)) === true,
+    auTravail,
+    equipe: (await read($, copains)).length,
+    humeur,
+    rythme,
+    raison: raison && maintenant < raison.jusqua ? raison : null,
+    arrivee: arriveeDuJour && maintenant < arriveeDuJour.jusqua ? arriveeDuJour : null,
+  })
 }
 
 // ------------------------------------------------ sa tenue, son expérience
@@ -607,6 +712,8 @@ let notes: Promise<void> = Promise.resolve()
 async function gagne($: EngineInterface, n: number) {
   xp += n
   xpANoter += n
+  // (un outil lancé : te regarder travailler nourrit sa curiosité)
+  if (n === 1) ilRessent({ quoi: 'outil' }, await $.clock.now())
   if (niveauDe(xp) > niveauVu) await noteXp($)
 }
 
@@ -675,6 +782,7 @@ async function feteNiveau($: EngineInterface) {
   // (sa scène d'abord : un toast refusé ne la lui retire pas ; derrière une longue action, elle attend son tour sans
   // tomber : elle ne se rejouera pas)
   await scene($, anim, dureeScene(anim) * 1000, false, 5 * 60_000)
+  ilRessent({ quoi: 'niveau' }, await $.clock.now())
   try {
     // son aura qui naît (Légende) ou qui s'intensifie, dite avec le reste
     const avant = auraDe(typeof fete === 'number' ? fete : 0)
@@ -789,11 +897,13 @@ function lieuActuel(maintenant: number, faitBoulot = boulotEnCours(maintenant)):
   return etatScene(coinVu.anim, coinVu.passage ? Math.min(t, dureeScene(coinVu.anim) - 0.001) : t)
 }
 
-/** Lance une activité (ou la balade si `null`) pour sa durée naturelle. */
-async function occupe($: EngineInterface, prochaine: { anim: ClawdAnim } | null) {
+/** Lance une activité (ou la balade si `null`) pour sa durée naturelle ; `puis` : celle qui la suit (après sa pensée, ou son clin d'œil complice). */
+async function occupe($: EngineInterface, prochaine: { anim: ClawdAnim; puis?: ClawdAnim } | null) {
   const ms = dureeScene(prochaine?.anim ?? 'balade') * 1000
   finActivite = (await $.clock.now()) + ms
-  await update($, activite, () => prochaine)
+  await update($, activite, () => (prochaine ? { anim: prochaine.anim } : null))
+  // (ce qu'il joue comble ce que ça comble : son cookie, sa faim ; choisi exprès ou tiré au sort)
+  if (prochaine) esprit = comble(esprit, prochaine.anim)
   // l'activité va au bout : ce qui attendait passe alors, et l'affichage suit aussitôt (le rendu ne repasse
   // que si un état change) : au travail ou avec son équipe, ses cartons ou son chantier ; au repos, sa balade ;
   // s'il a sommeil, il s'endort
@@ -805,7 +915,7 @@ async function occupe($: EngineInterface, prochaine: { anim: ClawdAnim } | null)
           const maintenant = await $.clock.now()
           if (sommeilEnAttente && !auTravail) await sEndort($, maintenant, sommeilEnAttente.nuit)
           else if (auTravail || (await read($, copains)).length) await update($, activite, () => null)
-          else await occupe($, null)
+          else await occupe($, prochaine.puis ? { anim: prochaine.puis } : null)
         }
         await suivanteScene($)
       })().catch(() => {}),
@@ -1292,7 +1402,7 @@ async function commandeDeBase($: EngineInterface, args: string) {
   if (/^livret/i.test(args)) return livret($)
   if (/^carte/i.test(args)) return ouvreCarteParCommande($, 'carte')
   if (/^mots?$/i.test(args)) return ouvreCarteParCommande($, 'mots')
-  return [`${await sonNiveau($)}`, `🧠 En ce moment, ${decritHumeur(humeurActuelle(), (await read($, dort)) === true)}.`, '/clawd montre <numéro | bande | scène> · /clawd voit · /clawd livret · /clawd carte · /clawd mots'].join('\n')
+  return [`${await sonNiveau($)}`, `🧠 En ce moment, ${decritHumeur(humeurActuelle(), (await read($, dort)) === true)}.`, `💭 ${await saPensee($)}`, '/clawd montre <numéro | bande | scène> · /clawd voit · /clawd livret · /clawd carte · /clawd mots'].join('\n')
 }
 
 // ------------------------------------------------------------- sa carte
@@ -1383,6 +1493,7 @@ async function ficheDe($: EngineInterface): Promise<Fiche> {
     joursEnsemble: v.adopte === null ? null : Math.floor((maintenant - v.adopte) / 86_400_000),
     faits: Object.keys(v.faits),
     ...(carteEnPlus.savoirs ? { savoirs: carteEnPlus.savoirs } : {}),
+    pensee: await saPensee($),
   }
 }
 
@@ -1573,6 +1684,7 @@ async function vueCarte($: EngineInterface, e: ResolveInput<'Pane' | 'AbovePromp
       <Box key="carte" flexDirection="column" gap={1}>
         {haut}
         <Svg source={c.svg} alt={`Carte de ${texteCarte(f).join(' · ')}`} width={largeur} height={Math.round((c.hauteur * largeur) / c.largeur)} />
+        {f.pensee && <Text key="pensee" wrap="wrap">{`💭 ${f.pensee}`}</Text>}
       </Box>
     )
   }
@@ -1842,12 +1954,15 @@ async function verdict($: EngineInterface, ok: boolean) {
   if (ok) {
     const serie = echecsDaffilee
     echecsDaffilee = 0
+    // (sa conscience : son inquiétude s'en va ; après une série d'échecs, il en est fier un bon moment)
+    ilRessent({ quoi: serie >= 2 ? 'delivrance' : 'reussite' }, await $.clock.now())
     // une série d'échecs enfin passée ; ou la galère du jour (vécue dans une autre session) que cette réussite résout
     if (serie >= 2 || (await galereDuJour($))) await retiens($, 'delivrance')
     if (serie >= 2) void compte($, v => ({ ...v, delivrances: v.delivrances + 1, pireSerie: Math.max(v.pireSerie, serie) }))
     return serie >= 2 ? scene($, 'delivrance', dureeScene('delivrance') * 1000) : scene($, 'fete', 6000)
   }
   echecsDaffilee++
+  ilRessent({ quoi: 'echec', serie: echecsDaffilee }, await $.clock.now())
   if (echecsDaffilee >= 3) {
     await retiens($, 'galere')
     return scene($, 'decourage', dureeScene('decourage') * 1000)
@@ -1995,6 +2110,7 @@ async function verdictDe($: EngineInterface, cmd: string, r: ToolCallResult) {
   if (lance(PUSH, cmd)) {
     if (!ok) return scene($, 'triste', 7000)
     await retiens($, 'push')
+    ilRessent({ quoi: 'push' }, await $.clock.now())
     const jour = journee(await $.clock.now())
     void compte($, v => ({ ...v, pushs: { jour, n: v.pushs.jour === jour ? v.pushs.n + 1 : 1 } }))
     return scene($, 'fete', 6000)
@@ -2150,6 +2266,20 @@ export const register: Register = on => {
       humeur = absent > 0 ? vit(gardee, absent, { dort: true, seul: false }) : gardee
     }
     humeurVecue = derniereActivite
+    // sa conscience, relue de même : fermé, il a dormi (il se réveille avec une petite faim) ; et ton rythme
+    raison = null
+    arriveeDuJour = null
+    emotionPensee = 0
+    guetPense = 0
+    veilleJusqua = 0
+    const espritGarde = espritDe(await $.store.get('esprit').catch(() => undefined))
+    if (espritGarde) {
+      const quand = await $.store.get('humeurA').catch(() => undefined)
+      const absent = typeof quand === 'number' ? derniereActivite - quand : 0
+      esprit = absent > 0 ? vieillit(espritGarde, absent, { dort: true }, derniereActivite) : espritGarde
+    }
+    const rythmeGarde = await $.store.get('rythme').catch(() => undefined)
+    rythme = estRythme(rythmeGarde) ? fusionne(rythmeGarde, []) : []
     // une sieste en cours quand le mod a été rechargé : elle garde une fin (sinon il dormirait jusqu'à ton prochain message)
     if ((await read($, dort)) && !estNuit(new Date(derniereActivite).getHours()) && finSieste === null) {
       finSieste = derniereActivite + (3 + Math.random() * 3) * 60_000
@@ -2164,6 +2294,7 @@ export const register: Register = on => {
         await vitSonHumeur($, maintenant)
         await $.store.set('humeur', humeurActuelle()).catch(() => {})
         await $.store.set('humeurA', maintenant).catch(() => {})
+        await $.store.set('esprit', { besoins: esprit.besoins, emotion: esprit.emotion }).catch(() => {})
         // ce qu'il a gagné, ajouté au total gardé
         await noteXp($).catch(() => {})
         // un mini-Clawd dont le sous-agent est fini (son SubagentStop manqué) s'en va
@@ -2187,6 +2318,8 @@ export const register: Register = on => {
         if (!dodo) {
           // pas de sieste pendant que Claude travaille : ses cartons ne disparaissent pas en plein déménagement
           if (maintenant - derniereActivite <= SOMMEIL_MS || auTravail) return
+          // levé pour te guetter : il veille encore un peu
+          if (maintenant < veilleJusqua) return
           const nuit = estNuit(new Date(maintenant).getHours())
           if (!nuit && humeur.energie > 0) return
           // il finit d'abord ce qu'il fait, et n'en commence pas d'autre : il s'endort dès la fin
@@ -2196,6 +2329,16 @@ export const register: Register = on => {
             return
           }
           await sEndort($, maintenant, nuit)
+          return
+        }
+        // ton heure approche (il connaît ton rythme) : il se lève tout seul pour te guetter, une fois par jour
+        if (finSieste === null && leveLe !== jourDe(maintenant) && moment(rythme, maintenant)?.quoi === 'bientot') {
+          leveLe = jourDe(maintenant)
+          veilleJusqua = maintenant + VEILLE_MS
+          humeur = { ...humeur, energie: 1 }
+          await update($, dort, () => false)
+          await emerge($)
+          await occupe($, null)
           return
         }
         if (finSieste !== null && maintenant >= finSieste) {
@@ -2303,13 +2446,15 @@ export const register: Register = on => {
     const maintenant = await $.clock.now()
     await relitEnchaine($)
     travaille(maintenant)
+    await noteRythme($, maintenant)
     const heure = new Date(maintenant).getHours()
     // la session est restée ouverte toute la nuit : il se réveille avec toi ; tu étais parti longtemps : il te fait la fête
     const retour = await retrouvailles($, maintenant)
     if (await premierDuJour($, maintenant)) {
       // une nouvelle journée dans une session restée ouverte : sa série continue
       void compte($, nouvelleJournee(maintenant))
-      await emerge($)
+      // (déjà levé pour te guetter : il ne refait pas son réveil)
+      if (leveLe !== jourDe(maintenant)) await emerge($)
       await seSouvient($, maintenant)
       if (retour) await scene($, retour, dureeScene(retour) * 1000)
     } else if (retour) {
@@ -2721,6 +2866,8 @@ export const register: Register = on => {
       void compte($, v => v)
       await reveil($)
       humeur = vecu(humeur, 'caresse')
+      // (vexé, ta caresse le lui fait oublier)
+      ilRessent({ quoi: 'caresse' }, await $.clock.now())
       // ta caresse passe tout de suite : il arrête ce qu'il fait (même un cœur d'avant)
       await joueGeste($, 'coeur', 3000)
     }
@@ -2732,6 +2879,7 @@ export const register: Register = on => {
       derniereDanse = d
       derniereScene = d
       humeur = vecu(humeur, 'reussite')
+      esprit = comble(esprit, d)
       await joueGeste($, d, Math.min(10_000, dureeScene(d) * 1000))
     }
     const occupeToi = async () => {
@@ -2739,10 +2887,14 @@ export const register: Register = on => {
       await finNumero($)
       await reveil($)
       await coupeScenes($)
-      const prochaine = tirage(await $.clock.now())
+      // trois fois de suite : il se vexe (et boude tout de suite) ; sinon, une autre activité, sans y penser d'abord
+      ilRessent({ quoi: 'zappe' }, await $.clock.now())
+      const tire = tirage(await $.clock.now())
+      const prochaine = tire.puis ? { anim: tire.puis } : tire
       // un état de fond a repris (un build, une question) : l'activité passe quand même tout de suite, devant lui, le temps
       // d'une danse au plus (cachée dessous, tu n'aurais rien vu) ; il reprend après, puisqu'il t'informe
       if (enScene && sansFin(enScene.ms)) {
+        esprit = comble(esprit, prochaine.anim)
         await joueGeste($, prochaine.anim, Math.min(10_000, dureeScene(prochaine.anim) * 1000))
         return
       }
@@ -2778,6 +2930,14 @@ export const register: Register = on => {
     const montreNiveau = async () => {
       await montreCarte($, 'carte', true).catch(() => {})
     }
+    // son 💭 : ce qu'il pense, là, en une phrase
+    const ditSaPensee = async () => {
+      try {
+        $.ui.toast(`💭 ${await saPensee($)}`, { timeoutMs: 8000 })
+      } catch {
+        // pas de toast ici : sa pensée reste dans /clawd et sa carte
+      }
+    }
     // sa carte, posée dans sa bande là où l'app n'ouvre pas de panneau : au-dessus de ce que les autres dessinent
     const carteBande = (await read($, carteOuverte))?.enBande ? await vueCarte($, e, Math.max(24, e.props.bodyColumns - 18), true) : null
     const boutons = (
@@ -2786,6 +2946,7 @@ export const register: Register = on => {
         <Button key="occupe" label="🎲" plain onPress={occupeToi} />
         <Button key="danse" label="🕺" plain onPress={danse} />
         <Button key="niveau" label={`⭐${nv}`} plain onPress={montreNiveau} />
+        <Button key="pense" label="💭" plain onPress={ditSaPensee} />
       </Box>
     )
 

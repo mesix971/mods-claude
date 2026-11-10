@@ -93,6 +93,16 @@ export type ClawdAnim =
   // le matin, il se souvient du moment fort de la veille : une victoire (souvenir), une galère pas finie (revanche)
   | 'souvenir'
   | 'revanche'
+  // sa conscience : il y pense avant d'agir (un besoin : faim, soif, bougeotte, curieux ; une émotion qui dure : fier,
+  // inquiet, boude ; ton heure qui approche : guette)
+  | 'faim'
+  | 'soif'
+  | 'bougeotte'
+  | 'curieux'
+  | 'fier'
+  | 'inquiet'
+  | 'boude'
+  | 'guette'
   // git : un pull qui ramène des nouveautés (un colis), une branche nouvelle (son drapeau)
   | 'livraison'
   | 'drapeau'

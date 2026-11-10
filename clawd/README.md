@@ -1,7 +1,7 @@
 # Clawd
 
 A tiny pixel-art Claude who lives above your prompt and silently acts out your
-Claude Code session, in 83 animated scenes and no text.
+Claude Code session, in 91 animated scenes and no text.
 
 Unofficial, fan-made project by mesix971. Not affiliated with or endorsed by
 Anthropic.
@@ -11,6 +11,13 @@ Anthropic.
 - At rest, he walks around and keeps himself busy: coffee, guitar, fishing,
   juggling, reading, dancing. His mood (energy, boredom, joy) picks what. At
   night, he sleeps until you come back.
+- He has a small inner life. His needs (hunger, thirst, restlessness,
+  curiosity) build up over time: when one presses, he thinks about it (a
+  cookie in his thought bubble), then does what satisfies it. His emotions
+  last: proud for ten minutes after a push, worried when failures pile up,
+  sulking if you skip his activity three times in a row (pet him and it is
+  forgotten). After three days he knows your hours: he gets up by himself
+  ten minutes before you usually arrive, and yawns when you usually stop.
 - While Claude works, he moves boxes from one pile to the other, with a thought
   bubble showing what Claude is doing. Now and then a box falls from the sky
   and he opens it instead: a jack-in-the-box, nesting boxes, a drum solo, a
@@ -58,7 +65,8 @@ Hover him for ♥ (pet), 🎲 (new activity), 🕺 (dance) and ⭐ (his card: a
 collectible card with his portrait, rank, experience, stats, qualities and
 achievements, in a pane, or in his band where the app opens no pane).
 `/clawd carte` opens it too, `/clawd mots` shows what he told you, in full.
-`/clawd` shows his level and mood, `/clawd montre <scene>` plays a scene, and
+`/clawd` shows his level, his mood and what he is thinking (so does 💭 on
+hover), `/clawd montre <scene>` plays a scene, and
 `/clawd voit` explains what he sees on atelier's band (the keywords and
 replies are in French).
 
@@ -81,7 +89,9 @@ passing build from a failing one), your prompts, subagents, compaction and
 permission requests. It reads what Claude Code provides: the current model,
 the permission mode, the context and rate-limit figures, the list of
 subagents, and the band published by atelier. It keeps its petting count,
-experience, mood, a few dates (such as your last visit) and the day's high
+experience, mood, needs, your daily rhythm (the time of your first and last
+message of each day, for fourteen days, to learn your hours; nothing else,
+and it never leaves your machine), a few dates (such as your last visit) and the day's high
 point (a word like `delivrance` and its date, never a command or its output),
 plus a few counters for his achievements (tools launched, sessions, fixes,
 pushes per day, days in a row, the date he first saw you, and the date of

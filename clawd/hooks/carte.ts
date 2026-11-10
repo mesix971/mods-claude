@@ -34,6 +34,8 @@ export type Fiche = {
   faits: readonly string[]
   /** ce que la version perso y ajoute (ses leçons, ses diplômes) : une ligne en bas de la carte */
   savoirs?: string
+  /** ce qu'il pense, là, en une phrase (sa conscience) */
+  pensee?: string
 }
 
 /** Ses qualités : ce que ses performances disent de lui, d'une à cinq étoiles (un palier franchi : une étoile) */
@@ -317,5 +319,6 @@ export function texteCarte(f: Fiche): string[] {
     `🧠 énergie ${Math.round(f.humeur.energie * 20) * 5} % · joie ${Math.round(f.humeur.joie * 20) * 5} % · ennui ${Math.round(f.humeur.ennui * 20) * 5} %${f.dort ? ' · il dort' : ''}`,
     `🏅 ${gagnes.length}/${FAITS.length} hauts faits${gagnes.length ? ` : ${gagnes.map(fait => fait.emoji).join(' ')}` : ''}`,
     ...(f.savoirs ? [f.savoirs] : []),
+    ...(f.pensee ? [`💭 ${f.pensee}`] : []),
   ]
 }

@@ -43,6 +43,25 @@
 
 ## clawd
 
+- **0.19.0** — 2026-11-10 — Il a une conscience.
+  - **Ses besoins** : sa faim, sa soif, son envie de bouger et sa curiosité
+    montent avec le temps. Quand l'un presse, il y pense (une bulle, son
+    cookie dedans), puis fait ce qui le comble. Te regarder travailler nourrit
+    sa curiosité.
+  - **Ses émotions durent** : fier dix minutes après un push, une délivrance
+    ou un niveau ; inquiet tant que les échecs s'enchaînent ; vexé si tu le
+    zappes trois fois de suite (il te tourne le dos, une caresse l'apaise).
+    Elles colorent ce qu'il choisit de faire, et il y repense au repos.
+  - **Ton rythme** : au bout de trois jours, il connaît tes heures. Endormi,
+    il se lève tout seul dix minutes avant la tienne et te guette ; il t'attend
+    si tu tardes, et bâille à ton heure de fin. Il note pour ça l'heure de ton
+    premier et de ton dernier message de chaque jour, sur quatorze jours, dans
+    le stockage du mod.
+  - **Ses pensées** : 💭 au survol, `/clawd` et sa carte disent en une phrase
+    ce qui lui passe par la tête. Endormi, ce dont il rêve.
+  - Huit scènes de pensée (91 en tout) : `faim`, `soif`, `bougeotte`,
+    `curieux`, `fier`, `inquiet`, `boude`, `guette`.
+
 - **0.18.4** — 2026-11-09 — Endormi, il se réveille quand tu lui demandes de
   rejouer une leçon depuis sa carte.
 

@@ -28,6 +28,8 @@ type Tuile = { fichier: string; anim: string; copains?: readonly unknown[]; rapp
 const tuiles: Tuile[] = [
   // au repos
   ...['balade', 'cafe', 'guitare', 'peche', 'jongle', 'glace', 'papillon', 'lecture', 'meditation'].map(anim => ({ fichier: anim, anim })),
+  // sa conscience : il pense à son cookie, il boude, il te guette
+  ...['faim', 'boude', 'guette'].map(anim => ({ fichier: anim, anim })),
   // ses danses (🕺), chacune dans la couleur d'un modèle
   { fichier: 'danse-haiku', anim: 'floss', couleur: T.haiku },
   { fichier: 'danse-sonnet', anim: 'griddy', couleur: T.sonnet },

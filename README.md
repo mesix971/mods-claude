@@ -6,7 +6,7 @@
 
 **[▶ Le film de présentation](https://mesix971.github.io/mods-claude/)** · [Installer](#installation) · [Clawd](#clawd) · [atelier](#atelier) · [In English](#in-english)
 
-<img src="https://img.shields.io/badge/Clawd-83%20sc%C3%A8nes%20anim%C3%A9es-d97758" alt="Clawd : 83 scènes animées"> <img src="https://img.shields.io/badge/mod-Claude%20Code-24292f" alt="Mod Claude Code"> <img src="https://img.shields.io/badge/licence-MIT-4cc38a" alt="Licence MIT">
+<img src="https://img.shields.io/badge/Clawd-91%20sc%C3%A8nes%20anim%C3%A9es-d97758" alt="Clawd : 91 scènes animées"> <img src="https://img.shields.io/badge/mod-Claude%20Code-24292f" alt="Mod Claude Code"> <img src="https://img.shields.io/badge/licence-MIT-4cc38a" alt="Licence MIT">
 
 </div>
 
@@ -16,7 +16,7 @@ Projet perso, fan-made et non officiel, sans lien avec Anthropic.
 
 Two mods for [Claude Code](https://claude.com/claude-code), in the CLI and the desktop app's Code tab:
 
-- **clawd**: a tiny pixel-art Claude who lives above your prompt and silently acts out your session, in 83 animated scenes with no text. He carries boxes while Claude works, and sometimes opens one. He celebrates passing builds and sulks under a rain cloud when they break. Each subagent arrives as a mini-Clawd in its model's color, hands its work back, then leaves in one of five ways. He sweats as the context fills, wears an autopilot visor in auto or bypass mode, and levels up as you work together, up to a Legend wrapped in a glowing aura. Come back day after day and he keeps a campfire going next to him (he tosses a box in, toasts a marshmallow). Hover him and click ⭐ for his collectible card. With atelier loaded, he also plays gags across its band: he steals the loading orb and makes the pills pop like popcorn, then always puts everything back.
+- **clawd**: a tiny pixel-art Claude who lives above your prompt and silently acts out your session, in 91 animated scenes with no text. He carries boxes while Claude works, and sometimes opens one. He celebrates passing builds and sulks under a rain cloud when they break. Each subagent arrives as a mini-Clawd in its model's color, hands its work back, then leaves in one of five ways. He sweats as the context fills, wears an autopilot visor in auto or bypass mode, and levels up as you work together, up to a Legend wrapped in a glowing aura. Come back day after day and he keeps a campfire going next to him (he tosses a box in, toasts a marshmallow). Hover him and click ⭐ for his collectible card. With atelier loaded, he also plays gags across its band: he steals the loading orb and makes the pills pop like popcorn, then always puts everything back.
 - **atelier**: a project band for Android developers:
   - APK and phone versions, with Install and Launch buttons;
   - git status, with Commit, Push and Pull buttons;
@@ -72,7 +72,7 @@ rangée qui couvre la bande, et Clawd y joue ses numéros.
 Le petit Claude orange, en pixel art animé, à droite du bandeau au-dessus du
 prompt. Fond transparent, taille du Clawd de l'app, contour et ombre qui
 suivent ton thème clair ou sombre. Pas un mot : tout passe par ses gestes.
-Chaque image ci-dessous est l'une de ses 83 scènes, telle que le mod la
+Chaque image ci-dessous est l'une de ses 91 scènes, telle que le mod la
 dessine (générée depuis son code par `promo/vitrine.mts`).
 
 ### Au repos, il vit sa vie
@@ -80,6 +80,28 @@ dessine (générée depuis son code par `promo/vitrine.mts`).
 Il se balade, puis s'occupe. Son humeur choisit quoi : son énergie, son
 ennui, sa joie. Laissé seul, il s'ennuie et s'agite. À plat, il fait la
 sieste et se réveille tout seul. La nuit, il dort jusqu'à ton retour.
+
+Il a aussi une petite conscience :
+
+- **Des besoins.** Sa faim, sa soif, son envie de bouger et sa curiosité
+  montent avec le temps. Quand l'un presse, il y pense (son cookie dans sa
+  bulle), puis il fait ce qui le comble.
+- **Des émotions qui durent.** Fier dix minutes après un push ou une galère
+  enfin passée, inquiet quand les échecs s'enchaînent, vexé si tu le zappes
+  trois fois de suite (il te tourne le dos ; une caresse, et c'est oublié).
+- **Ton rythme.** Au bout de trois jours, il connaît tes heures. Il se lève
+  tout seul dix minutes avant la tienne et te guette, et il bâille quand tu
+  t'arrêtes d'habitude.
+- **Ses pensées.** 💭 au survol, `/clawd` ou sa carte : une phrase qui dit ce
+  qui lui passe par la tête, et pourquoi il fait ce qu'il fait.
+
+<table>
+<tr>
+<td align="center" width="33%"><img src="promo/vitrine/faim.svg" width="270" alt="Clawd pense à un cookie, dans sa bulle de pensée"><br><sub>Il a faim : il y pense…</sub></td>
+<td align="center" width="33%"><img src="promo/vitrine/boude.svg" width="270" alt="Clawd tourne le dos, vexé"><br><sub>Zappé trois fois : il boude</sub></td>
+<td align="center" width="33%"><img src="promo/vitrine/guette.svg" width="270" alt="Clawd regarde à gauche et à droite, une horloge dans sa bulle"><br><sub>Ton heure approche : il te guette</sub></td>
+</tr>
+</table>
 
 <table>
 <tr>
@@ -358,8 +380,8 @@ le même deux fois. `/clawd montre <numéro>` en lance un.
 
 - **Survole-le** : ♥ pour le caresser (le compteur est gardé d'une session à
   l'autre), 🎲 pour qu'il change d'activité, 🕺 pour qu'il danse, ⭐ pour son
-  niveau. Tes gestes passent tout de suite, avant ce qu'il fait.
-- **`/clawd`** : son niveau et son humeur. `/clawd montre <numéro | bande |
+  niveau, 💭 pour ce qu'il pense. Tes gestes passent tout de suite, avant ce qu'il fait.
+- **`/clawd`** : son niveau, son humeur et ce qu'il pense. `/clawd montre <numéro | bande |
   scène>` lui fait jouer un numéro ou une scène. `/clawd voit` dit ce qu'il
   voit de la bande, et pourquoi un numéro se joue ou non.
 - **Rien ne se coupe** : une scène va au bout, et les réactions attendent leur
@@ -376,8 +398,11 @@ résultat (pour savoir si un build ou un push passe), tes messages, les
 sous-agents, le compactage, les permissions. Il lit aussi ce que l'app lui donne :
 le modèle qui tourne, le mode de permission, le remplissage du contexte et
 les quotas, la liste des sous-agents, la bande publiée par atelier. Il garde
-dans le stockage du mod son compteur de caresses, son expérience, son humeur
-et quelques dates, comme ta dernière visite. Testé avec Claude Code 2.1.309.
+dans le stockage du mod son compteur de caresses, son expérience, son humeur,
+ses besoins et quelques dates, comme ta dernière visite. Pour connaître ton
+rythme, il y note aussi l'heure de ton premier et de ton dernier message de
+chaque jour, sur quatorze jours : rien d'autre, et rien ne quitte ta machine.
+Testé avec Claude Code 2.1.321.
 
 ## atelier
 
