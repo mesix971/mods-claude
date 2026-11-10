@@ -351,9 +351,13 @@ test('ton heure approche : endormi, il se lève tout seul et te guette ; tu arri
   const hier23h = new Date(2026, 9, 14, 23, 0).getTime()
   const { stockage, horloge } = moteur(on, hier23h)
   let t = hier23h
+  // (par demi-heures : une nuit avancée d'un seul bloc dépasse ce que l'horloge simulée résout d'un coup)
   const avance = async (ms: number) => {
-    t += ms
-    await horloge.advance(ms)
+    for (let reste = ms; reste > 0; reste -= 30 * MIN) {
+      const pas = Math.min(reste, 30 * MIN)
+      t += pas
+      await horloge.advance(pas)
+    }
   }
   stockage.set('rythme', HABITUES)
   await $.session.start(SESSION)
