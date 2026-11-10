@@ -90,8 +90,8 @@ permission requests. It reads what Claude Code provides: the current model,
 the permission mode, the context and rate-limit figures, the list of
 subagents, and the band published by atelier. It keeps its petting count,
 experience, mood, needs, your daily rhythm (the time of your first and last
-message of each day, for fourteen days, to learn your hours; nothing else,
-and it never leaves your machine), a few dates (such as your last visit) and the day's high
+sign of life of each day, a session opened or a message sent, for fourteen
+days, to learn your hours; nothing else, and it never leaves your machine), a few dates (such as your last visit) and the day's high
 point (a word like `delivrance` and its date, never a command or its output),
 plus a few counters for his achievements (tools launched, sessions, fixes,
 pushes per day, days in a row, the date he first saw you, and the date of

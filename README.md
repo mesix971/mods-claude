@@ -400,8 +400,9 @@ le modèle qui tourne, le mode de permission, le remplissage du contexte et
 les quotas, la liste des sous-agents, la bande publiée par atelier. Il garde
 dans le stockage du mod son compteur de caresses, son expérience, son humeur,
 ses besoins et quelques dates, comme ta dernière visite. Pour connaître ton
-rythme, il y note aussi l'heure de ton premier et de ton dernier message de
-chaque jour, sur quatorze jours : rien d'autre, et rien ne quitte ta machine.
+rythme, il y note aussi l'heure de ton premier et de ton dernier signe de vie
+de chaque jour (une session ouverte, un message), sur quatorze jours : rien
+d'autre, et rien ne quitte ta machine.
 Testé avec Claude Code 2.1.321.
 
 ## atelier

@@ -27,8 +27,9 @@ export type Besoins = Record<Besoin, number>
 
 /** Éveillé, chaque besoin est à son comble en ce temps */
 const PLEIN_MS: Besoins = { faim: 50 * MIN, soif: 35 * MIN, bouger: 25 * MIN, curiosite: 40 * MIN }
-/** Endormi, seules sa faim et sa soif montent, et bien plus lentement */
+/** Endormi, seules sa faim et sa soif montent, bien plus lentement, et jamais au-delà d'une petite faim au réveil */
 const RALENTI = 5
+const AU_REVEIL = 0.7
 /** À partir de là, un besoin peut décider de son activité ; à 1, il ne pense plus qu'à ça */
 export const ENVIE_DES = 0.6
 /** Ce qu'une activité doit combler d'un besoin pour qu'il la choisisse exprès */
@@ -108,8 +109,10 @@ export function vieillit(e: Esprit, dt: number, o: { dort: boolean }, maintenant
   const d = Math.max(0, dt)
   const besoins = Object.fromEntries(
     BESOINS.map(k => {
-      const monte = o.dort ? (k === 'faim' || k === 'soif' ? d / PLEIN_MS[k] / RALENTI : 0) : d / PLEIN_MS[k]
-      return [k, borne(e.besoins[k] + monte)]
+      if (!o.dort) return [k, borne(e.besoins[k] + d / PLEIN_MS[k])]
+      const monte = k === 'faim' || k === 'soif' ? d / PLEIN_MS[k] / RALENTI : 0
+      // (dormir ne le rassasie pas : ce qu'il avait déjà, il le garde)
+      return [k, borne(Math.max(e.besoins[k], Math.min(AU_REVEIL, e.besoins[k] + monte)))]
     }),
   ) as Besoins
   return { besoins, emotion: emotionDe(e, maintenant), zaps: e.zaps.filter(t => maintenant - t < ZAPS_MS && t <= maintenant) }
@@ -218,7 +221,8 @@ export const SCENE_EMOTION: Record<Sentiment, ClawdAnim> = { fier: 'fier', inqui
 export type JourVu = { jour: string; debut: number; fin: number }
 export type Rythme = JourVu[]
 
-const DECALAGE_MS = 5 * 3_600_000
+/** L'heure où sa journée commence */
+const DEBUT_H = 5
 /** Les jours qu'il garde en tête, et ceux qu'il lui faut pour connaître tes habitudes */
 const JOURS_GARDES = 14
 const JOURS_QU_IL_FAUT = 3
@@ -226,18 +230,22 @@ const deux = (n: number) => String(n).padStart(2, '0')
 
 /** Sa journée (commencée à 5 h), triable : AAAA-MM-JJ */
 export function jourDe(ms: number): string {
-  const d = new Date(ms - DECALAGE_MS)
-  return `${d.getFullYear()}-${deux(d.getMonth() + 1)}-${deux(d.getDate())}`
+  const d = new Date(ms)
+  // (avant 5 h : encore la veille ; sur les composantes locales de l'heure, un changement d'heure ne décale rien)
+  const j = d.getHours() < DEBUT_H ? new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1) : d
+  return `${j.getFullYear()}-${deux(j.getMonth() + 1)}-${deux(j.getDate())}`
 }
 /** Les minutes écoulées depuis 5 h */
 export function minuteDuJour(ms: number): number {
-  const d = new Date(ms - DECALAGE_MS)
-  return d.getHours() * 60 + d.getMinutes()
+  const d = new Date(ms)
+  return (d.getHours() * 60 + d.getMinutes() - DEBUT_H * 60 + 1440) % 1440
 }
 
-export const estRythme = (v: unknown): v is Rythme =>
-  Array.isArray(v) &&
-  v.every(j => typeof j === 'object' && j !== null && typeof (j as JourVu).jour === 'string' && /^\d{4}-\d{2}-\d{2}$/.test((j as JourVu).jour) && fini((j as JourVu).debut) && fini((j as JourVu).fin))
+const estJourVu = (j: unknown): j is JourVu =>
+  typeof j === 'object' && j !== null && typeof (j as JourVu).jour === 'string' && /^\d{4}-\d{2}-\d{2}$/.test((j as JourVu).jour) && fini((j as JourVu).debut) && fini((j as JourVu).fin)
+export const estRythme = (v: unknown): v is Rythme => Array.isArray(v) && v.every(estJourVu)
+/** Ton rythme tel qu'il a été gardé : chaque jour lisible est repris (un jour abîmé ne lui fait pas tout oublier) */
+export const rythmeDe = (v: unknown): Rythme => (Array.isArray(v) ? fusionne(v.filter(estJourVu), []) : [])
 
 /** Deux mémoires de ton rythme (deux sessions ouvertes) n'en font qu'une : par jour, ton premier signe et ton dernier */
 export function fusionne(a: Rythme, b: Rythme): Rythme {

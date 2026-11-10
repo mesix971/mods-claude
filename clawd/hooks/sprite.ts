@@ -2489,7 +2489,7 @@ const SCENES: Record<ClawdAnim, () => Scene> = {
   // bouger, sa curiosité) dans sa bulle, puis il se décide : l'activité qui le comble suit
   faim: () => yPense(COOKIE, [{ yeux: 'haut' }, { yeux: 'coeur' }, { yeux: 'coeur', d: 'tete' }], { yeux: 'heureux' }),
   soif: () => yPense(GOBELET, [{ yeux: 'haut' }, { yeux: 'mi', bouche: 'o' }, { yeux: 'haut', d: 'tete' }], { yeux: 'heureux' }),
-  bougeotte: () => yPense(ECLAIR, [{ yeux: 'haut' }, { yeux: 'haut', jambes: 'tape' }, { yeux: 'heureux', jambes: 'tape', g: 'haut' }], { yeux: 'heureux', g: 'haut', d: 'haut' }),
+  bougeotte: () => yPense(ECLAIR_PENSEE, [{ yeux: 'haut' }, { yeux: 'haut', jambes: 'tape' }, { yeux: 'heureux', jambes: 'tape', g: 'haut' }], { yeux: 'heureux', g: 'haut', d: 'haut' }),
   curieux: () => yPense(INTERROGATION, [{ yeux: 'haut' }, { yeux: 'gauche', d: 'tete' }, { yeux: 'droite', d: 'tete' }], { yeux: 'grand' }),
   // … ou une émotion qui dure : sa médaille (il est encore fier), la croix rouge de ce qui rate (il s'inquiète, un œil
   // vers la bande)
@@ -4326,7 +4326,7 @@ function pensee(icone: readonly string[]): string {
 // question de sa curiosité, sa médaille (il est fier), la croix de ce qui rate (il s'inquiète), ton heure qui approche.
 // Sur le blanc de la bulle : jamais de blanc ni de jaune clair
 const GOBELET = ['..B.B..', '.B.B...', 'GGGGGG.', 'GNNNNGG', 'GNNNNG.', '.GGGG..']
-const ECLAIR = ['...yy', '..yy.', '.yyyy', '..yy.', '.yy..', 'yy...']
+const ECLAIR_PENSEE = ['...yy', '..yy.', '.yyyy', '..yy.', '.yy..', 'yy...']
 const INTERROGATION = ['.bbb.', 'b...b', '...b.', '..b..', '.....', '..b..']
 const MEDAILLE_PENSEE = ['R...R', '.R.R.', '..R..', '.yYy.', 'yYYYy', '.yYy.']
 const CROIX_ROUGE = ['R...R', '.R.R.', '..R..', '.R.R.', 'R...R']

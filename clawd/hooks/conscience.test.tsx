@@ -27,6 +27,7 @@ import {
   parBesoinSeulement,
   pense,
   ressent,
+  rythmeDe,
   vieillit,
 } from './conscience'
 import type { Esprit, Rythme } from './conscience'
@@ -53,6 +54,9 @@ test('ses besoins : ils montent éveillé, à peine endormi (sa faim, sa soif), 
   expect(centieme(dormi.besoins.faim)).toBe(0.2)
   expect(dormi.besoins.bouger).toBe(0)
   expect(dormi.besoins.curiosite).toBe(0)
+  // une nuit entière : une petite faim au réveil, pas affamé ; et dormir ne le rassasie pas
+  expect(vieillit(esprit(), 600 * MIN, { dort: true }, T0).besoins).toMatchObject({ faim: 0.7, soif: 0.7 })
+  expect(vieillit(esprit({ faim: 0.9 }), 600 * MIN, { dort: true }, T0).besoins.faim).toBe(0.9)
   // un temps négatif (l'horloge recule) ne le rassasie pas
   expect(vieillit(esprit({ faim: 0.5 }), -5 * MIN, { dort: false }, T0).besoins.faim).toBe(0.5)
   // son cookie comble sa faim, pas sa soif ; une scène qui ne comble rien ne change rien
@@ -168,6 +172,9 @@ test('ton rythme : sa journée commence à 5 h ; tes jours fusionnent ; tes habi
   expect(estRythme(HABITUES)).toBe(true)
   expect(estRythme([{ jour: '15/10', debut: 1, fin: 2 }])).toBe(false)
   expect(estRythme({})).toBe(false)
+  // relu du stockage : un jour abîmé ne lui fait pas oublier les autres
+  expect(rythmeDe([...HABITUES, { jour: 'hier', debut: 1, fin: 2 }, null, { jour: '2026-10-11', debut: 'tôt', fin: 3 }])).toEqual(HABITUES)
+  expect(rythmeDe('rien')).toEqual([])
 })
 
 test('où en est ta journée : il te guette à ton heure, t’attend si tu tardes, et il se fait tard passé ton heure de fin', () => {
@@ -340,9 +347,10 @@ test('trois 🎲 de suite : il boude, te tourne le dos, et ne vient plus te cher
 })
 
 test('ton heure approche : endormi, il se lève tout seul et te guette ; tu arrives en retard, il t’attendait (sans refaire son réveil)', { timeoutMs: 120_000 }, async ($, on) => {
-  // 6 h 30, la session est restée ouverte ; d'habitude tu arrives à 9 h
-  const { stockage, horloge } = moteur(on, le15(6, 30))
-  let t = le15(6, 30)
+  // la veille à 23 h, tu laisses la session ouverte ; d'habitude tu arrives à 9 h
+  const hier23h = new Date(2026, 9, 14, 23, 0).getTime()
+  const { stockage, horloge } = moteur(on, hier23h)
+  let t = hier23h
   const avance = async (ms: number) => {
     t += ms
     await horloge.advance(ms)
@@ -350,7 +358,7 @@ test('ton heure approche : endormi, il se lève tout seul et te guette ; tu arri
   stockage.set('rythme', HABITUES)
   await $.session.start(SESSION)
   const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
-  // la nuit, sans toi : il dort pour de bon, et passé 7 h aussi
+  // la nuit, sans toi : il dort pour de bon, jusqu'au matin
   await avance(12 * MIN)
   for (let s = 0; s < 20 && (await scene(ui as never)) !== 'dodo'; s++) await avance(1000)
   expect(await scene(ui as never)).toBe('dodo')
@@ -376,9 +384,85 @@ test('ton heure approche : endormi, il se lève tout seul et te guette ; tu arri
     await avance(1000)
   }
   expect(vues.has('reveil')).toBe(false)
-  expect(await clawd($ as never)).toContain('Tu es arrivé plus tard que d’habitude (9 h) : il t’attendait')
+  expect(await clawd($ as never)).toContain('u es arrivé plus tard que d’habitude (9 h) : il t’attendait')
   // ton rythme d'aujourd'hui est noté
   expect((stockage.get('rythme') as Rythme).at(-1)).toMatchObject({ jour: '2026-10-15', debut: 290 })
+  await ui.unmount()
+})
+
+test('rouvert après une nuit : une petite faim (pas affamé), et son café du réveil l’a désaltéré', { timeoutMs: 60_000 }, async ($, on) => {
+  const { stockage, horloge } = moteur(on, le15(8))
+  // hier soir : rassasié ; la session d'avant s'est fermée il y a dix heures
+  stockage.set('journee', '2026-10-14')
+  stockage.set('esprit', { besoins: { faim: 0.1, soif: 0.1, bouger: 0, curiosite: 0 }, emotion: null })
+  stockage.set('humeurA', le15(8) - 600 * MIN)
+  await $.session.start(SESSION)
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  // il sort du lit (son café compris) : une petite faim, pas « il a faim »
+  expect(await clawd($ as never)).toContain('💭 Il a une petite faim')
+  await horloge.advance(MIN)
+  expect(espritDe(stockage.get('esprit'))!.besoins.soif).toBeLessThan(0.2)
+  await ui.unmount()
+})
+
+test('rien ne le presse : jamais de cookie, de glace ni de café par hasard (il ne mange et ne boit que par besoin)', { timeoutMs: 60_000 }, async ($, on) => {
+  const { stockage, horloge } = moteur(on, T0)
+  stockage.set('esprit', { besoins: { faim: 0, soif: 0, bouger: 0, curiosite: 0 }, emotion: null })
+  stockage.set('humeurA', T0)
+  await $.session.start(SESSION)
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  const vues = new Set<string>()
+  for (let s = 0; s < 5 * 60; s++) {
+    await horloge.advance(1000)
+    vues.add(await scene(ui as never))
+  }
+  // il s'est occupé (plusieurs activités), sans rien manger ni boire
+  expect(vues.size).toBeGreaterThan(3)
+  for (const anim of ['cookie', 'glace', 'cafe', 'faim', 'soif']) expect(vues.has(anim)).toBe(false)
+  await ui.unmount()
+})
+
+test('deux builds ratés d’affilée : il s’inquiète (il sait combien) ; ça passe enfin : il en est fier', { timeoutMs: 60_000 }, async ($, on) => {
+  const { horloge } = moteur(on, T0)
+  const sortie = { isError: true, text: 'BUILD FAILED' }
+  on('tool.call', { tool: 'Bash' }, () => ({ result: sortie.text, isError: sortie.isError, text: sortie.text }) as never)
+  await $.session.start(SESSION)
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  const build = async () => {
+    await horloge.advance(20_000)
+    await $.tool.call({ tool: 'Bash', command: './gradlew assembleDebug' } as never)
+  }
+  await build()
+  expect(await clawd($ as never)).not.toContain('inquiètent')
+  await build()
+  expect(await clawd($ as never)).toContain('💭 Tes 2 échecs d’affilée l’inquiètent')
+  await build()
+  expect(await clawd($ as never)).toContain('💭 Tes 3 échecs d’affilée l’inquiètent')
+  sortie.isError = false
+  sortie.text = 'BUILD SUCCESSFUL'
+  await build()
+  const apres = await clawd($ as never)
+  expect(apres).not.toContain('inquiètent')
+  expect(apres).toContain('💭 Il est fier de vous deux : la galère est passée')
+  await ui.unmount()
+})
+
+test('ton heure de fin approche : il bâille, une seule fois ce jour-là', { timeoutMs: 60_000 }, async ($, on) => {
+  // 17 h 55 : d'habitude tu t'arrêtes à 18 h, et tu es là depuis ce matin
+  const { stockage, horloge } = moteur(on, le15(17, 55))
+  stockage.set('rythme', [...HABITUES, { jour: '2026-10-15', debut: 240, fin: 770 }])
+  await $.session.start(SESSION)
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  let bailles = 0
+  let avant = ''
+  for (let s = 0; s < 8 * 60; s++) {
+    await horloge.advance(1000)
+    const vu = await scene(ui as never)
+    if (vu === 'baille' && avant !== 'baille') bailles++
+    avant = vu
+  }
+  expect(bailles).toBe(1)
+  expect(await clawd($ as never)).toContain('d’habitude tu t’arrêtes vers 18 h')
   await ui.unmount()
 })
 

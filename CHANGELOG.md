@@ -47,7 +47,8 @@
   - **Ses besoins** : sa faim, sa soif, son envie de bouger et sa curiosité
     montent avec le temps. Quand l'un presse, il y pense (une bulle, son
     cookie dedans), puis fait ce qui le comble. Te regarder travailler nourrit
-    sa curiosité.
+    sa curiosité. Il ne mange et ne boit plus que par besoin : ni le hasard
+    ni ton 🎲 ne lui sortent plus un cookie ou un café.
   - **Ses émotions durent** : fier dix minutes après un push, une délivrance
     ou un niveau ; inquiet tant que les échecs s'enchaînent ; vexé si tu le
     zappes trois fois de suite (il te tourne le dos, une caresse l'apaise).
@@ -55,8 +56,8 @@
   - **Ton rythme** : au bout de trois jours, il connaît tes heures. Endormi,
     il se lève tout seul dix minutes avant la tienne et te guette ; il t'attend
     si tu tardes, et bâille à ton heure de fin. Il note pour ça l'heure de ton
-    premier et de ton dernier message de chaque jour, sur quatorze jours, dans
-    le stockage du mod.
+    premier et de ton dernier signe de vie de chaque jour (une session
+    ouverte, un message), sur quatorze jours, dans le stockage du mod.
   - **Ses pensées** : 💭 au survol, `/clawd` et sa carte disent en une phrase
     ce qui lui passe par la tête. Endormi, ce dont il rêve.
   - Huit scènes de pensée (91 en tout) : `faim`, `soif`, `bougeotte`,

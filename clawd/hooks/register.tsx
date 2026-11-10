@@ -19,7 +19,7 @@ import type { ClawdAnim, ClawdCopain, ElementBande } from '../types'
 import { CELLULE, COIN_VIDE, HAUTEUR as HAUTEUR_BANDE, LARGEUR_BANDE, MARGE, MAX_SVG, NUMEROS, RETENUE, departDe, diagnostic, estNumero, numerosAvecMinis, numerosJouables, prepareNumero, reactionA, svgNumero, svgNumeroDemo } from './bande'
 import { HUMEUR_DEPART, choisit, decrit as decritHumeur, ecartRepos, estHumeur, estNuit, vecu, vit } from './humeur'
 import type { Humeur } from './humeur'
-import { APPELS_A_TOI, ESPRIT_DEPART, SCENE_BESOIN, SCENE_EMOTION, arrivee, colore, comble, emotionDe, envie as envieDe, espritDe, estRythme, fusionne, jourDe, minuteDuJour, moment, noteVu, parBesoinSeulement, pense, ressent, vieillit } from './conscience'
+import { APPELS_A_TOI, ESPRIT_DEPART, SCENE_BESOIN, SCENE_EMOTION, arrivee, colore, comble, emotionDe, envie as envieDe, espritDe, fusionne, jourDe, minuteDuJour, moment, noteVu, parBesoinSeulement, pense, ressent, rythmeDe, vieillit } from './conscience'
 import type { Besoin, Esprit, Rythme, Vecu } from './conscience'
 import { ACTIVITES, BAILLE_S, BONBON_S, CLAWD_TEXTE, DANSES, EMOJI, EN_BULLE, JEUX_CARTONS, RAPPORT_S, SORTIES, TAILLE, TEINTES, avecT0, bulleDedans, dureeBoulot, dureeRetour, dureeScene, estChoregraphie, etatBoulot, etatScene, minisAPart, svgBulle, svgDecor, svgMinis, svgScene, teinte, teinteConnue, tenueDe } from './sprite'
 import type { Bulle, Deguisement, EnPlace, Insigne, Mini, Sortie, Tenue } from './sprite'
@@ -104,8 +104,8 @@ export const humeurActuelle = () => ({ ...humeur })
 let esprit: Esprit = { ...ESPRIT_DEPART, besoins: { ...ESPRIT_DEPART.besoins } }
 let rythme: Rythme = []
 export const espritActuel = (): Esprit => ({ ...esprit, besoins: { ...esprit.besoins } })
-/** Le besoin qui lui a fait choisir ce qu'il fait (il y pense, puis le fait), jusqu'à la fin de son activité */
-let raison: { besoin: Besoin; anim: ClawdAnim; jusqua: number } | null = null
+/** Le besoin qui lui a fait choisir ce qu'il fait (il y pense, puis le fait) : vrai tant qu'il le joue (voir `saPensee`) */
+let raison: { besoin: Besoin; anim: ClawdAnim } | null = null
 /** Ton arrivée du jour quand elle sort de tes habitudes : il y pense encore un quart d'heure */
 let arriveeDuJour: { quoi: 'retard' | 'matinal'; heure: number; jusqua: number } | null = null
 /** Quand il a repensé à son émotion, guetté ton heure : il n'y revient que de temps en temps */
@@ -113,7 +113,7 @@ let emotionPensee = 0
 let guetPense = 0
 const EMOTION_MS = 4 * 60_000
 const GUET_MS = 3 * 60_000
-const ATTENTE_MS = 8 * 60_000
+const ATTENTE_MS = 10 * 60_000
 /** Le jour où il a bâillé à ton heure de fin, et celui où il s'est levé tout seul pour te guetter (une fois chacun) */
 let bailleLe = ''
 let leveLe = ''
@@ -558,7 +558,8 @@ async function vitSonHumeur($: EngineInterface, maintenant: number) {
   humeurVecue = maintenant
   humeur = vit(humeur, dt, { dort: (await read($, dort)) === true, seul: maintenant - derniereActivite > SEUL_MS })
   // (ses besoins montent, son émotion passée s'efface ; comme son humeur, pas plus de dix minutes d'un coup)
-  esprit = vieillit(esprit, Math.min(dt, 10 * 60_000), { dort: (await read($, dort)) === true }, maintenant)
+  const endormi = (await read($, dort)) === true
+  esprit = vieillit(esprit, Math.min(dt, 10 * 60_000), { dort: endormi }, maintenant)
 }
 
 /** Son feu de camp brûle-t-il (sa série, 2 jours au moins) ? Il s'en occupe alors de temps en temps */
@@ -615,9 +616,8 @@ function cePenseAvant(maintenant: number): { anim: ClawdAnim; puis?: ClawdAnim }
   const e = envieDe(esprit, activitesAuRepos(feuAllume), derniereScene, maintenant)
   if (!e) return null
   derniereScene = e.anim
-  const pensee = SCENE_BESOIN[e.besoin]
-  raison = { ...e, jusqua: maintenant + (dureeScene(pensee) + dureeScene(e.anim)) * 1000 }
-  return { anim: pensee, puis: e.anim }
+  raison = { ...e }
+  return { anim: SCENE_BESOIN[e.besoin], puis: e.anim }
 }
 
 /** Tu es là : il le note dans ton rythme (relu avant d'écrire : une autre session a pu en noter), au plus toutes les cinq minutes */
@@ -626,17 +626,20 @@ async function noteRythme($: EngineInterface, maintenant: number) {
   const m = minuteDuJour(maintenant)
   const vu = rythme.find(j => j.jour === jour)
   if (vu && m >= vu.debut && m - vu.fin < 5) return
+  rythme = fusionne(rythme, rythmeDe(await $.store.get('rythme').catch(() => undefined)))
   // ton premier signe de la journée, comparé à tes habitudes : en retard, matinal (il y pense un quart d'heure)
   const a = arrivee(rythme, maintenant)
-  arriveeDuJour = a ? { ...a, jusqua: maintenant + 15 * 60_000 } : arriveeDuJour
-  const garde = await $.store.get('rythme').catch(() => undefined)
-  rythme = noteVu(fusionne(rythme, estRythme(garde) ? garde : []), maintenant)
+  if (a) arriveeDuJour = { ...a, jusqua: maintenant + 15 * 60_000 }
+  rythme = noteVu(rythme, maintenant)
   await $.store.set('rythme', rythme).catch(() => {})
 }
 
 /** Ce qu'il pense, là, en une phrase (sa conscience) : pour /clawd, sa carte et son 💭 */
 export async function saPensee($: EngineInterface): Promise<string> {
   const maintenant = await $.clock.now()
+  // (« il avait faim : il se régale » : seulement pendant qu'il y pense ou qu'il mange, pas si autre chose l'a coupé)
+  const a = await read($, activite)
+  const enCours = raison && a && maintenant < finActivite && (a.anim === raison.anim || a.anim === SCENE_BESOIN[raison.besoin]) ? raison : null
   return pense(esprit, {
     maintenant,
     dort: (await read($, dort)) === true,
@@ -644,7 +647,7 @@ export async function saPensee($: EngineInterface): Promise<string> {
     equipe: (await read($, copains)).length,
     humeur,
     rythme,
-    raison: raison && maintenant < raison.jusqua ? raison : null,
+    raison: enCours,
     arrivee: arriveeDuJour && maintenant < arriveeDuJour.jusqua ? arriveeDuJour : null,
   })
 }
@@ -713,7 +716,7 @@ async function gagne($: EngineInterface, n: number) {
   xp += n
   xpANoter += n
   // (un outil lancé : te regarder travailler nourrit sa curiosité)
-  if (n === 1) ilRessent({ quoi: 'outil' }, await $.clock.now())
+  if (n === XP_OUTIL) ilRessent({ quoi: 'outil' }, await $.clock.now())
   if (niveauDe(xp) > niveauVu) await noteXp($)
 }
 
@@ -2245,6 +2248,20 @@ export const register: Register = on => {
     niveauVu = niveauDe(xp)
     niveauAFeter = null
     if ((await read($, niveau)) !== niveauVu) await update($, niveau, () => niveauVu)
+    // sa conscience, relue avant son réveil (son café compte) : fermé, il a dormi (il se réveille avec une petite
+    // faim) ; et ton rythme
+    raison = null
+    arriveeDuJour = null
+    emotionPensee = 0
+    guetPense = 0
+    veilleJusqua = 0
+    const espritGarde = espritDe(await $.store.get('esprit').catch(() => undefined))
+    if (espritGarde) {
+      const quand = await $.store.get('humeurA').catch(() => undefined)
+      const absent = typeof quand === 'number' ? derniereActivite - quand : 0
+      esprit = absent > 0 ? vieillit(espritGarde, absent, { dort: true }, derniereActivite) : espritGarde
+    }
+    rythme = rythmeDe(await $.store.get('rythme').catch(() => undefined))
     // la première session de la journée, il sort du lit ; ensuite, il est en forme ;
     // et si tu étais parti longtemps, il te fait la fête (après son café, le matin)
     const retour = await retrouvailles($, derniereActivite)
@@ -2266,20 +2283,6 @@ export const register: Register = on => {
       humeur = absent > 0 ? vit(gardee, absent, { dort: true, seul: false }) : gardee
     }
     humeurVecue = derniereActivite
-    // sa conscience, relue de même : fermé, il a dormi (il se réveille avec une petite faim) ; et ton rythme
-    raison = null
-    arriveeDuJour = null
-    emotionPensee = 0
-    guetPense = 0
-    veilleJusqua = 0
-    const espritGarde = espritDe(await $.store.get('esprit').catch(() => undefined))
-    if (espritGarde) {
-      const quand = await $.store.get('humeurA').catch(() => undefined)
-      const absent = typeof quand === 'number' ? derniereActivite - quand : 0
-      esprit = absent > 0 ? vieillit(espritGarde, absent, { dort: true }, derniereActivite) : espritGarde
-    }
-    const rythmeGarde = await $.store.get('rythme').catch(() => undefined)
-    rythme = estRythme(rythmeGarde) ? fusionne(rythmeGarde, []) : []
     // une sieste en cours quand le mod a été rechargé : elle garde une fin (sinon il dormirait jusqu'à ton prochain message)
     if ((await read($, dort)) && !estNuit(new Date(derniereActivite).getHours()) && finSieste === null) {
       finSieste = derniereActivite + (3 + Math.random() * 3) * 60_000
@@ -2295,6 +2298,8 @@ export const register: Register = on => {
         await $.store.set('humeur', humeurActuelle()).catch(() => {})
         await $.store.set('humeurA', maintenant).catch(() => {})
         await $.store.set('esprit', { besoins: esprit.besoins, emotion: esprit.emotion }).catch(() => {})
+        // ton rythme, relu : une autre session a pu te voir (ici, il ne te guette pas pendant que tu travailles ailleurs)
+        rythme = fusionne(rythme, rythmeDe(await $.store.get('rythme').catch(() => undefined)))
         // ce qu'il a gagné, ajouté au total gardé
         await noteXp($).catch(() => {})
         // un mini-Clawd dont le sous-agent est fini (son SubagentStop manqué) s'en va
@@ -2319,7 +2324,7 @@ export const register: Register = on => {
           // pas de sieste pendant que Claude travaille : ses cartons ne disparaissent pas en plein déménagement
           if (maintenant - derniereActivite <= SOMMEIL_MS || auTravail) return
           // levé pour te guetter : il veille encore un peu
-          if (maintenant < veilleJusqua) return
+          if (maintenant < veilleJusqua && veilleJusqua - maintenant <= VEILLE_MS) return
           const nuit = estNuit(new Date(maintenant).getHours())
           if (!nuit && humeur.energie > 0) return
           // il finit d'abord ce qu'il fait, et n'en commence pas d'autre : il s'endort dès la fin
@@ -2371,6 +2376,8 @@ export const register: Register = on => {
         if (dessine && sessionANoter !== null) {
           sessionANoter = null
           void compte($, v => nouvelleJournee(maintenant)({ ...v, sessions: v.sessions + 1 }))
+          // (tu viens de l'ouvrir : tu es là, ton rythme le note ; il ne te guette pas alors que tu es devant lui)
+          await noteRythme($, maintenant).catch(() => {})
         }
         // sa carte ouverte suit ce qu'il vit (son expérience, votre vie commune, son humeur, ses nouvelles)
         await rafraichitCarte($)
@@ -2441,6 +2448,7 @@ export const register: Register = on => {
     else if (e.turnId === undefined) tourDeToi = false
     // une notification de tâche, une routine, une autre session : ce n'est pas toi qui parles (il ne se réveille pas, ta séance ne continue pas)
     if (!deToi(e)) return next(e)
+    const dormait = (await read($, dort)) === true
     await reveil($)
     // tu lui parles : il finit ce qu'il fait (une action ne se coupe jamais), puis te répond
     const maintenant = await $.clock.now()
@@ -2453,8 +2461,8 @@ export const register: Register = on => {
     if (await premierDuJour($, maintenant)) {
       // une nouvelle journée dans une session restée ouverte : sa série continue
       void compte($, nouvelleJournee(maintenant))
-      // (déjà levé pour te guetter : il ne refait pas son réveil)
-      if (leveLe !== jourDe(maintenant)) await emerge($)
+      // (levé tout seul pour te guetter, et encore debout : il ne refait pas son réveil)
+      if (dormait || leveLe !== jourDe(maintenant)) await emerge($)
       await seSouvient($, maintenant)
       if (retour) await scene($, retour, dureeScene(retour) * 1000)
     } else if (retour) {
