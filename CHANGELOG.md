@@ -43,6 +43,12 @@
 
 ## clawd
 
+- **0.19.1** — 2026-11-15 — Il retrouve sa place à droite des lignes d'atelier.
+  Depuis Claude Code 2.1.325, l'app dessine une rangée par mod et les empile :
+  son coin tombait sous les lignes d'atelier, et la bande doublait de hauteur.
+  Il se dessine maintenant dans la rangée d'atelier, et la sienne s'efface ;
+  sans atelier, il garde la sienne.
+
 - **0.19.0** — 2026-11-10 — Il a une conscience.
   - **Ses besoins** : sa faim, sa soif, son envie de bouger et sa curiosité
     montent avec le temps. Quand l'un presse, il y pense (une bulle, son

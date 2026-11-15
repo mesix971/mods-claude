@@ -994,6 +994,8 @@ export const surBureau = () => bureau
 export const enTour = () => auTravail
 /** Sa bande a été dessinée au moins une fois dans ce module (la session est affichée quelque part) */
 let dessine = false
+/** Atelier lui fait une place dans sa rangée (la bande d'une app qui empile une rangée par mod) : la sienne s'efface */
+let chezAtelier = false
 export const aEteDessine = () => dessine
 /** La largeur de la bande, en cases (noté à chaque dessin) : le cadre la montre */
 let colonnes = 0
@@ -2734,7 +2736,14 @@ export const register: Register = on => {
   // sa carte, dans son panneau (⭐ au survol, 💬, /clawd carte)
   on('ui.render', { component: 'Pane', requestId: CARTE }, async ($, e) => vueCarte($, e, e.props.bodyColumns, false))
 
-  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+  // Depuis Claude Code 2.1.325, l'app dessine une rangée par mod et les empile : son coin, seul dans la sienne,
+  // tombait sous les lignes d'atelier (la bande doublait de hauteur). Il se dessine donc aussi dans la rangée
+  // d'atelier, à droite de ses lignes comme avant (atelier pose ce qui vient d'en dessous à sa droite, et s'il est
+  // au-dessus, ce sont ses lignes qui passent à gauche), et sa propre rangée s'efface dès qu'il y a sa place. Sans
+  // atelier, il garde la sienne.
+  on('ui.render', { component: 'AbovePrompt', plugin: ['clawd', 'atelier'] }, async ($, e, next) => {
+    if (e.plugin === 'atelier') chezAtelier = true
+    else if (chezAtelier) return next(e)
     dessine = true
     sondage = e.props.hasSurvey === true
     if (e.props.hasSurvey) {
