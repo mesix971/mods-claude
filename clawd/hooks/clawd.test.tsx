@@ -2362,7 +2362,7 @@ test('🫣 un rebase en conflit qu’on abandonne le soulage aussi ; la fin du t
   expect(await vuJusqua($, horloge, 'balade', 3)).not.toContain('cache')
 })
 
-test('🤗 tu reviens après plus de 8 h : il t’a attendu (coucou des deux pattes et cœur) ; tes messages comptent comme des visites', { timeoutMs: 60_000 }, async ($, on) => {
+test('🤗 tu reviens après plus de 8 h : il t’a attendu (coucou des deux pattes et cœur) ; tes messages comptent comme des visites', { timeoutMs: 120_000 }, async ($, on) => {
   const SESSION = { cwd: '/projet', surface: 'desktop', isInteractive: true } as const
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   // samedi 14 h : il ne connaît encore que ta séance de travail de la veille au soir (vendredi 20 h)

@@ -14,6 +14,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, ToolCallResult } from 'claude-code'
 import type { ResolveInput } from 'claude-code'
+import type { RenderElement, RenderInput } from 'claude-code'
 
 import type { ClawdAnim, ClawdCopain, ElementBande } from '../types'
 import { CELLULE, COIN_VIDE, HAUTEUR as HAUTEUR_BANDE, LARGEUR_BANDE, MARGE, MAX_SVG, NUMEROS, RETENUE, departDe, diagnostic, estNumero, numerosAvecMinis, numerosJouables, prepareNumero, reactionA, svgNumero, svgNumeroDemo } from './bande'
@@ -2190,6 +2191,312 @@ function geste(g: 'caresse' | 'zappe', anim: ClawdAnim) {
 
 // ------------------------------------------------------------------ hooks
 
+// Depuis Claude Code 2.1.325, l'app dessine une rangée par mod et les empile : son coin, seul dans la sienne,
+// tombait sous les lignes d'atelier (la bande doublait de hauteur). Il se dessine donc aussi dans la rangée
+// d'atelier, à droite de ses lignes comme avant (atelier pose ce qui vient d'en dessous à sa droite, et s'il est
+// au-dessus, ce sont ses lignes qui passent à gauche), et sa propre rangée s'efface dès qu'il y a sa place. Sans
+// atelier, il garde la sienne. Deux crochets (le sien, celui de la rangée d'atelier) plutôt qu'un filtre à deux
+// noms : un moteur d'avant 2.1.325, sans rangées (le contrôle du matin), ne reconnaît que le premier.
+async function bandeDe($: EngineInterface, e: RenderInput<'AbovePrompt'>, next: (e: RenderInput<'AbovePrompt'>) => Promise<RenderElement>): Promise<RenderElement> {
+  if (e.plugin === 'atelier') chezAtelier = true
+  else if (chezAtelier) return next(e)
+  dessine = true
+  sondage = e.props.hasSurvey === true
+  if (e.props.hasSurvey) {
+    // son dessin n'est plus affiché : le prochain repart d'où en est le déménagement
+    dessinAffiche = null
+    minisAffiches = null
+    return next(e)
+  }
+  // Claude au travail : ses numéros s'y font plus rares ; hors desktop, pas de grande scène
+  auTravail = e.props.isWorking === true
+  bureau = e.surface === 'desktop'
+  colonnes = e.props.bodyColumns
+  const dessous = await next(e)
+  const p = await read($, passage)
+  const a = await read($, activite)
+  const endormi = await read($, dort)
+  const épuisé = await read($, fatigue)
+  const equipe = await read($, copains)
+
+  // ce qu'il fait en fond ; des sous-agents tournent : il dirige le chantier
+  // (et ne s'endort pas)
+  // une activité commencée va au bout, même si Claude se met au travail : ses cartons ensuite
+  const enActivite = a !== null && (await $.clock.now()) < finActivite
+  const fond: ClawdAnim =
+    // (une activité commencée passe même avant l'arrivée de son équipe ; une activité finie ne se rejoue jamais : il se balade)
+    enActivite ? a.anim : equipe.length >= SIFFLE_DES ? 'sifflet' : equipe.length > 0 ? 'chef' : endormi ? 'dodo' : e.props.isWorking ? 'boulot' : épuisé ? 'fatigue' : 'balade'
+  // au travail, une petite réaction s'affiche en bulle au-dessus de sa tête :
+  // il continue sa scène au lieu de s'interrompre (les grosses gardent la leur)
+  const bulle: Bulle | null =
+    p && (fond === 'boulot' || fond === 'chef' || fond === 'sifflet') && (EN_BULLE as readonly ClawdAnim[]).includes(p.anim) ? (p.anim as Bulle) : null
+  const anim: ClawdAnim = bulle ? fond : (p?.anim ?? fond)
+  const couleur = teinte((await read($, modele)) ?? (await $.session.model().catch(() => null)))
+  // chaque mini dans la teinte du modèle de son sous-agent
+  const minis = equipe.map(c => ({ fait: c.fait, couleur: teinteConnue(c.modele) }))
+  const maintenant = await $.clock.now()
+  const deguise = deguisementDu(maintenant)
+  // sa tenue : son déguisement du jour, sa visière, sa sueur, son insigne ; ses minis n'ont que le déguisement et la visière
+  const porte = await tenueSession($)
+  // son coup d'œil vers ce qui vient de changer sur la bande (ses minis tournent la tête avec lui)
+  const oeil = await read($, coupDOeil)
+  const regard = oeil && maintenant < oeil.jusqua ? oeil.vers : undefined
+  const tenue = tenueDe({ ...porte, deguise, ...(regard ? { regard } : {}) })
+  const tenueMinis = tenueDe({ deguise, visiere: porte.visiere, ...(regard ? { regard } : {}) })
+  const nv = await read($, niveau)
+  // un numéro sur toute la bande : son coin reste vide pendant ce temps (n'y restent que ses cartons quand il l'a lancé
+  // en plein déménagement : il revient les reprendre là où il les a laissés)
+  const n = await read($, numero)
+  // (et seulement une fois le dessin de son numéro posé : son numéro et son dessin s'écrivent l'un après l'autre, et un
+  // rendu entre les deux le faisait disparaître un instant au départ, ou apparaître en double à la fin)
+  const enNumero = n !== null && maintenant < n.fin && e.surface === 'desktop' && (await read($, grandeScene))?.id === n.id
+  // son déménagement n'avance que quand on le voit : une scène ou un numéro qui l'interrompt le met en pause ; un
+  // nouveau tour le fait repartir du début de sa boucle (où il en était juste avant : `faitAvant`)
+  const faitAvant = boulotEnCours(maintenant)
+  const tourAvant = boulotTour
+  reprise(enNumero || numeroLance ? null : anim, maintenant)
+  const repart = anim === 'boulot' && boulotTour !== tourAvant
+  // une scène qui interrompt son déménagement se joue là où il en était, au milieu de ses cartons (il ne saute plus à
+  // son coin, puis de nouveau au milieu en reprenant) ; commencée là, elle y reste jusqu'au bout
+  const passee = p !== null && anim === p.anim && anim !== 'boulot'
+  const surPlace = enNumero || !passee
+    ? null
+    : placeDuPassage?.id === p.id
+      ? placeDuPassage.place
+      : fond === 'boulot' && !estChoregraphie(anim)
+        ? boulotEnPlace(maintenant)
+        : null
+  // (au plus près de là où il était, là où elle tient tout entière dans sa toile : il y va à pied, ses cartons restent)
+  const enPlace = surPlace ? { ...surPlace, x: placeJouable(anim, surPlace.x) } : null
+  if (!enNumero) placeDuPassage = passee && enPlace ? { id: p.id, place: enPlace } : null
+  // ses minis ont leur propre dessin (hors chorégraphie et rapport) : un sous-agent qui change d'outil ne recrée pas le sien
+  const aPart = minisAPart(anim)
+  if (anim === 'rapport' && p) {
+    if (minisDuRapport?.id !== p.id) minisDuRapport = { id: p.id, minis }
+  } else minisDuRapport = null
+  const minisDedans = aPart ? [] : (minisDuRapport?.minis ?? minis)
+  // quand il se déplace (ses cartons), pas de bulle : dessinée dans son image, elle la refaisait à chaque outil (à
+  // son arrivée puis à son départ), et l'app redémarre une image neuve en retard : il s'arrêtait et sautait d'un côté à
+  // l'autre ; dessinée à part, elle ne le suivrait pas. Sa scène suffit à dire qu'il travaille
+  const bulleVisible = bulle !== null && !bulleDedans(anim)
+  // (une scène qui recommence, la même deux fois de suite, repart de son début : son passage fait partie de la clé)
+  const cle = `${anim}|${couleur.O}|${JSON.stringify(minisDedans)}|${anim === 'rapport' ? JSON.stringify(rapportEnCours) : ''}|${tenue ? JSON.stringify(tenue) : ''}|${enPlace ? enPlace.x : ''}|${passee ? p.id : ''}`
+  // le mouchard des dessins (pour /clawd voit) : quand, quelle scène, et pourquoi son image a été refaite
+  const avant = dessinAffiche?.cle
+  notesDessins.push({ t: maintenant, anim, refaite: !enNumero && avant !== cle ? (avant === undefined ? 'premier dessin' : pourquoiRefaite(avant, cle)) : null, surface: e.surface })
+  if (notesDessins.length > 20) notesDessins.shift()
+  if (enNumero) dessinAffiche = null
+  // seule sa tenue (visière, sueur, insigne) ou sa couleur a changé : la même scène, redessinée là où elle en est (elle
+  // ne repart pas du début, il ne rentre pas chez lui)
+  else if (avant !== cle && dessinAffiche && memeScene(avant!, cle)) dessinAffiche = { ...dessinAffiche, cle }
+  else if (avant !== cle) {
+    // jamais il ne saute d'une scène à l'autre : de là où il est (où la scène coupée l'a laissé, ou son numéro, qu'il a
+    // fini là où il l'avait commencé), il marche jusqu'au départ de la suivante pendant que ce qu'il laisse s'efface
+    const ici = lieuNumero ?? lieuActuel(maintenant, faitAvant)
+    lieuNumero = null
+    // (sur place, ou son déménagement qui reprend : ses cartons restent)
+    const garde = enPlace !== null || (anim === 'boulot' && !repart)
+    const vers = enPlace ? enPlace.x : anim === 'boulot' ? etatBoulot(boulotEnCours(maintenant)).x : etatScene(anim, 0).x
+    let rentre: EnPlace | undefined
+    if (ici && (Math.abs(ici.x - vers) > 0.5 || (ici.decor !== '' && !garde))) {
+      // (déjà en route vers là : il continue ; ses cartons gardés restent posés pendant qu'il marche)
+      if (!(retourChez && enRetour(maintenant) && Math.abs(retourChez.vers - vers) < 0.5)) retourChez = { etat: { x: ici.x, decor: ici.decor, ...(garde ? { garde: true } : {}) }, vers, debut: maintenant }
+      rentre = { ...retourChez!.etat, rentre: true, vers, avance: +((maintenant - retourChez!.debut) / 1000).toFixed(2) }
+    }
+    const reste = rentre ? Math.max(0, dureeTrajet(retourChez!) - rentre.avance!) : 0
+    // son déménagement ne compte qu'une fois qu'il y est (à la fin du trajet, même repris en route : sa clé a changé)
+    if (anim === 'boulot' && reste > 0) boulotAttente = Math.max(0, maintenant - (boulotDepuis ?? maintenant)) + reste * 1000
+    // son déménagement laissé là (la fin du tour, son équipe qui arrive) : le prochain repartira du début de sa boucle
+    if ((coinVu?.anim === 'boulot' || coinVu?.enPlace) && anim !== 'boulot' && !enPlace) boulotTour = -1
+    dessinAffiche = { cle, depuis: maintenant, ...(rentre ? { rentre } : {}) }
+    coinVu = { anim, depuis: maintenant, decale: reste, enPlace, passage: passee }
+  }
+  const rentre = dessinAffiche?.rentre ?? null
+  // où en est sa scène (s), recalé à chaque rendu : l'app recrée son image quand la bande change, et une image neuve
+  // repartait du début (ou d'un instant figé : il ne faisait plus que regarder ses cartons tomber). Son déménagement a
+  // son propre compte (il le reprend là où il l'a laissé) ; les autres scènes comptent depuis qu'elles se jouent
+  // (précédée de son trajet, sa scène suit l'horloge de son image : la sienne part à son arrivée)
+  const deja = anim === 'boulot' && !rentre ? boulotEnCours(maintenant) : dessinAffiche ? (maintenant - dessinAffiche.depuis) / 1000 : 0
+  // le dessin de ses minis : refait seulement quand eux ou sa scène changent, recalé sur la même horloge (celle de sa
+  // scène, qui attend la fin de son retour chez lui)
+  const dejaMinis = rentre ? Math.max(0, deja - (dureeRetour(rentre.x, rentre.vers) - (rentre.avance ?? 0))) : deja
+  const cleMinis = `${cle}|${JSON.stringify(minis)}`
+  if (enNumero || !aPart || !minis.length) minisAffiches = null
+  else if (minisAffiches?.cle !== cleMinis) minisAffiches = { cle: cleMinis, source: svgMinis(anim, minis, couleur, 0, tenueMinis) }
+  // son dessin : atelier le pose par-dessus toute la bande ; quand atelier ne dessine rien, c'est à lui
+  const gs = enNumero ? await read($, grandeScene) : null
+  const atelierPose = enNumero && (await read($, sceneAtelier)) !== null
+  // pendant son numéro, ce qui était posé autour de lui (ses cartons) l'attend dans son coin, à sa place
+  const coin = enNumero && lieuNumero?.decor ? svgDecor(lieuNumero.decor) : COIN_VIDE
+  // la bulle part d'où en est sa scène quand elle apparaît (son dessin ne change plus ensuite : elle ne ressurgit pas)
+  if (!bulle || !p) bulleVue = null
+  else if (bulleVue?.id !== p.id) bulleVue = { id: p.id, deja }
+
+  const caresser = async () => {
+    geste('caresse', anim)
+    const n = (await update($, caresses, c => c + 1)) ?? 0
+    await $.store.set('caresses', n)
+    void compte($, v => v)
+    await reveil($)
+    humeur = vecu(humeur, 'caresse')
+    // (vexé, ta caresse le lui fait oublier)
+    ilRessent({ quoi: 'caresse' }, await $.clock.now())
+    // ta caresse passe tout de suite : il arrête ce qu'il fait (même un cœur d'avant)
+    await joueGeste($, 'coeur', 3000)
+  }
+  // ton bouton 🕺 : il danse tout de suite, comme le ♥ ; une autre danse à chaque clic, sans attendre la fin de la première
+  const danse = async () => {
+    await reveil($)
+    const choix = DANSES.filter(d => d !== derniereDanse && d !== derniereScene && d !== a?.anim)
+    const d = pioche(choix)
+    derniereDanse = d
+    derniereScene = d
+    humeur = vecu(humeur, 'reussite')
+    esprit = comble(esprit, d)
+    await joueGeste($, d, Math.min(10_000, dureeScene(d) * 1000))
+  }
+  const occupeToi = async () => {
+    geste('zappe', anim)
+    await finNumero($)
+    await reveil($)
+    await coupeScenes($)
+    // trois fois de suite : il se vexe (et boude tout de suite) ; sinon, une autre activité, sans y penser d'abord
+    ilRessent({ quoi: 'zappe' }, await $.clock.now())
+    const tire = tirage(await $.clock.now())
+    const prochaine = tire.puis ? { anim: tire.puis } : tire
+    // un état de fond a repris (un build, une question) : l'activité passe quand même tout de suite, devant lui, le temps
+    // d'une danse au plus (cachée dessous, tu n'aurais rien vu) ; il reprend après, puisqu'il t'informe
+    if (enScene && sansFin(enScene.ms)) {
+      esprit = comble(esprit, prochaine.anim)
+      await joueGeste($, prochaine.anim, Math.min(10_000, dureeScene(prochaine.anim) * 1000))
+      return
+    }
+    await occupe($, prochaine)
+  }
+
+  // Ce que les autres dessinent (le bandeau d'atelier…) prend toute la
+  // largeur ; Clawd se tient à droite, posé sur le bord du bas.
+  const { Box, Button } = $.ui.resolve(e)
+  // son mot de la nuit, pas encore lu : une bulle au-dessus de lui ; un clic le montre
+  const mot = await read($, motNonLu)
+  const lireMot = async () => {
+    // en entier, dans sa carte (ses mots) : un toast le couperait
+    await motLu($)
+    await montreCarte($, 'mots').catch(() => {})
+  }
+  // (sur le bureau, sa bulle de parole en pixel art flotte dans son propre dessin : un bouton ne s'anime pas ; le bouton,
+  // sans dessin, est posé dessus pour la lire ; au terminal, l'emoji)
+  const SvgMot = e.surface === 'desktop' ? $.ui.resolve(e).Svg : null
+  const bureauMot = mot !== null && SvgMot !== null
+  const dessinMot = bureauMot && SvgMot && (
+    <Box key="mot-dessin" position="absolute" top={0} left={0}>
+      <SvgMot source={svgMot()} alt="Son mot de la nuit, à lire" width={TAILLE.largeur} height={TAILLE.hauteur} />
+    </Box>
+  )
+  const bulleMot = mot && (
+    <Box key="mot" position="absolute" top={0} right={0}>
+      <Button key="lire-mot" label={bureauMot ? '\u2800\u2800' : '💬'} plain onPress={lireMot} />
+    </Box>
+  )
+  // son niveau, au survol : sa carte (son grade, son expérience, ses performances, ses qualités, ses hauts faits) ;
+  // un second clic la range
+  const montreNiveau = async () => {
+    await montreCarte($, 'carte', true).catch(() => {})
+  }
+  // son 💭 : ce qu'il pense, là, en une phrase
+  const ditSaPensee = async () => {
+    try {
+      $.ui.toast(`💭 ${await saPensee($)}`, { timeoutMs: 8000 })
+    } catch {
+      // pas de toast ici : sa pensée reste dans /clawd et sa carte
+    }
+  }
+  // sa carte, posée dans sa bande là où l'app n'ouvre pas de panneau : au-dessus de ce que les autres dessinent
+  const carteBande = (await read($, carteOuverte))?.enBande ? await vueCarte($, e, Math.max(24, e.props.bodyColumns - 18), true) : null
+  const boutons = (
+    <Box position="absolute" top={0} left={0} display="none" hover={{ display: 'flex' }} flexDirection="row">
+      <Button key="caresse" label="♥" plain onPress={caresser} />
+      <Button key="occupe" label="🎲" plain onPress={occupeToi} />
+      <Button key="danse" label="🕺" plain onPress={danse} />
+      <Button key="niveau" label={`⭐${nv}`} plain onPress={montreNiveau} />
+      <Button key="pense" label="💭" plain onPress={ditSaPensee} />
+    </Box>
+  )
+
+  if (e.surface === 'desktop') {
+    const { Svg } = $.ui.resolve(e)
+    return (
+      <Box flexDirection="row" alignItems="flex-end">
+        <Box flexDirection="column" flexGrow={1}>
+          {carteBande}
+          {dessous}
+        </Box>
+        <Box key="clawd" flexShrink={0}>
+          <Svg
+            source={enNumero ? coin : svgScene(anim, minisDedans, deja, couleur, anim === 'rapport' ? (rapportEnCours ?? undefined) : undefined, undefined, tenue, rentre ?? enPlace ?? undefined)}
+            alt={`Clawd : ${anim}${equipe.length ? ` (+${equipe.length} copains)` : ''}`}
+            width={TAILLE.largeur}
+            height={TAILLE.hauteur}
+          />
+          {minisAffiches?.source && (
+            // ses mini-Clawds, posés à côté de lui dans leur propre dessin
+            <Box key="minis" position="absolute" top={0} left={0}>
+              <Svg source={avecT0(minisAffiches.source, dejaMinis)} alt={`Ses ${minis.length} mini-Clawds`} width={TAILLE.largeur} height={TAILLE.hauteur} />
+            </Box>
+          )}
+          {!enNumero && bulle && bulleVue && bulleVisible && (
+            // posée sur sa scène, dans son propre dessin : la scène ne redémarre pas
+            <Box key="bulle" position="absolute" top={0} left={0}>
+              <Svg
+                source={svgBulle(anim, bulle, bulleVue.deja)}
+                alt={`Bulle : ${bulle}`}
+                width={TAILLE.largeur}
+                height={TAILLE.hauteur}
+              />
+            </Box>
+          )}
+          {boutons}
+          {dessinMot}
+          {bulleMot}
+        </Box>
+        {gs && !atelierPose && (
+          // sans atelier, sa rangée est la nôtre : il pose son numéro lui-même, par-dessus toute la bande,
+          // à sa largeur en px (la bande ne se mesure qu'en cases : une de plus, l'app compte les cases entières ;
+          // plus large que la bande, l'image y est ramenée, sans être étirée)
+          <Box key="grande-scene" position="absolute" left={0} right={0} bottom={0}>
+            <Svg source={avecT0(gs.svg, (maintenant - (typeof gs.debut === 'number' ? gs.debut : maintenant)) / 1000)} alt={`Clawd : ${n?.nom ?? 'numéro'}`} width={Math.round((e.props.bodyColumns + 1) * CELLULE)} height={gs.hauteur} />
+          </Box>
+        )}
+      </Box>
+    )
+  }
+
+  const { Text } = $.ui.resolve(e)
+  return (
+    <Box flexDirection="row" alignItems="flex-end">
+      <Box flexDirection="column" flexGrow={1}>
+        {carteBande}
+        {dessous}
+      </Box>
+      <Box key="clawd" flexShrink={0} flexDirection="row" alignItems="center">
+        {minis.slice(0, 5).map((m, i) => (
+          <Text key={`mini-${i}`} color={(m.couleur ?? couleur).O}>
+            {i === Math.min(minis.length, 5) - 1 ? '▪ ' : '▪'}
+          </Text>
+        ))}
+        {EMOJI[bulle ?? anim] !== '' && <Text dimColor>{`${EMOJI[bulle ?? anim]} `}</Text>}
+        <Box flexDirection="column">
+          {CLAWD_TEXTE.map((l, i) => (
+            <Text key={i} color={couleur.O}>{l}</Text>
+          ))}
+        </Box>
+        {boutons}
+        {bulleMot}
+      </Box>
+    </Box>
+  )
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const ran = await next(e)
@@ -2736,308 +3043,6 @@ export const register: Register = on => {
   // sa carte, dans son panneau (⭐ au survol, 💬, /clawd carte)
   on('ui.render', { component: 'Pane', requestId: CARTE }, async ($, e) => vueCarte($, e, e.props.bodyColumns, false))
 
-  // Depuis Claude Code 2.1.325, l'app dessine une rangée par mod et les empile : son coin, seul dans la sienne,
-  // tombait sous les lignes d'atelier (la bande doublait de hauteur). Il se dessine donc aussi dans la rangée
-  // d'atelier, à droite de ses lignes comme avant (atelier pose ce qui vient d'en dessous à sa droite, et s'il est
-  // au-dessus, ce sont ses lignes qui passent à gauche), et sa propre rangée s'efface dès qu'il y a sa place. Sans
-  // atelier, il garde la sienne.
-  on('ui.render', { component: 'AbovePrompt', plugin: ['clawd', 'atelier'] }, async ($, e, next) => {
-    if (e.plugin === 'atelier') chezAtelier = true
-    else if (chezAtelier) return next(e)
-    dessine = true
-    sondage = e.props.hasSurvey === true
-    if (e.props.hasSurvey) {
-      // son dessin n'est plus affiché : le prochain repart d'où en est le déménagement
-      dessinAffiche = null
-      minisAffiches = null
-      return next(e)
-    }
-    // Claude au travail : ses numéros s'y font plus rares ; hors desktop, pas de grande scène
-    auTravail = e.props.isWorking === true
-    bureau = e.surface === 'desktop'
-    colonnes = e.props.bodyColumns
-    const dessous = await next(e)
-    const p = await read($, passage)
-    const a = await read($, activite)
-    const endormi = await read($, dort)
-    const épuisé = await read($, fatigue)
-    const equipe = await read($, copains)
-
-    // ce qu'il fait en fond ; des sous-agents tournent : il dirige le chantier
-    // (et ne s'endort pas)
-    // une activité commencée va au bout, même si Claude se met au travail : ses cartons ensuite
-    const enActivite = a !== null && (await $.clock.now()) < finActivite
-    const fond: ClawdAnim =
-      // (une activité commencée passe même avant l'arrivée de son équipe ; une activité finie ne se rejoue jamais : il se balade)
-      enActivite ? a.anim : equipe.length >= SIFFLE_DES ? 'sifflet' : equipe.length > 0 ? 'chef' : endormi ? 'dodo' : e.props.isWorking ? 'boulot' : épuisé ? 'fatigue' : 'balade'
-    // au travail, une petite réaction s'affiche en bulle au-dessus de sa tête :
-    // il continue sa scène au lieu de s'interrompre (les grosses gardent la leur)
-    const bulle: Bulle | null =
-      p && (fond === 'boulot' || fond === 'chef' || fond === 'sifflet') && (EN_BULLE as readonly ClawdAnim[]).includes(p.anim) ? (p.anim as Bulle) : null
-    const anim: ClawdAnim = bulle ? fond : (p?.anim ?? fond)
-    const couleur = teinte((await read($, modele)) ?? (await $.session.model().catch(() => null)))
-    // chaque mini dans la teinte du modèle de son sous-agent
-    const minis = equipe.map(c => ({ fait: c.fait, couleur: teinteConnue(c.modele) }))
-    const maintenant = await $.clock.now()
-    const deguise = deguisementDu(maintenant)
-    // sa tenue : son déguisement du jour, sa visière, sa sueur, son insigne ; ses minis n'ont que le déguisement et la visière
-    const porte = await tenueSession($)
-    // son coup d'œil vers ce qui vient de changer sur la bande (ses minis tournent la tête avec lui)
-    const oeil = await read($, coupDOeil)
-    const regard = oeil && maintenant < oeil.jusqua ? oeil.vers : undefined
-    const tenue = tenueDe({ ...porte, deguise, ...(regard ? { regard } : {}) })
-    const tenueMinis = tenueDe({ deguise, visiere: porte.visiere, ...(regard ? { regard } : {}) })
-    const nv = await read($, niveau)
-    // un numéro sur toute la bande : son coin reste vide pendant ce temps (n'y restent que ses cartons quand il l'a lancé
-    // en plein déménagement : il revient les reprendre là où il les a laissés)
-    const n = await read($, numero)
-    // (et seulement une fois le dessin de son numéro posé : son numéro et son dessin s'écrivent l'un après l'autre, et un
-    // rendu entre les deux le faisait disparaître un instant au départ, ou apparaître en double à la fin)
-    const enNumero = n !== null && maintenant < n.fin && e.surface === 'desktop' && (await read($, grandeScene))?.id === n.id
-    // son déménagement n'avance que quand on le voit : une scène ou un numéro qui l'interrompt le met en pause ; un
-    // nouveau tour le fait repartir du début de sa boucle (où il en était juste avant : `faitAvant`)
-    const faitAvant = boulotEnCours(maintenant)
-    const tourAvant = boulotTour
-    reprise(enNumero || numeroLance ? null : anim, maintenant)
-    const repart = anim === 'boulot' && boulotTour !== tourAvant
-    // une scène qui interrompt son déménagement se joue là où il en était, au milieu de ses cartons (il ne saute plus à
-    // son coin, puis de nouveau au milieu en reprenant) ; commencée là, elle y reste jusqu'au bout
-    const passee = p !== null && anim === p.anim && anim !== 'boulot'
-    const surPlace = enNumero || !passee
-      ? null
-      : placeDuPassage?.id === p.id
-        ? placeDuPassage.place
-        : fond === 'boulot' && !estChoregraphie(anim)
-          ? boulotEnPlace(maintenant)
-          : null
-    // (au plus près de là où il était, là où elle tient tout entière dans sa toile : il y va à pied, ses cartons restent)
-    const enPlace = surPlace ? { ...surPlace, x: placeJouable(anim, surPlace.x) } : null
-    if (!enNumero) placeDuPassage = passee && enPlace ? { id: p.id, place: enPlace } : null
-    // ses minis ont leur propre dessin (hors chorégraphie et rapport) : un sous-agent qui change d'outil ne recrée pas le sien
-    const aPart = minisAPart(anim)
-    if (anim === 'rapport' && p) {
-      if (minisDuRapport?.id !== p.id) minisDuRapport = { id: p.id, minis }
-    } else minisDuRapport = null
-    const minisDedans = aPart ? [] : (minisDuRapport?.minis ?? minis)
-    // quand il se déplace (ses cartons), pas de bulle : dessinée dans son image, elle la refaisait à chaque outil (à
-    // son arrivée puis à son départ), et l'app redémarre une image neuve en retard : il s'arrêtait et sautait d'un côté à
-    // l'autre ; dessinée à part, elle ne le suivrait pas. Sa scène suffit à dire qu'il travaille
-    const bulleVisible = bulle !== null && !bulleDedans(anim)
-    // (une scène qui recommence, la même deux fois de suite, repart de son début : son passage fait partie de la clé)
-    const cle = `${anim}|${couleur.O}|${JSON.stringify(minisDedans)}|${anim === 'rapport' ? JSON.stringify(rapportEnCours) : ''}|${tenue ? JSON.stringify(tenue) : ''}|${enPlace ? enPlace.x : ''}|${passee ? p.id : ''}`
-    // le mouchard des dessins (pour /clawd voit) : quand, quelle scène, et pourquoi son image a été refaite
-    const avant = dessinAffiche?.cle
-    notesDessins.push({ t: maintenant, anim, refaite: !enNumero && avant !== cle ? (avant === undefined ? 'premier dessin' : pourquoiRefaite(avant, cle)) : null, surface: e.surface })
-    if (notesDessins.length > 20) notesDessins.shift()
-    if (enNumero) dessinAffiche = null
-    // seule sa tenue (visière, sueur, insigne) ou sa couleur a changé : la même scène, redessinée là où elle en est (elle
-    // ne repart pas du début, il ne rentre pas chez lui)
-    else if (avant !== cle && dessinAffiche && memeScene(avant!, cle)) dessinAffiche = { ...dessinAffiche, cle }
-    else if (avant !== cle) {
-      // jamais il ne saute d'une scène à l'autre : de là où il est (où la scène coupée l'a laissé, ou son numéro, qu'il a
-      // fini là où il l'avait commencé), il marche jusqu'au départ de la suivante pendant que ce qu'il laisse s'efface
-      const ici = lieuNumero ?? lieuActuel(maintenant, faitAvant)
-      lieuNumero = null
-      // (sur place, ou son déménagement qui reprend : ses cartons restent)
-      const garde = enPlace !== null || (anim === 'boulot' && !repart)
-      const vers = enPlace ? enPlace.x : anim === 'boulot' ? etatBoulot(boulotEnCours(maintenant)).x : etatScene(anim, 0).x
-      let rentre: EnPlace | undefined
-      if (ici && (Math.abs(ici.x - vers) > 0.5 || (ici.decor !== '' && !garde))) {
-        // (déjà en route vers là : il continue ; ses cartons gardés restent posés pendant qu'il marche)
-        if (!(retourChez && enRetour(maintenant) && Math.abs(retourChez.vers - vers) < 0.5)) retourChez = { etat: { x: ici.x, decor: ici.decor, ...(garde ? { garde: true } : {}) }, vers, debut: maintenant }
-        rentre = { ...retourChez!.etat, rentre: true, vers, avance: +((maintenant - retourChez!.debut) / 1000).toFixed(2) }
-      }
-      const reste = rentre ? Math.max(0, dureeTrajet(retourChez!) - rentre.avance!) : 0
-      // son déménagement ne compte qu'une fois qu'il y est (à la fin du trajet, même repris en route : sa clé a changé)
-      if (anim === 'boulot' && reste > 0) boulotAttente = Math.max(0, maintenant - (boulotDepuis ?? maintenant)) + reste * 1000
-      // son déménagement laissé là (la fin du tour, son équipe qui arrive) : le prochain repartira du début de sa boucle
-      if ((coinVu?.anim === 'boulot' || coinVu?.enPlace) && anim !== 'boulot' && !enPlace) boulotTour = -1
-      dessinAffiche = { cle, depuis: maintenant, ...(rentre ? { rentre } : {}) }
-      coinVu = { anim, depuis: maintenant, decale: reste, enPlace, passage: passee }
-    }
-    const rentre = dessinAffiche?.rentre ?? null
-    // où en est sa scène (s), recalé à chaque rendu : l'app recrée son image quand la bande change, et une image neuve
-    // repartait du début (ou d'un instant figé : il ne faisait plus que regarder ses cartons tomber). Son déménagement a
-    // son propre compte (il le reprend là où il l'a laissé) ; les autres scènes comptent depuis qu'elles se jouent
-    // (précédée de son trajet, sa scène suit l'horloge de son image : la sienne part à son arrivée)
-    const deja = anim === 'boulot' && !rentre ? boulotEnCours(maintenant) : dessinAffiche ? (maintenant - dessinAffiche.depuis) / 1000 : 0
-    // le dessin de ses minis : refait seulement quand eux ou sa scène changent, recalé sur la même horloge (celle de sa
-    // scène, qui attend la fin de son retour chez lui)
-    const dejaMinis = rentre ? Math.max(0, deja - (dureeRetour(rentre.x, rentre.vers) - (rentre.avance ?? 0))) : deja
-    const cleMinis = `${cle}|${JSON.stringify(minis)}`
-    if (enNumero || !aPart || !minis.length) minisAffiches = null
-    else if (minisAffiches?.cle !== cleMinis) minisAffiches = { cle: cleMinis, source: svgMinis(anim, minis, couleur, 0, tenueMinis) }
-    // son dessin : atelier le pose par-dessus toute la bande ; quand atelier ne dessine rien, c'est à lui
-    const gs = enNumero ? await read($, grandeScene) : null
-    const atelierPose = enNumero && (await read($, sceneAtelier)) !== null
-    // pendant son numéro, ce qui était posé autour de lui (ses cartons) l'attend dans son coin, à sa place
-    const coin = enNumero && lieuNumero?.decor ? svgDecor(lieuNumero.decor) : COIN_VIDE
-    // la bulle part d'où en est sa scène quand elle apparaît (son dessin ne change plus ensuite : elle ne ressurgit pas)
-    if (!bulle || !p) bulleVue = null
-    else if (bulleVue?.id !== p.id) bulleVue = { id: p.id, deja }
-
-    const caresser = async () => {
-      geste('caresse', anim)
-      const n = (await update($, caresses, c => c + 1)) ?? 0
-      await $.store.set('caresses', n)
-      void compte($, v => v)
-      await reveil($)
-      humeur = vecu(humeur, 'caresse')
-      // (vexé, ta caresse le lui fait oublier)
-      ilRessent({ quoi: 'caresse' }, await $.clock.now())
-      // ta caresse passe tout de suite : il arrête ce qu'il fait (même un cœur d'avant)
-      await joueGeste($, 'coeur', 3000)
-    }
-    // ton bouton 🕺 : il danse tout de suite, comme le ♥ ; une autre danse à chaque clic, sans attendre la fin de la première
-    const danse = async () => {
-      await reveil($)
-      const choix = DANSES.filter(d => d !== derniereDanse && d !== derniereScene && d !== a?.anim)
-      const d = pioche(choix)
-      derniereDanse = d
-      derniereScene = d
-      humeur = vecu(humeur, 'reussite')
-      esprit = comble(esprit, d)
-      await joueGeste($, d, Math.min(10_000, dureeScene(d) * 1000))
-    }
-    const occupeToi = async () => {
-      geste('zappe', anim)
-      await finNumero($)
-      await reveil($)
-      await coupeScenes($)
-      // trois fois de suite : il se vexe (et boude tout de suite) ; sinon, une autre activité, sans y penser d'abord
-      ilRessent({ quoi: 'zappe' }, await $.clock.now())
-      const tire = tirage(await $.clock.now())
-      const prochaine = tire.puis ? { anim: tire.puis } : tire
-      // un état de fond a repris (un build, une question) : l'activité passe quand même tout de suite, devant lui, le temps
-      // d'une danse au plus (cachée dessous, tu n'aurais rien vu) ; il reprend après, puisqu'il t'informe
-      if (enScene && sansFin(enScene.ms)) {
-        esprit = comble(esprit, prochaine.anim)
-        await joueGeste($, prochaine.anim, Math.min(10_000, dureeScene(prochaine.anim) * 1000))
-        return
-      }
-      await occupe($, prochaine)
-    }
-
-    // Ce que les autres dessinent (le bandeau d'atelier…) prend toute la
-    // largeur ; Clawd se tient à droite, posé sur le bord du bas.
-    const { Box, Button } = $.ui.resolve(e)
-    // son mot de la nuit, pas encore lu : une bulle au-dessus de lui ; un clic le montre
-    const mot = await read($, motNonLu)
-    const lireMot = async () => {
-      // en entier, dans sa carte (ses mots) : un toast le couperait
-      await motLu($)
-      await montreCarte($, 'mots').catch(() => {})
-    }
-    // (sur le bureau, sa bulle de parole en pixel art flotte dans son propre dessin : un bouton ne s'anime pas ; le bouton,
-    // sans dessin, est posé dessus pour la lire ; au terminal, l'emoji)
-    const SvgMot = e.surface === 'desktop' ? $.ui.resolve(e).Svg : null
-    const bureauMot = mot !== null && SvgMot !== null
-    const dessinMot = bureauMot && SvgMot && (
-      <Box key="mot-dessin" position="absolute" top={0} left={0}>
-        <SvgMot source={svgMot()} alt="Son mot de la nuit, à lire" width={TAILLE.largeur} height={TAILLE.hauteur} />
-      </Box>
-    )
-    const bulleMot = mot && (
-      <Box key="mot" position="absolute" top={0} right={0}>
-        <Button key="lire-mot" label={bureauMot ? '\u2800\u2800' : '💬'} plain onPress={lireMot} />
-      </Box>
-    )
-    // son niveau, au survol : sa carte (son grade, son expérience, ses performances, ses qualités, ses hauts faits) ;
-    // un second clic la range
-    const montreNiveau = async () => {
-      await montreCarte($, 'carte', true).catch(() => {})
-    }
-    // son 💭 : ce qu'il pense, là, en une phrase
-    const ditSaPensee = async () => {
-      try {
-        $.ui.toast(`💭 ${await saPensee($)}`, { timeoutMs: 8000 })
-      } catch {
-        // pas de toast ici : sa pensée reste dans /clawd et sa carte
-      }
-    }
-    // sa carte, posée dans sa bande là où l'app n'ouvre pas de panneau : au-dessus de ce que les autres dessinent
-    const carteBande = (await read($, carteOuverte))?.enBande ? await vueCarte($, e, Math.max(24, e.props.bodyColumns - 18), true) : null
-    const boutons = (
-      <Box position="absolute" top={0} left={0} display="none" hover={{ display: 'flex' }} flexDirection="row">
-        <Button key="caresse" label="♥" plain onPress={caresser} />
-        <Button key="occupe" label="🎲" plain onPress={occupeToi} />
-        <Button key="danse" label="🕺" plain onPress={danse} />
-        <Button key="niveau" label={`⭐${nv}`} plain onPress={montreNiveau} />
-        <Button key="pense" label="💭" plain onPress={ditSaPensee} />
-      </Box>
-    )
-
-    if (e.surface === 'desktop') {
-      const { Svg } = $.ui.resolve(e)
-      return (
-        <Box flexDirection="row" alignItems="flex-end">
-          <Box flexDirection="column" flexGrow={1}>
-            {carteBande}
-            {dessous}
-          </Box>
-          <Box key="clawd" flexShrink={0}>
-            <Svg
-              source={enNumero ? coin : svgScene(anim, minisDedans, deja, couleur, anim === 'rapport' ? (rapportEnCours ?? undefined) : undefined, undefined, tenue, rentre ?? enPlace ?? undefined)}
-              alt={`Clawd : ${anim}${equipe.length ? ` (+${equipe.length} copains)` : ''}`}
-              width={TAILLE.largeur}
-              height={TAILLE.hauteur}
-            />
-            {minisAffiches?.source && (
-              // ses mini-Clawds, posés à côté de lui dans leur propre dessin
-              <Box key="minis" position="absolute" top={0} left={0}>
-                <Svg source={avecT0(minisAffiches.source, dejaMinis)} alt={`Ses ${minis.length} mini-Clawds`} width={TAILLE.largeur} height={TAILLE.hauteur} />
-              </Box>
-            )}
-            {!enNumero && bulle && bulleVue && bulleVisible && (
-              // posée sur sa scène, dans son propre dessin : la scène ne redémarre pas
-              <Box key="bulle" position="absolute" top={0} left={0}>
-                <Svg
-                  source={svgBulle(anim, bulle, bulleVue.deja)}
-                  alt={`Bulle : ${bulle}`}
-                  width={TAILLE.largeur}
-                  height={TAILLE.hauteur}
-                />
-              </Box>
-            )}
-            {boutons}
-            {dessinMot}
-            {bulleMot}
-          </Box>
-          {gs && !atelierPose && (
-            // sans atelier, sa rangée est la nôtre : il pose son numéro lui-même, par-dessus toute la bande,
-            // à sa largeur en px (la bande ne se mesure qu'en cases : une de plus, l'app compte les cases entières ;
-            // plus large que la bande, l'image y est ramenée, sans être étirée)
-            <Box key="grande-scene" position="absolute" left={0} right={0} bottom={0}>
-              <Svg source={avecT0(gs.svg, (maintenant - (typeof gs.debut === 'number' ? gs.debut : maintenant)) / 1000)} alt={`Clawd : ${n?.nom ?? 'numéro'}`} width={Math.round((e.props.bodyColumns + 1) * CELLULE)} height={gs.hauteur} />
-            </Box>
-          )}
-        </Box>
-      )
-    }
-
-    const { Text } = $.ui.resolve(e)
-    return (
-      <Box flexDirection="row" alignItems="flex-end">
-        <Box flexDirection="column" flexGrow={1}>
-          {carteBande}
-          {dessous}
-        </Box>
-        <Box key="clawd" flexShrink={0} flexDirection="row" alignItems="center">
-          {minis.slice(0, 5).map((m, i) => (
-            <Text key={`mini-${i}`} color={(m.couleur ?? couleur).O}>
-              {i === Math.min(minis.length, 5) - 1 ? '▪ ' : '▪'}
-            </Text>
-          ))}
-          {EMOJI[bulle ?? anim] !== '' && <Text dimColor>{`${EMOJI[bulle ?? anim]} `}</Text>}
-          <Box flexDirection="column">
-            {CLAWD_TEXTE.map((l, i) => (
-              <Text key={i} color={couleur.O}>{l}</Text>
-            ))}
-          </Box>
-          {boutons}
-          {bulleMot}
-        </Box>
-      </Box>
-    )
-  })
+  on('ui.render', { component: 'AbovePrompt' }, bandeDe)
+  on('ui.render', { component: 'AbovePrompt', plugin: 'atelier' }, bandeDe)
 }

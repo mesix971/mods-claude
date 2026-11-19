@@ -43,6 +43,12 @@
 
 ## clawd
 
+- **0.19.2** — 2026-11-19 — Il se dessine de nouveau avec toutes les versions de
+  l'app. Le correctif 0.19.1 n'avait qu'un crochet, filtré sur deux noms de
+  rangée ; un moteur d'avant 2.1.325 (sans rangées par mod) ne le reconnaissait
+  pas, et Clawd ne s'y dessinait plus. Deux crochets désormais : le sien, et
+  celui de la rangée d'atelier.
+
 - **0.19.1** — 2026-11-15 — Il retrouve sa place à droite des lignes d'atelier.
   Depuis Claude Code 2.1.325, l'app dessine une rangée par mod et les empile :
   son coin tombait sous les lignes d'atelier, et la bande doublait de hauteur.
