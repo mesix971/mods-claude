@@ -20,6 +20,7 @@ import type { ClawdAnim, ClawdCopain, ElementBande } from '../types'
 import { CELLULE, COIN_VIDE, HAUTEUR as HAUTEUR_BANDE, LARGEUR_BANDE, MARGE, MAX_SVG, NUMEROS, RETENUE, departDe, diagnostic, estNumero, numerosAvecMinis, numerosJouables, prepareNumero, reactionA, svgNumero, svgNumeroDemo } from './bande'
 import { HUMEUR_DEPART, choisit, decrit as decritHumeur, ecartRepos, estHumeur, estNuit, vecu, vit } from './humeur'
 import type { Humeur } from './humeur'
+import { auCoinDuFeu } from './conscience'
 import { APPELS_A_TOI, ESPRIT_DEPART, SCENE_BESOIN, SCENE_EMOTION, arrivee, colore, comble, emotionDe, envie as envieDe, espritDe, fusionne, jourDe, minuteDuJour, moment, noteVu, parBesoinSeulement, pense, ressent, rythmeDe, vieillit } from './conscience'
 import type { Besoin, Esprit, Rythme, Vecu } from './conscience'
 import { ACTIVITES, BAILLE_S, BONBON_S, CLAWD_TEXTE, DANSES, EMOJI, EN_BULLE, JEUX_CARTONS, RAPPORT_S, SORTIES, TAILLE, TEINTES, avecT0, bulleDedans, dureeBoulot, dureeRetour, dureeScene, estChoregraphie, etatBoulot, etatScene, minisAPart, svgBulle, svgDecor, svgMinis, svgScene, teinte, teinteConnue, tenueDe } from './sprite'
@@ -577,6 +578,12 @@ function tirage(maintenant: number): { anim: ClawdAnim; puis?: ClawdAnim } {
   // sa conscience d'abord : ce à quoi il pense passe avant son humeur
   const pensee = cePenseAvant(maintenant)
   if (pensee) return pensee
+  // son feu brûle : il y revient souvent (une activité sur trois)
+  const feu = auCoinDuFeu(feuAllume, AU_FEU, derniereScene)
+  if (feu) {
+    derniereScene = feu
+    return { anim: feu }
+  }
   const d = deguisementDu(maintenant)
   const envie = d ? ENVIE_DU[d] : undefined
   // (son émotion colore son humeur : fier, il bouge ; inquiet, il cherche le calme ; vexé, il ne vient pas te chercher)

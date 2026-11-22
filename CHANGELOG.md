@@ -43,6 +43,12 @@
 
 ## clawd
 
+- **0.19.3** — 2026-11-22 — Il vit davantage autour de son feu. Quand il brûle
+  (ta série de jours), une activité sur trois se passe près de lui : une bûche
+  à remettre, un carton à brûler, ses pattes à réchauffer (avant, une sur sept
+  environ). Et quand il a faim, il grille le plus souvent une guimauve plutôt
+  que de sortir un cookie.
+
 - **0.19.2** — 2026-11-19 — Il se dessine de nouveau avec toutes les versions de
   l'app. Le correctif 0.19.1 n'avait qu'un crochet, filtré sur deux noms de
   rangée ; un moteur d'avant 2.1.325 (sans rangées par mod) ne le reconnaissait

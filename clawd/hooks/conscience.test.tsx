@@ -10,6 +10,7 @@ import {
   SCENE_BESOIN,
   SCENE_EMOTION,
   arrivee,
+  auCoinDuFeu,
   besoinFort,
   colore,
   comble,
@@ -32,7 +33,7 @@ import {
 } from './conscience'
 import type { Esprit, Rythme } from './conscience'
 import { HUMEUR_DEPART } from './humeur'
-import { ACTIVITES, EMOJI, PENSEES, dureeScene, svgScene } from './sprite'
+import { ACTIVITES, AU_FEU, EMOJI, PENSEES, dureeScene, svgScene } from './sprite'
 
 const MIN = 60_000
 /** Au centième près (ses jauges sont des sommes de fractions) */
@@ -93,6 +94,35 @@ test('un besoin pressant décide de son activité : ce qui le comble, jamais deu
   expect(envie(ressent(esprit({ bouger: 1 }), { quoi: 'echec', serie: 2 }, T0), ACTIVITES, null, T0, toujours)).toBeNull()
   // chacune de ses pensées a sa scène
   for (const scene of [...Object.values(SCENE_BESOIN), ...Object.values(SCENE_EMOTION), 'guette'] as const) expect(PENSEES).toContain(scene)
+})
+
+test('🔥 son feu brûle : il y revient une activité sur trois, jamais deux fois la même ; affamé, il grille sa guimauve', () => {
+  // pas de feu : rien ; le feu allumé : une fois sur trois
+  expect(auCoinDuFeu(false, AU_FEU, null, () => 0)).toBeNull()
+  expect(auCoinDuFeu(true, AU_FEU, null, () => 0.5)).toBeNull()
+  expect(auCoinDuFeu(true, AU_FEU, null, () => 0)).toBe('flambe')
+  // jamais deux fois la même d'affilée, et jamais sa guimauve sans faim
+  let graine = 3
+  const hasard = () => ((graine = (graine * 16807) % 2147483647) - 1) / 2147483646
+  const vues = new Map<string, number>()
+  let avant: (typeof AU_FEU)[number] | null = null
+  for (let i = 0; i < 3000; i++) {
+    const a = auCoinDuFeu(true, AU_FEU, avant, hasard)
+    if (a) {
+      expect(a).not.toBe(avant)
+      vues.set(a, (vues.get(a) ?? 0) + 1)
+      avant = a
+    }
+  }
+  expect([...vues.keys()].sort()).toEqual(['buche', 'flambe', 'rechauffe'])
+  const total = [...vues.values()].reduce((s, n) => s + n, 0)
+  expect(total).toBeGreaterThan(800)
+  expect(total).toBeLessThan(1200)
+  // affamé près de son feu : le plus souvent sa guimauve ; sans feu, jamais (elle n'est pas proposée)
+  const feu = [...ACTIVITES, ...AU_FEU]
+  expect(envie(esprit({ faim: 1 }), feu, null, T0, () => 0)).toEqual({ besoin: 'faim', anim: 'guimauve' })
+  expect(envie(esprit({ faim: 1 }), feu, 'guimauve', T0, () => 0)?.anim).toBe('cookie')
+  expect(envie(esprit({ faim: 1 }), ACTIVITES, null, T0, () => 0)?.anim).toBe('cookie')
 })
 
 test('ses émotions durent : fier d’un push, inquiet des échecs qui s’enchaînent, vexé par trois zaps ; une caresse pardonne', () => {

@@ -152,7 +152,25 @@ export function envie(e: Esprit, activites: readonly ClawdAnim[], avant: ClawdAn
   if (hasard() >= (e.besoins[besoin] - ENVIE_DES) / (1 - ENVIE_DES) + 0.15) return null
   const choix = activites.filter(a => a !== avant && (COMBLE[a]?.[besoin] ?? 0) >= ASSEZ)
   if (!choix.length) return null
+  // son feu brûle (sa guimauve n'est proposée qu'alors) : affamé, il la grille plus volontiers qu'il ne sort un cookie
+  if (choix.includes('guimauve') && hasard() < GUIMAUVE_P) return { besoin, anim: 'guimauve' }
   return { besoin, anim: choix[Math.min(choix.length - 1, Math.floor(hasard() * choix.length))]! }
+}
+
+/** Son feu allumé, la part de ses activités qu'il passe autour de lui ; affamé, la part de ses faims qui finissent en guimauve grillée */
+export const FEU_P = 1 / 3
+const GUIMAUVE_P = 0.6
+
+/**
+ * Son feu de camp brûle : il y revient souvent (une bûche à remettre, un
+ * carton à brûler, ses pattes à réchauffer), une activité sur trois, jamais
+ * deux fois la même d'affilée ; ce qu'il ne fait que par besoin (sa guimauve)
+ * attend sa faim. Null : pas cette fois, ou pas de feu.
+ */
+export function auCoinDuFeu(feu: boolean, autour: readonly ClawdAnim[], avant: ClawdAnim | null, hasard: () => number = Math.random): ClawdAnim | null {
+  if (!feu || hasard() >= FEU_P) return null
+  const choix = autour.filter(a => a !== avant && !parBesoinSeulement(a))
+  return choix.length ? choix[Math.min(choix.length - 1, Math.floor(hasard() * choix.length))]! : null
 }
 
 /** Ce qui lui arrive */
