@@ -7,7 +7,7 @@ import { autreQue, deToi, deguisementDu, insigneDe, niveauDe, seuilNiveau, sueur
 import { auraDe } from './register'
 import { activitesAuRepos } from './register'
 import { AU_FEU, bornesScene, placeJouable } from './sprite'
-import { FAMILLES, sesSavoirs } from './savoirs'
+import { FAMILLES, NUMEROS_D_ICI, SCENES_D_ICI, sesSavoirs } from './savoirs'
 import { svgMot } from './sprite'
 import { COIN_VIDE, EXEMPLE, MAX_SVG, NUMEROS, departDe, prepareNumero, svgNumero } from './bande'
 import { FAITS, GRADES, gradeDe, nouveauxFaits, prochainGrade } from './grades'
@@ -3124,10 +3124,13 @@ test('🎓 sans leçon du soir (la version publique) : l’onglet montre tout ce
   await presse(ui, 'niveau')
   const panneau = await $.ui.mount(PANNEAU('desktop'))
   const libelle = async (cle: string) => ((await panneau.find({ key: cle })) as { props?: { label?: string } } | undefined)?.props?.label
-  // toutes ses scènes et tous ses numéros (aucun appris le soir ici)
+  // toutes ses scènes et tous ses numéros ; « du soir » : ce que la version publique ne connaît pas (la version perso
+  // en a, apprises la nuit), et seulement ça
   const tout = sesSavoirs()
   expect(tout).toHaveLength(Object.keys(EMOJI).length + Object.keys(NUMEROS).length)
-  expect(tout.filter(x => x.duSoir)).toEqual([])
+  for (const x of tout) expect(x.duSoir).toBe(!(x.numero ? NUMEROS_D_ICI : SCENES_D_ICI).includes(x.nom))
+  for (const nom of SCENES_D_ICI) expect(Object.hasOwn(EMOJI, nom)).toBe(true)
+  for (const nom of NUMEROS_D_ICI) expect(Object.hasOwn(NUMEROS, nom)).toBe(true)
   expect(new Set(tout.map(x => x.famille))).toEqual(new Set(FAMILLES))
   expect(await libelle('vue-lecons')).toBe(`🎓 Ce qu’il sait (${tout.length})`)
   await presse(panneau, 'vue-lecons')
