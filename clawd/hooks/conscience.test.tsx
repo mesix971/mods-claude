@@ -9,8 +9,8 @@ import {
   ESPRIT_DEPART,
   SCENE_BESOIN,
   SCENE_EMOTION,
+  BUCHE_MS,
   arrivee,
-  auCoinDuFeu,
   besoinFort,
   colore,
   comble,
@@ -19,6 +19,7 @@ import {
   espritDe,
   estRythme,
   fusionne,
+  gesteDuFeu,
   habitudes,
   heureDite,
   jourDe,
@@ -96,28 +97,23 @@ test('un besoin pressant décide de son activité : ce qui le comble, jamais deu
   for (const scene of [...Object.values(SCENE_BESOIN), ...Object.values(SCENE_EMOTION), 'guette'] as const) expect(PENSEES).toContain(scene)
 })
 
-test('🔥 son feu brûle : il y revient une activité sur trois, jamais deux fois la même ; affamé, il grille sa guimauve', () => {
-  // pas de feu : rien ; le feu allumé : une fois sur trois
-  expect(auCoinDuFeu(false, AU_FEU, null, () => 0)).toBeNull()
-  expect(auCoinDuFeu(true, AU_FEU, null, () => 0.5)).toBeNull()
-  expect(auCoinDuFeu(true, AU_FEU, null, () => 0)).toBe('flambe')
-  // jamais deux fois la même d'affilée, et jamais sa guimauve sans faim
-  let graine = 3
-  const hasard = () => ((graine = (graine * 16807) % 2147483647) - 1) / 2147483646
-  const vues = new Map<string, number>()
-  let avant: (typeof AU_FEU)[number] | null = null
-  for (let i = 0; i < 3000; i++) {
-    const a = auCoinDuFeu(true, AU_FEU, avant, hasard)
-    if (a) {
-      expect(a).not.toBe(avant)
-      vues.set(a, (vues.get(a) ?? 0) + 1)
-      avant = a
-    }
-  }
-  expect([...vues.keys()].sort()).toEqual(['buche', 'flambe', 'rechauffe'])
-  const total = [...vues.values()].reduce((s, n) => s + n, 0)
-  expect(total).toBeGreaterThan(800)
-  expect(total).toBeLessThan(1200)
+test('🔥 son feu est là et il sait s’en servir : une bûche quand il baisse, un carton après son déménagement, au chaud le soir ou fatigué', () => {
+  const calme = { feu: true, maintenant: T0, buche: T0, carton: -Infinity, finDuTour: 0, energie: 1, avant: null }
+  // 14 h, en forme, feu garni : rien à y faire ; et sans feu, jamais rien
+  expect(gesteDuFeu(calme, () => 0)).toBeNull()
+  expect(gesteDuFeu({ ...calme, feu: false, buche: 0 }, () => 0)).toBeNull()
+  // son feu baisse (un quart d'heure sans bûche) : il en remet une, pas deux d'affilée
+  expect(gesteDuFeu({ ...calme, buche: T0 - BUCHE_MS }, () => 0.99)).toBe('buche')
+  expect(gesteDuFeu({ ...calme, buche: T0 - BUCHE_MS, avant: 'buche' }, () => 0.99)).toBeNull()
+  // un tour de Claude vient de finir : un carton vide au feu ; pas un second dans le quart d'heure, ni longtemps après le tour
+  expect(gesteDuFeu({ ...calme, finDuTour: T0 - MIN }, () => 0.99)).toBe('flambe')
+  expect(gesteDuFeu({ ...calme, finDuTour: T0 - MIN, carton: T0 - 5 * MIN }, () => 0.99)).toBeNull()
+  expect(gesteDuFeu({ ...calme, finDuTour: T0 - 10 * MIN }, () => 0.99)).toBeNull()
+  // fatigué, ou le soir : il vient se réchauffer, une fois sur quatre
+  expect(gesteDuFeu({ ...calme, energie: 0.2 }, () => 0.1)).toBe('rechauffe')
+  expect(gesteDuFeu({ ...calme, energie: 0.2 }, () => 0.5)).toBeNull()
+  expect(gesteDuFeu({ ...calme, maintenant: le15(21), buche: le15(21) }, () => 0.1)).toBe('rechauffe')
+  expect(gesteDuFeu({ ...calme, maintenant: le15(21), buche: le15(21), avant: 'rechauffe' }, () => 0.1)).toBeNull()
   // affamé près de son feu : le plus souvent sa guimauve ; sans feu, jamais (elle n'est pas proposée)
   const feu = [...ACTIVITES, ...AU_FEU]
   expect(envie(esprit({ faim: 1 }), feu, null, T0, () => 0)).toEqual({ besoin: 'faim', anim: 'guimauve' })

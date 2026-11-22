@@ -43,6 +43,18 @@
 
 ## clawd
 
+- **0.20.0** — 2026-11-22 — Son feu au naturel, et tout ce qu'il sait dans sa carte.
+  - **Son feu** : plus de quota (une activité sur trois, c'était trop). Il
+    sait que son feu est là et s'en sert pour une raison : une bûche quand il
+    baisse (tous les quarts d'heure), un carton vide brûlé après son
+    déménagement, ses pattes au chaud quand il est fatigué, le soir ou tôt le
+    matin, sa guimauve quand il a faim.
+  - **Sa carte, onglet 🎓** : tout ce qu'il sait faire, par famille (au
+    repos, ses danses, autour du feu, dans sa tête, ses cartons, avec toi et
+    Claude, sur toute la bande). Une pastille cliquée le montre en direct, et
+    il le rejoue sur sa bande. La version qui apprend la nuit garde ses
+    leçons du soir à part, au-dessus.
+
 - **0.19.3** — 2026-11-22 — Il vit davantage autour de son feu. Quand il brûle
   (ta série de jours), une activité sur trois se passe près de lui : une bûche
   à remettre, un carton à brûler, ses pattes à réchauffer (avant, une sur sept

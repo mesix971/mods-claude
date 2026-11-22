@@ -20,7 +20,8 @@ import type { ClawdAnim, ClawdCopain, ElementBande } from '../types'
 import { CELLULE, COIN_VIDE, HAUTEUR as HAUTEUR_BANDE, LARGEUR_BANDE, MARGE, MAX_SVG, NUMEROS, RETENUE, departDe, diagnostic, estNumero, numerosAvecMinis, numerosJouables, prepareNumero, reactionA, svgNumero, svgNumeroDemo } from './bande'
 import { HUMEUR_DEPART, choisit, decrit as decritHumeur, ecartRepos, estHumeur, estNuit, vecu, vit } from './humeur'
 import type { Humeur } from './humeur'
-import { auCoinDuFeu } from './conscience'
+import { A_SA_RAISON, gesteDuFeu } from './conscience'
+import { sesSavoirs } from './savoirs'
 import { APPELS_A_TOI, ESPRIT_DEPART, SCENE_BESOIN, SCENE_EMOTION, arrivee, colore, comble, emotionDe, envie as envieDe, espritDe, fusionne, jourDe, minuteDuJour, moment, noteVu, parBesoinSeulement, pense, ressent, rythmeDe, vieillit } from './conscience'
 import type { Besoin, Esprit, Rythme, Vecu } from './conscience'
 import { ACTIVITES, BAILLE_S, BONBON_S, CLAWD_TEXTE, DANSES, EMOJI, EN_BULLE, JEUX_CARTONS, RAPPORT_S, SORTIES, TAILLE, TEINTES, avecT0, bulleDedans, dureeBoulot, dureeRetour, dureeScene, estChoregraphie, etatBoulot, etatScene, minisAPart, svgBulle, svgDecor, svgMinis, svgScene, teinte, teinteConnue, tenueDe } from './sprite'
@@ -566,6 +567,10 @@ async function vitSonHumeur($: EngineInterface, maintenant: number) {
 
 /** Son feu de camp brûle-t-il (sa série, 2 jours au moins) ? Il s'en occupe alors de temps en temps */
 let feuAllume = false
+/** Sa dernière bûche, son dernier carton brûlé, la fin du dernier tour de Claude : son feu, il s'en sert pour une raison */
+let derniereBuche = 0
+let dernierCarton = -Infinity
+let finDuTourA = 0
 /** Ses activités au repos : avec son feu allumé, celles autour de lui en plus (un carton au feu, une bûche…) */
 export const activitesAuRepos = (feu: boolean): readonly ClawdAnim[] => (feu ? [...ACTIVITES, ...AU_FEU] : ACTIVITES)
 
@@ -578,9 +583,11 @@ function tirage(maintenant: number): { anim: ClawdAnim; puis?: ClawdAnim } {
   // sa conscience d'abord : ce à quoi il pense passe avant son humeur
   const pensee = cePenseAvant(maintenant)
   if (pensee) return pensee
-  // son feu brûle : il y revient souvent (une activité sur trois)
-  const feu = auCoinDuFeu(feuAllume, AU_FEU, derniereScene)
+  // son feu brûle : il l'entretient, y brûle un carton après son déménagement, s'y réchauffe (chaque geste a sa raison)
+  const feu = gesteDuFeu({ feu: feuAllume, maintenant, buche: derniereBuche, carton: dernierCarton, finDuTour: finDuTourA, energie: humeur.energie, avant: derniereScene })
   if (feu) {
+    if (feu === 'buche') derniereBuche = maintenant
+    if (feu === 'flambe') dernierCarton = maintenant
     derniereScene = feu
     return { anim: feu }
   }
@@ -590,7 +597,7 @@ function tirage(maintenant: number): { anim: ClawdAnim; puis?: ClawdAnim } {
   const h = colore(humeur, esprit, maintenant)
   const vexe = emotionDe(esprit, maintenant)?.nom === 'vexe'
   // (il ne mange que quand il a faim, ne boit que quand il a soif : ça, c'est son besoin qui en décide, plus haut)
-  const libres = activitesAuRepos(feuAllume).filter(a => !parBesoinSeulement(a))
+  const libres = activitesAuRepos(feuAllume).filter(a => !parBesoinSeulement(a) && !A_SA_RAISON.includes(a))
   let anim = envie && envie !== derniereScene && Math.random() < ENVIE_P ? envie : choisit(h, libres, derniereScene)
   for (let i = 0; i < 8 && vexe && APPELS_A_TOI.includes(anim); i++) anim = choisit(h, libres, derniereScene)
   derniereScene = anim
@@ -1430,7 +1437,7 @@ const CARTE = 'carte'
  * l'autre, elle se voit en situation seulement. `rang` : son numéro (n° 12),
  * sur sa pastille, pour distinguer deux leçons du même jour.
  */
-export type LeconCarte = { id: string; date: string; titre: string; texte: string; scene?: ClawdAnim; deguise?: Deguisement; numero?: string; rang?: number }
+export type LeconCarte = { id: string; date: string; titre: string; texte: string; scene?: ClawdAnim; deguise?: Deguisement; numero?: string; rang?: number; famille?: string; duSoir?: boolean }
 
 /**
  * Ce que la version perso ajoute à sa carte (posé par elle, à l'ouverture et
@@ -1449,6 +1456,25 @@ export const carteEnPlus: {
 /** Sa vue de la carte ouverte : son portrait, ses mots ou ses leçons */
 type VueCarte = 'carte' | 'mots' | 'lecons'
 const lesLecons = () => carteEnPlus.lecons ?? []
+/**
+ * Tout ce qu'il sait faire en dehors de ses leçons du soir (savoirs.ts), dans
+ * la forme d'une leçon : sa carte les montre et les rejoue de la même façon
+ */
+function sesSavoirsCarte(lecons: readonly LeconCarte[]): LeconCarte[] {
+  const deLecons = new Set(lecons.flatMap(l => [l.scene, l.numero]).filter((x): x is ClawdAnim | string => Boolean(x)))
+  return sesSavoirs(deLecons).map(v => ({
+    id: v.id,
+    date: '',
+    titre: `${v.emoji} ${v.nom}`,
+    texte: v.numero
+      ? `Un numéro sur toute la bande${NUMEROS[v.numero]?.besoin ? ` : il lui faut ${NUMEROS[v.numero]!.besoin}` : ''}.`
+      : `${v.famille}${v.duSoir ? ' · appris le soir' : ''}.`,
+    famille: v.famille,
+    duSoir: v.duSoir,
+    ...(v.scene ? { scene: v.scene } : {}),
+    ...(v.numero ? { numero: v.numero } : {}),
+  }))
+}
 
 /** Il rejoue une leçon sur sa bande : sa scène (en entier si c'est une chorégraphie), ou son numéro ; false s'il n'y a rien à jouer, ou s'il ne peut pas */
 async function joueLeconIci($: EngineInterface, l: LeconCarte): Promise<boolean> {
@@ -1576,25 +1602,27 @@ export async function ouvreCarteParCommande($: EngineInterface, vue: VueCarte) {
 async function vueCarte($: EngineInterface, e: ResolveInput<'Pane' | 'AbovePrompt'>, cases: number, enBande: boolean) {
   const ouverte = await read($, carteOuverte)
   const lecons = lesLecons()
-  const vue: VueCarte = ouverte?.vue === 'mots' ? 'mots' : ouverte?.vue === 'lecons' && lecons.length ? 'lecons' : 'carte'
+  const savoirs = sesSavoirsCarte(lecons)
+  const vue: VueCarte = ouverte?.vue === 'mots' ? 'mots' : ouverte?.vue === 'lecons' ? 'lecons' : 'carte'
   // (lu ici : ce qu'elle montre a changé, elle se redessine)
   await read($, carteAJour)
   const f = await ficheDe($)
   const nouvelles = await nouvellesDe($)
   const { Box, Text, Button } = $.ui.resolve(e)
   const versVue = (v: VueCarte) => () => void montreCarte($, v).catch(() => {})
-  const onglets = nouvelles.length > 0 || lecons.length > 0 || vue !== 'carte'
+  const onglets = true
   const haut = (
     <Box key="carte-haut" flexDirection="row" gap={1} flexWrap="wrap">
       {onglets && <Button key="vue-carte" label="🪪 Sa carte" variant={vue === 'carte' ? 'primary' : 'secondary'} onPress={versVue('carte')} />}
-      {onglets && <Button key="vue-mots" label={`💬 Ses mots (${nouvelles.length})`} variant={vue === 'mots' ? 'primary' : 'secondary'} onPress={versVue('mots')} />}
-      {lecons.length > 0 && <Button key="vue-lecons" label={`🎓 Ses leçons (${lecons.length})`} variant={vue === 'lecons' ? 'primary' : 'secondary'} onPress={versVue('lecons')} />}
+      {(nouvelles.length > 0 || vue === 'mots') && <Button key="vue-mots" label={`💬 Ses mots (${nouvelles.length})`} variant={vue === 'mots' ? 'primary' : 'secondary'} onPress={versVue('mots')} />}
+      <Button key="vue-lecons" label={lecons.length ? `🎓 Ses leçons (${lecons.length})` : `🎓 Ce qu’il sait (${savoirs.length})`} variant={vue === 'lecons' ? 'primary' : 'secondary'} onPress={versVue('lecons')} />
       {enBande && <Button key="ranger-carte" label="✕" plain onPress={() => void rangeCarte($).catch(() => {})} />}
     </Box>
   )
   if (vue === 'lecons') {
     // la leçon choisie (une date cliquée), sinon la plus récente
-    const l = lecons.find(x => x.id === ouverte?.lecon) ?? lecons[0]!
+    const l = [...lecons, ...savoirs].find(x => x.id === ouverte?.lecon) ?? lecons[0] ?? savoirs[0]!
+    const familles = [...new Set(savoirs.map(x => x.famille ?? ''))]
     const choisit = (id: string) => () => void update($, carteOuverte, c => (c ? { ...c, lecon: id } : c)).catch(() => {})
     // le numéro sur la bande d'exemple, dans sa carte (ta bande n'a pas toujours ce qu'il lui faut) : sur desktop seulement
     const demo = e.surface === 'desktop' && l.numero ? svgNumeroDemo(l.numero, teinte((await read($, modele)) ?? (await $.session.model().catch(() => null))), l.deguise) : null
@@ -1649,14 +1677,17 @@ async function vueCarte($: EngineInterface, e: ResolveInput<'Pane' | 'AbovePromp
     return (
       <Box key="carte" flexDirection="column" gap={1}>
         {haut}
-        <Box key="lecon-dates" flexDirection="row" flexWrap="wrap" columnGap={1}>
-          {lecons.map(x => (
-            <Button key={`lecon-${x.id}`} label={x.rang ? `n° ${x.rang} · ${dateCourte(x.date)}` : dateCourte(x.date)} variant={x.id === l.id ? 'primary' : 'secondary'} onPress={choisit(x.id)} />
-          ))}
-        </Box>
+        {lecons.length > 0 && <Text key="titre-soir" bold>{`🌙 Ses leçons du soir (${lecons.length})`}</Text>}
+        {lecons.length > 0 && (
+          <Box key="lecon-dates" flexDirection="row" flexWrap="wrap" columnGap={1}>
+            {lecons.map(x => (
+              <Button key={`lecon-${x.id}`} label={x.rang ? `n° ${x.rang} · ${dateCourte(x.date)}` : dateCourte(x.date)} variant={x.id === l.id ? 'primary' : 'secondary'} onPress={choisit(x.id)} />
+            ))}
+          </Box>
+        )}
         {direct}
         <Box key="lecon-texte" flexDirection="column">
-          <Text bold color={f.couleur.O}>{`🎓 ${dateCourte(l.date)} · ${l.titre}`}</Text>
+          <Text bold color={f.couleur.O}>{l.date ? `🎓 ${dateCourte(l.date)} · ${l.titre}` : `🛠 ${l.titre}`}</Text>
           <Text wrap="wrap">{l.texte}</Text>
           {!l.scene && !l.numero && <Text dimColor>Rien à rejouer : elle se voit en situation.</Text>}
           {l.numero && !direct && <Text dimColor>Un numéro sur toute la bande : il le joue en vrai, au-dessus de son coin.</Text>}
@@ -1666,6 +1697,18 @@ async function vueCarte($: EngineInterface, e: ResolveInput<'Pane' | 'AbovePromp
           {demo && <Button key="lecon-revoit" label="↻ Revoir ici" variant="secondary" onPress={() => void revoit().catch(() => {})} />}
           {(l.scene || l.numero) && <Button key="lecon-joue" label="▶ Qu’il la joue sur sa bande" onPress={rejoue} />}
         </Box>
+        {/* tout ce qu'il sait faire d'autre, par famille (🌙 : appris le soir, sans fiche de leçon) */}
+        <Text key="titre-ici" bold>{`🛠 Ce qu’il sait faire d’autre (${savoirs.length})`}</Text>
+        {familles.map(fam => (
+          <Box key={`famille-${fam}`} flexDirection="row" flexWrap="wrap" columnGap={1} alignItems="center">
+            <Text dimColor>{`${fam} :`}</Text>
+            {savoirs
+              .filter(x => x.famille === fam)
+              .map(x => (
+                <Button key={`lecon-${x.id}`} label={`${x.duSoir ? '🌙' : ''}${x.titre}`} plain variant={x.id === l.id ? 'primary' : 'secondary'} onPress={choisit(x.id)} />
+              ))}
+          </Box>
+        ))}
       </Box>
     )
   }
@@ -2568,6 +2611,10 @@ export const register: Register = on => {
     // faim) ; et ton rythme
     raison = null
     arriveeDuJour = null
+    // (son feu vient d'être garni : sa première bûche dans un quart d'heure)
+    derniereBuche = derniereActivite
+    dernierCarton = -Infinity
+    finDuTourA = 0
     emotionPensee = 0
     guetPense = 0
     veilleJusqua = 0
@@ -2874,6 +2921,8 @@ export const register: Register = on => {
     // un tour que tu n'as pas lancé (une notification de tâche, une routine) : ce n'est pas ta séance
     const deToiCeTour = tourDeToi
     if (deToiCeTour) derniereActivite = await $.clock.now()
+    // (son déménagement fini : un carton vide ira peut-être au feu)
+    finDuTourA = await $.clock.now()
     // un tour fini (même interrompu) : rien de ce qu'il montrait ne tourne plus (commande, question, permission, compactage,
     // sa cachette) ; affiché jusqu'à ce que ce qu'il dit du tour le remplace d'un coup
     permissions.length = 0

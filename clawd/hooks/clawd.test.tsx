@@ -7,6 +7,7 @@ import { autreQue, deToi, deguisementDu, insigneDe, niveauDe, seuilNiveau, sueur
 import { auraDe } from './register'
 import { activitesAuRepos } from './register'
 import { AU_FEU, bornesScene, placeJouable } from './sprite'
+import { FAMILLES, sesSavoirs } from './savoirs'
 import { svgMot } from './sprite'
 import { COIN_VIDE, EXEMPLE, MAX_SVG, NUMEROS, departDe, prepareNumero, svgNumero } from './bande'
 import { FAITS, GRADES, gradeDe, nouveauxFaits, prochainGrade } from './grades'
@@ -3116,13 +3117,30 @@ test('💬 son mot de la nuit se lit en entier (sa carte, ses mots) ; là où l�
   await ui.unmount()
 })
 
-test('🎓 sans leçon (la version publique) : pas d’onglet', async ($, on) => {
+test('🎓 sans leçon du soir (la version publique) : l’onglet montre tout ce qu’il sait faire, par famille, et le rejoue', async ($, on) => {
   moteur(on)
   on('ui.open', () => ({ value: { isPlaced: true } }))
   const ui = await $.ui.mount({ ...BAND(), surface: 'desktop' })
   await presse(ui, 'niveau')
   const panneau = await $.ui.mount(PANNEAU('desktop'))
-  expect(await panneau.find({ key: 'vue-lecons' })).toBeUndefined()
+  const libelle = async (cle: string) => ((await panneau.find({ key: cle })) as { props?: { label?: string } } | undefined)?.props?.label
+  // toutes ses scènes et tous ses numéros (aucun appris le soir ici)
+  const tout = sesSavoirs()
+  expect(tout).toHaveLength(Object.keys(EMOJI).length + Object.keys(NUMEROS).length)
+  expect(tout.filter(x => x.duSoir)).toEqual([])
+  expect(new Set(tout.map(x => x.famille))).toEqual(new Set(FAMILLES))
+  expect(await libelle('vue-lecons')).toBe(`🎓 Ce qu’il sait (${tout.length})`)
+  await presse(panneau, 'vue-lecons')
+  // pas de leçons du soir : pas de leur titre ; ses savoirs, une pastille chacun
+  expect(await panneau.find({ key: 'titre-soir' })).toBeUndefined()
+  expect(await libelle('lecon-s-guimauve')).toBe('🍡 guimauve')
+  expect(await libelle('lecon-n-tournee')).toBe('🎪 tournee')
+  // une pastille cliquée : sa scène en direct
+  await presse(panneau, 'lecon-s-guimauve')
+  const dessins = await (panneau as unknown as { findAll: (q: unknown) => Promise<{ props: { alt?: string } }[]> }).findAll({ type: 'Svg' })
+  expect(dessins.some(d => String(d.props.alt).includes('guimauve'))).toBe(true)
+  // ce que montrent déjà ses leçons du soir n'est pas redit ; une scène inconnue d'ici est marquée du soir
+  expect(sesSavoirs(new Set(['guimauve', 'tournee'])).some(x => x.nom === 'guimauve' || x.nom === 'tournee')).toBe(false)
   await panneau.unmount()
   await ui.unmount()
 })

@@ -157,20 +157,44 @@ export function envie(e: Esprit, activites: readonly ClawdAnim[], avant: ClawdAn
   return { besoin, anim: choix[Math.min(choix.length - 1, Math.floor(hasard() * choix.length))]! }
 }
 
-/** Son feu allumé, la part de ses activités qu'il passe autour de lui ; affamé, la part de ses faims qui finissent en guimauve grillée */
-export const FEU_P = 1 / 3
+/** Affamé près de son feu, la part de ses faims qui finissent en guimauve grillée */
 const GUIMAUVE_P = 0.6
 
+/** Ce qu'il ne fait jamais au hasard autour de son feu : il lui faut une raison (le feu qui baisse, un carton vide) */
+export const A_SA_RAISON: readonly ClawdAnim[] = ['buche', 'flambe']
+/** Son feu baisse : une bûche à peu près tous les quarts d'heure */
+export const BUCHE_MS = 15 * MIN
+/** Un tour de Claude vient de finir (dans les trois minutes) : un carton vide à brûler, pas plus d'un par quart d'heure */
+const APRES_TOUR_MS = 3 * MIN
+const CARTON_MS = 15 * MIN
+/** Fatigué, ou le soir et tôt le matin : il vient se réchauffer, une fois sur quatre */
+const AU_CHAUD_P = 0.25
+
+/** Ce qu'il sait de son feu au moment de s'occuper */
+export type AuFeu = {
+  feu: boolean
+  maintenant: number
+  /** sa dernière bûche, son dernier carton brûlé, la fin du dernier tour de Claude (ms) */
+  buche: number
+  carton: number
+  finDuTour: number
+  energie: number
+  avant: ClawdAnim | null
+}
+
 /**
- * Son feu de camp brûle : il y revient souvent (une bûche à remettre, un
- * carton à brûler, ses pattes à réchauffer), une activité sur trois, jamais
- * deux fois la même d'affilée ; ce qu'il ne fait que par besoin (sa guimauve)
- * attend sa faim. Null : pas cette fois, ou pas de feu.
+ * Son feu de camp est là, et il sait s'en servir : il l'entretient (une
+ * bûche quand il baisse), y brûle un carton vide après son déménagement, et
+ * vient s'y réchauffer quand il est fatigué ou qu'il fait nuit. Jamais par
+ * quota : chaque geste a sa raison. Null : rien à y faire maintenant.
  */
-export function auCoinDuFeu(feu: boolean, autour: readonly ClawdAnim[], avant: ClawdAnim | null, hasard: () => number = Math.random): ClawdAnim | null {
-  if (!feu || hasard() >= FEU_P) return null
-  const choix = autour.filter(a => a !== avant && !parBesoinSeulement(a))
-  return choix.length ? choix[Math.min(choix.length - 1, Math.floor(hasard() * choix.length))]! : null
+export function gesteDuFeu(c: AuFeu, hasard: () => number = Math.random): ClawdAnim | null {
+  if (!c.feu) return null
+  if (c.maintenant - c.buche >= BUCHE_MS && c.avant !== 'buche') return 'buche'
+  if (c.finDuTour > 0 && c.maintenant - c.finDuTour < APRES_TOUR_MS && c.maintenant - c.carton >= CARTON_MS && c.avant !== 'flambe') return 'flambe'
+  const heure = new Date(c.maintenant).getHours()
+  if ((c.energie < 0.35 || heure >= 19 || heure < 8) && c.avant !== 'rechauffe' && hasard() < AU_CHAUD_P) return 'rechauffe'
+  return null
 }
 
 /** Ce qui lui arrive */
