@@ -43,6 +43,11 @@
 
 ## clawd
 
+- **0.22.1** — 2026-11-26 — Son thème est reposé quand une app s'attache à la
+  session (ton téléphone qui l'ouvre après coup, par exemple), et
+  `/clawd thème ?` dit où il en est : les apps attachées, et ce que l'app a
+  répondu à la dernière pose.
+
 - **0.22.0** — 2026-11-26 — Son feu de camp en fond de l'app. Derrière la
   conversation, une nuit chaude sous les étoiles (un crépuscule crème en
   mode clair), et son feu épinglé en bas à droite : flammes qui ondulent,

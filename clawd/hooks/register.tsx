@@ -1422,7 +1422,7 @@ async function commandeDeBase($: EngineInterface, args: string) {
   }
   if (/^voi[st]/i.test(args)) return voit($)
   if (/^livret/i.test(args)) return livret($)
-  if (/^th[èe]me/i.test(args)) return basculeTheme($)
+  if (/^th[èe]me/i.test(args)) return basculeTheme($, args)
   if (/^carte/i.test(args)) return ouvreCarteParCommande($, 'carte')
   if (/^mots?$/i.test(args)) return ouvreCarteParCommande($, 'mots')
   return [`${await sonNiveau($)}`, `🧠 En ce moment, ${decritHumeur(humeurActuelle(), (await read($, dort)) === true)}.`, `💭 ${await saPensee($)}`, '/clawd montre <numéro | bande | scène> · /clawd voit · /clawd livret · /clawd carte · /clawd mots · /clawd thème'].join('\n')
@@ -2255,16 +2255,36 @@ function geste(g: 'caresse' | 'zappe', anim: ClawdAnim) {
  * à l'ouverture d'une session sauf si tu l'as retiré (/clawd thème). Un moteur
  * sans thèmes, ou une surface qui n'en peint pas : rien ne change.
  */
-async function poseTheme($: EngineInterface) {
+async function poseTheme($: EngineInterface, pourquoi = 'ouverture') {
+  let resultat: string
   try {
-    if ((await $.store.get('theme')) !== false) await $.theme.set(THEME_CLAWD)
-  } catch {
-    // pas de thème ici : l'app garde le sien
+    if ((await $.store.get('theme')) === false) resultat = 'retiré par toi'
+    else {
+      const r = await $.theme.set(THEME_CLAWD)
+      resultat = r.isDrawn ? 'posé, une app qui dessine les thèmes est là' : `posé, mais rien ne le dessine : ${r.reason}`
+    }
+  } catch (erreur) {
+    resultat = `refusé : ${String(erreur).slice(0, 300)}`
   }
+  // (pour /clawd thème ? : ce que l'app a répondu, et quand)
+  dernierTheme = { quand: await $.clock.now(), pourquoi, resultat }
+}
+/** La dernière pose de son thème et ce que l'app en a dit */
+let dernierTheme: { quand: number; pourquoi: string; resultat: string } | null = null
+
+/** /clawd thème ? : où en est son thème (pour comprendre une app qui ne le montre pas) */
+async function etatTheme($: EngineInterface) {
+  const surfaces = await $.session.surfaces().catch(() => [] as readonly string[])
+  const t = dernierTheme
+  return [
+    `🎨 Surfaces attachées : ${surfaces.length ? surfaces.join(', ') : 'aucune'}.`,
+    t ? `🎨 Dernière pose (${t.pourquoi}, ${new Date(t.quand).toLocaleTimeString('fr-FR')}) : ${t.resultat}.` : '🎨 Pas encore posé dans cette session.',
+  ].join('\n')
 }
 
 /** /clawd thème : son thème retiré de l'app, ou remis (ton choix est gardé d'une session à l'autre) */
-export async function basculeTheme($: EngineInterface) {
+export async function basculeTheme($: EngineInterface, args = '') {
+  if (/\?|[ée]tat/.test(args)) return etatTheme($)
   try {
     const retire = (await $.store.get('theme')) === false
     await $.store.set('theme', retire)
@@ -3131,6 +3151,12 @@ export const register: Register = on => {
   on('ui.render', { component: 'Pane', requestId: CARTE }, async ($, e) => vueCarte($, e, e.props.bodyColumns, false))
 
   on('ui.render', { component: 'AbovePrompt' }, bandeDe)
+  // une app qui s'attache à la session (ton téléphone, l'app de bureau) : son thème reposé pour elle
+  on('session.attach', async ($, e, next) => {
+    const r = await next(e)
+    if (e.surface === 'desktop' || e.surface === 'mobile') await poseTheme($, `${e.surface} attaché`)
+    return r
+  })
   // son feu de camp, en fond de l'app (son thème le demande : fond.ts)
   on('ui.render', { component: 'Backdrop' }, ($, e, next) => {
     if (e.props.scene !== 'feu' || (e.surface !== 'desktop' && e.surface !== 'mobile')) return next(e)

@@ -3134,6 +3134,25 @@ test('🎨 son thème : sa palette entière dans les deux modes, son terracotta 
   expect(PROBLEMES_THEME.filter(l => l.startsWith('Desktop won’t paint') || l.startsWith("Desktop won't paint"))).toEqual([])
 })
 
+test('🎨 ton téléphone s’attache à la session : son thème est reposé pour lui, et /clawd thème ? le dit', async ($, on) => {
+  moteur(on)
+  const poses: unknown[] = []
+  on('theme.set', ($, e) => {
+    poses.push(e)
+    return { value: { isDrawn: true, requestId: 'theme' } }
+  })
+  on('session.attach', ($, e) => ({ clientId: e.clientId }))
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  on('command.register', () => ({ value: { command: 'clawd' } }) as never)
+  await $.session.start({ cwd: '/projet', surface: 'desktop', isInteractive: true } as never)
+  const avant = poses.length
+  await $.session.attach({ surface: 'mobile', clientId: 'mobile:tel' } as never)
+  expect(poses.length).toBe(avant + 1)
+  const r = await $.command.run({ command: 'clawd', args: 'thème ?', origin: { kind: 'composer' } } as never)
+  expect(String(r.text)).toContain('mobile attaché')
+  expect(String(r.text)).toContain('posé, une app qui dessine les thèmes est là')
+})
+
 test('🎓 sans leçon du soir (la version publique) : l’onglet montre tout ce qu’il sait faire, par famille, et le rejoue', async ($, on) => {
   moteur(on)
   on('ui.open', () => ({ value: { isPlaced: true } }))
