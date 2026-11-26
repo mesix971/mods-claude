@@ -634,6 +634,8 @@ test('PowerShell : pas de bash WSL ni d’attente bloquante', async ($, on) => {
 })
 
 test('rien à montrer : le bandeau laisse le moteur dessiner', async ($, on) => {
+  // (son horloge : depuis Claude Code 2.1.331, un test fournit la sienne)
+  mock.clock(on as never, { now: Date.UTC(2026, 9, 7, 6, 0) })
   on('ui.render', ($, e) => {
     const { Text } = $.ui.resolve(e)
     return <Text>moteur</Text>

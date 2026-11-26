@@ -1337,7 +1337,8 @@ export const register: Register = (on, options) => {
       if (dessous === null || dessous === undefined) return dessous
       const { Box } = $.ui.resolve(e)
       // bande vide ou masquée : son numéro reste à nous (la bande partagée, vide, le lui dit)
-      const grandeScene = await numeroDeClawd(await $.clock.now())
+      // (sur le bureau seulement : ailleurs, pas de grande scène, ni d'heure à demander)
+      const grandeScene = e.surface === 'desktop' ? await numeroDeClawd(await $.clock.now()) : null
       return (
         <Box flexDirection="row" alignItems="flex-end">
           <Box flexDirection="column" flexGrow={1} />
