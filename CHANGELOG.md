@@ -395,6 +395,9 @@
 
 ## atelier
 
+- **0.13.1** — 2026-11-26 — Ses tests suivent les types de Claude Code
+  2.1.331 : la validation stricte y passe. Aucun changement visible.
+
 - **0.13.0** — 2026-10-31 — La bande partagée publie aussi le bouton de la
   ligne git (Commit + push, Commit, Pull, Push), juste après 🆕 : « à montrer »
   quand des modifs attendent un commit depuis 30 min, sans build raté ni en

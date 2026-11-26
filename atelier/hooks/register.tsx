@@ -1320,7 +1320,8 @@ export const register: Register = (on, options) => {
     // le numéro que Clawd joue sur toute la bande (son dessin, qu'il publie) :
     // posé par-dessus nos lignes, dans notre rangée, la seule qui couvre la bande
     const numeroDeClawd = async (maintenant: number) => {
-      const gs = e.surface === 'desktop' ? grandeSceneDe(await read($, grandeSceneClawd), maintenant) : null
+      if (e.surface !== 'desktop') return null
+      const gs = grandeSceneDe(await read($, grandeSceneClawd), maintenant)
       if (!gs) return null
       const { Box, Svg } = $.ui.resolve(e)
       // la bande ne se mesure qu'en cases : sa largeur en px, pour que le dessin la couvre à l'échelle 1 (une case de

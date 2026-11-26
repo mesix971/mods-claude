@@ -113,7 +113,7 @@ function fakeRun(argv: readonly string[], installed: { lastUpdate: string; absen
 const BAND = {
   plugin: 'atelier',
   component: 'AbovePrompt',
-  props: { hasSurvey: false, isWorking: false, maxRows: 10, bodyColumns: 120, scroll: { offset: 0, bodyRows: 10 }, view: {} },
+  props: { hasSurvey: false, isCollapsed: false, isWorking: false, maxRows: 10, bodyColumns: 120, scroll: { offset: 0, bodyRows: 10 }, view: {} },
 } as const
 
 test('bandeau : APK plus récent que le tel, git en avance, quota 5 h', async ($, on) => {
@@ -163,8 +163,8 @@ test('bandeau : APK plus récent que le tel, git en avance, quota 5 h', async ($
     changed: ['context', 'rateLimits'],
   })
   expect(toasts.some(t => t.includes('Quota 5 h à 82 %'))).toBe(true)
-  await $.command.run({ command: 'atelier', args: '', origin: { kind: 'composer' } })
-  await $.command.run({ command: 'atelier', args: '', origin: { kind: 'composer' } })
+  await $.command.run({ command: 'atelier', args: '', origin: { kind: 'composer' } } as never)
+  await $.command.run({ command: 'atelier', args: '', origin: { kind: 'composer' } } as never)
 
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...BAND, surface })
@@ -219,7 +219,7 @@ test('bandeau : APK plus récent que le tel, git en avance, quota 5 h', async ($
   }
 
   // /tel installe le debug (le plus récent), puis le tel est à jour
-  const res = await $.command.run({ command: 'tel', args: '', origin: { kind: 'composer' } })
+  const res = await $.command.run({ command: 'tel', args: '', origin: { kind: 'composer' } } as never)
   expect(res.text ?? '').toContain('MonApp-5.7.0-debug.apk installé')
   expect(runs.some(r => r.endsWith('install -r C:/proj/app/build/outputs/apk/debug/MonApp-5.7.0-debug.apk'))).toBe(true)
   for (const surface of ['terminal', 'desktop'] as const) {
@@ -310,7 +310,7 @@ test('↻ relit les quotas, une fenêtre déjà réinitialisée repart à 0 %, e
   expect(await ui.find({ type: 'Svg' })).toBeUndefined()
   expect(toasts).toContain('Bandeau atelier masqué : tape /atelier pour le ré-afficher')
   // /atelier le fait revenir
-  await $.command.run({ command: 'atelier', args: '', origin: { kind: 'composer' } })
+  await $.command.run({ command: 'atelier', args: '', origin: { kind: 'composer' } } as never)
   expect(await alt()).toContain('contexte 92 %')
   await ui.unmount()
 })
@@ -349,8 +349,8 @@ function shellStubs(on: Parameters<Parameters<typeof test>[1] extends infer F ? 
     return { result: { questions: e.questions, answers: { [q]: opts.answer } } }
   })
   for (const tool of ['Bash', 'PowerShell'] as const) {
-    on('tool.call', { tool }, ($, e) => {
-      ran.push(e.command)
+    on('tool.call', { tool } as never, ($, e) => {
+      ran.push((e as { command: string }).command)
       return { result: { stdout: 'ok', stderr: '', interrupted: false } }
     })
   }
@@ -382,7 +382,7 @@ test('commande destructrice : passe si tu autorises', async ($, on) => {
 
 test('secret indexé : le commit est bloqué', async ($, on) => {
   const { ran, asked } = shellStubs(on as never, { answer: 'Refuser', staged: 'app/src/Main.kt\nlocal.properties\n.env.example\n' })
-  await $.prompt.submit({ text: 'commit et pousse' })
+  await $.prompt.submit({ text: 'commit et pousse' } as never)
   await $.tool.call({ tool: 'Bash', command: 'git commit -m "feat: truc"' })
   expect(asked[0]).toContain('local.properties')
   expect(asked[0]).not.toContain('.env.example')
@@ -391,21 +391,21 @@ test('secret indexé : le commit est bloqué', async ($, on) => {
 
 test('commit : toujours direct ; push non demandé : confirmation, demandé : direct', async ($, on) => {
   const { ran, asked } = shellStubs(on as never, { answer: 'Refuser' })
-  await $.prompt.submit({ text: 'corrige le bug du minuteur' })
+  await $.prompt.submit({ text: 'corrige le bug du minuteur' } as never)
   await $.tool.call({ tool: 'Bash', command: 'git commit -am "fix: minuteur"' })
   expect(asked.length).toBe(0)
   expect(ran).toEqual(['git commit -am "fix: minuteur"'])
   await $.tool.call({ tool: 'Bash', command: 'git push' })
   expect(asked.length).toBe(1)
   expect(ran.length).toBe(1)
-  await $.prompt.submit({ text: 'ok commit et pousse' })
+  await $.prompt.submit({ text: 'ok commit et pousse' } as never)
   await $.tool.call({ tool: 'Bash', command: 'git push' })
   expect(ran).toEqual(['git commit -am "fix: minuteur"', 'git push'])
 })
 
 test('push non demandé : avec l’option push_sans_demande, il passe sans question ; les secrets, eux, demandent encore', { options: { push_sans_demande: true } }, async ($, on) => {
   const { ran, asked } = shellStubs(on as never, { answer: 'Refuser' })
-  await $.prompt.submit({ text: 'corrige le bug du minuteur' })
+  await $.prompt.submit({ text: 'corrige le bug du minuteur' } as never)
   await $.tool.call({ tool: 'Bash', command: 'git push' })
   expect(asked.length).toBe(0)
   expect(ran).toEqual(['git push'])
@@ -413,7 +413,7 @@ test('push non demandé : avec l’option push_sans_demande, il passe sans quest
 
 test('push non demandé, option push_sans_demande : un secret en partance demande toujours', { options: { push_sans_demande: true } }, async ($, on) => {
   const { ran, asked } = shellStubs(on as never, { answer: 'Refuser', staged: 'local.properties\n' })
-  await $.prompt.submit({ text: 'corrige le bug du minuteur' })
+  await $.prompt.submit({ text: 'corrige le bug du minuteur' } as never)
   await $.tool.call({ tool: 'Bash', command: 'git commit -m "x" && git push' })
   expect(asked.length).toBe(1)
   expect(ran.length).toBe(0)
@@ -491,7 +491,7 @@ test('garde-fous : une commande qui CITE une commande dangereuse ne demande rien
 
 test('garde-fous : un gh -f ne passe plus pour un push forcé, et ce que tu écris sous « Other » arrive à Claude', async ($, on) => {
   const { ran, asked } = shellStubs(on as never, { answer: 'non, lance plutôt les tests' })
-  await $.prompt.submit({ text: 'pousse et lance le verdict' })
+  await $.prompt.submit({ text: 'pousse et lance le verdict' } as never)
   await $.tool.call({ tool: 'Bash', command: 'git push origin main && gh workflow run verdict.yml -f essai=true' })
   expect(asked).toEqual([])
   expect(ran.length).toBe(1)
@@ -503,7 +503,7 @@ test('garde-fous : un gh -f ne passe plus pour un push forcé, et ce que tu écr
 
 test('garde-fous : les secrets sont cherchés dans le dépôt du cd, et avec l’option garde_fou_ok, GARDE_FOU_OK=1 ne redemande pas', { options: { garde_fou_ok: true } }, async ($, on) => {
   const { ran, asked, lances } = shellStubs(on as never, { answer: 'Refuser', staged: 'local.properties\n' })
-  await $.prompt.submit({ text: 'commit' })
+  await $.prompt.submit({ text: 'commit' } as never)
   await $.tool.call({ tool: 'Bash', command: 'cd "/c/Users/moi/projets/autre" && git commit -m "x"' })
   expect(lances.filter(a => a.includes('--cached')).map(a => a[a.indexOf('-C') + 1])).toEqual(['C:/Users/moi/projets/autre'])
   expect(asked.length).toBe(1)
@@ -516,7 +516,7 @@ test('garde-fous : les secrets sont cherchés dans le dépôt du cd, et avec l�
 
 test('garde-fous : avec l’option garde_fou_ok, ton « Autoriser » pour des secrets passe au garde-fou global (pas une deuxième question)', { options: { garde_fou_ok: true } }, async ($, on) => {
   const { ran, asked } = shellStubs(on as never, { answer: 'Autoriser', staged: 'local.properties\n' })
-  await $.prompt.submit({ text: 'commit' })
+  await $.prompt.submit({ text: 'commit' } as never)
   await $.tool.call({ tool: 'Bash', command: 'git commit -m "x"' })
   await $.tool.call({ tool: 'PowerShell', command: 'git commit -m "x"' })
   expect(asked.length).toBe(2)
@@ -525,7 +525,7 @@ test('garde-fous : avec l’option garde_fou_ok, ton « Autoriser » pour des se
 
 test('garde-fous : sans l’option garde_fou_ok (par défaut), GARDE_FOU_OK=1 ne saute pas le contrôle des secrets, et ton « Autoriser » ne le pose pas', async ($, on) => {
   const { ran, asked } = shellStubs(on as never, { answer: 'Autoriser', staged: 'local.properties\n' })
-  await $.prompt.submit({ text: 'commit' })
+  await $.prompt.submit({ text: 'commit' } as never)
   await $.tool.call({ tool: 'Bash', command: 'GARDE_FOU_OK=1 git commit -m "x"' })
   await $.tool.call({ tool: 'Bash', command: 'export GARDE_FOU_OK=1; git commit -m "x"' })
   await $.tool.call({ tool: 'PowerShell', command: '$env:GARDE_FOU_OK = 1; git commit -m "x"' })
@@ -757,8 +757,8 @@ android {
     const { Text } = $.ui.resolve(e)
     return <Text>moteur</Text>
   })
-  await $.command.run({ command: 'atelier', args: '', origin: { kind: 'composer' } })
-  await $.command.run({ command: 'atelier', args: '', origin: { kind: 'composer' } })
+  await $.command.run({ command: 'atelier', args: '', origin: { kind: 'composer' } } as never)
+  await $.command.run({ command: 'atelier', args: '', origin: { kind: 'composer' } } as never)
   const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
   expect(await ui.find({ type: 'Text', text: /📱 3\.15\.2/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /\$major/ })).toBeUndefined()
@@ -851,7 +851,7 @@ test('bandeau : la liste de l’app desktop en pastilles, le nom au survol, coch
   await plan({ advance: true })
   const fini = await $.ui.mount({ ...BAND, surface: 'desktop' })
   expect(String((await fini.find({ type: 'Svg' }))?.props?.alt)).toContain('Tâches 3/3')
-  await $.prompt.submit({ text: 'merci' })
+  await $.prompt.submit({ text: 'merci' } as never)
   expect(await fini.find({ type: 'Svg' })).toBeUndefined()
   expect(await fini.find({ type: 'Text', text: /moteur/ })).toBeDefined()
   await fini.unmount()
@@ -933,7 +933,7 @@ test('bandeau : TodoWrite et TaskList suivis, pas la liste d’un sous-agent, et
     { content: 'Lire le code', status: 'completed', activeForm: 'Lecture du code' },
     { content: 'Corriger le bug', status: 'in_progress', activeForm: 'Correction du bug' },
   ]
-  await $.tool.call({ tool: 'TodoWrite', todos })
+  await $.tool.call({ tool: 'TodoWrite', todos } as never)
   const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
   const alt = async () => String((await ui.find({ type: 'Svg' }))?.props?.alt ?? '')
   expect(await alt()).toBe('Tâches 1/2 : Lire le code (faite), Corriger le bug (en cours)')
@@ -948,7 +948,7 @@ test('bandeau : TodoWrite et TaskList suivis, pas la liste d’un sous-agent, et
 
   // un message glissé par le moteur ne vide pas un plan, même fini
   await $.tool.call({ tool: 'TodoWrite', todos: todos.map(t => ({ ...t, status: 'completed' })) })
-  await $.prompt.submit({ text: 'rappel', isMeta: true })
+  await $.prompt.submit({ text: 'rappel', isMeta: true } as never)
   expect(await alt()).toContain('Tâches 2/2')
 
   // TaskList recale la liste sur les tâches de Claude Code
@@ -1318,7 +1318,7 @@ test('bandeau : les sous-agents en pastilles, puis effacés au message suivant',
   await $.turn.complete({ answer: 'fait', durationMs: 1, isAborted: false, turnId: 't9', reason: 'answer', agentId: 'a1' } as never)
   expect(String((await svg())?.props?.alt)).toBe('Sous-agents : Eclaireur (fini)')
   expect(String((await svg())?.props?.source)).toContain('fill="#9CB86A"')
-  await $.prompt.submit({ text: 'la suite' })
+  await $.prompt.submit({ text: 'la suite' } as never)
   expect(await svg()).toBeUndefined()
   await ui.unmount()
 })
@@ -1708,8 +1708,8 @@ test('bandeau : le conseil de modèle de Haiku, montré quand il diffère de ce 
   await horloge.settle()
   expect(demandes).toHaveLength(1)
   expect(demandes[0]).toMatchObject({ model: 'haiku', effort: 'low', maxTokens: 150 })
-  expect(demandes[0].prompt).toContain('<demande>\nrenomme le bouton Masquer en Cacher dans register.tsx\n</demande>')
-  expect(demandes[0].prompt).toContain('projet autre ; plan en cours : 0 étape(s) ; dernier build sans échec ; sous-agents au travail : 0.')
+  expect(demandes[0]!.prompt).toContain('<demande>\nrenomme le bouton Masquer en Cacher dans register.tsx\n</demande>')
+  expect(demandes[0]!.prompt).toContain('projet autre ; plan en cours : 0 étape(s) ; dernier build sans échec ; sous-agents au travail : 0.')
   // la session tourne en Opus : le conseil diffère, il s'affiche, sa raison au survol
   const d = await conseilMontre('desktop')
   expect(d.alt).toBe('Conseil : 💡 Sonnet · Moyen')
@@ -1763,7 +1763,7 @@ test('bandeau : le conseil de modèle de Haiku, montré quand il diffère de ce 
   expect((await conseilMontre('terminal')).alt).toBe('')
   // bandeau masqué : personne ne verrait le conseil, Haiku n'est pas appelé
   const avant = demandes.length
-  await $.command.run({ command: 'atelier', args: '', origin: { kind: 'composer' } })
+  await $.command.run({ command: 'atelier', args: '', origin: { kind: 'composer' } } as never)
   await demande('encore une demande assez longue pour être jugée')
   await horloge.settle()
   expect(demandes).toHaveLength(avant)
@@ -1811,7 +1811,7 @@ test('bouton « Nouvelle conversation » : toujours le même, à la même place,
   let tokens = 100_000
   on('session.usage', () => ({ value: { startedAt: 0, context: { tokens, window: 1_000_000, percent: tokens / 10_000 }, rateLimits: [] } }))
   on('command.list', () => ({ value: [{ name: 'compact' }, { name: 'suite' }] }) as never)
-  let publiee: { elements?: { id: string; genre: string; x: number; largeur: number; ligne: number }[] } | null = null
+  let publiee = null as { elements?: { id: string; genre: string; etat?: string; x: number; largeur: number; ligne: number }[] } | null
   on('state.set', ($, e, next) => {
     if ((e as { key?: string }).key === 'scene') publiee = (e as { value?: typeof publiee }).value ?? null
     return next(e)
