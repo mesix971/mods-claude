@@ -381,7 +381,7 @@ le même deux fois. `/clawd montre <numéro>` en lance un.
 - **Survole-le** : ♥ pour le caresser (le compteur est gardé d'une session à
   l'autre), 🎲 pour qu'il change d'activité, 🕺 pour qu'il danse, ⭐ pour son
   niveau, 💭 pour ce qu'il pense. Tes gestes passent tout de suite, avant ce qu'il fait.
-- **Son thème** : l'app prend ses couleurs (son terracotta, des gris chauds), en clair comme en sombre. `/clawd thème` le retire ou le remet.
+- **Son thème** : l'app prend ses couleurs (son terracotta, des gris chauds), en clair comme en sombre, avec son feu de camp animé en fond. `/clawd thème` le retire ou le remet.
 - **`/clawd`** : son niveau, son humeur et ce qu'il pense. `/clawd montre <numéro | bande |
   scène>` lui fait jouer un numéro ou une scène. `/clawd voit` dit ce qu'il
   voit de la bande, et pourquoi un numéro se joue ou non.

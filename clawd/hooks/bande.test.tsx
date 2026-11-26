@@ -13,7 +13,7 @@ import { TEINTES } from './sprite'
 const BAND = {
   plugin: 'clawd',
   component: 'AbovePrompt',
-  props: { hasSurvey: false, isWorking: false, maxRows: 10, bodyColumns: 120, scroll: { offset: 0, bodyRows: 10 }, view: {} },
+  props: { hasSurvey: false, isCollapsed: false, isWorking: false, maxRows: 10, bodyColumns: 120, scroll: { offset: 0, bodyRows: 10 }, view: {} },
 } as const
 const SESSION = { cwd: '/projet', surface: 'desktop', isInteractive: true } as const
 const COMPOSER = { kind: 'composer' } as const
@@ -337,13 +337,13 @@ test('ses minis : les autres le regardent depuis leurs cases ; saute-mouton, pyr
 test('le poids : avec trois minis, leurs figurants et des dessins d’atelier réalistes, chaque numéro reste sous la limite du moteur', () => {
   // ~4 Ko par dessin d'atelier, comme une jauge avec son style
   const dessin = (w: number) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} 18">${'<rect x="1" y="1" width="1" height="1"/>'.repeat(100)}</svg>`
-  const bande: ElementBande[] = [
+  const bande: ElementBande[] = ([
     { id: 'jauge-5h', genre: 'jauge', etat: 'critique', x: 0, largeur: 157, ligne: 1 },
     { id: 'jauge-7j', genre: 'jauge', etat: 'ok', x: 171, largeur: 108, ligne: 1 },
     { id: 'build', genre: 'build', etat: 'echec', x: 0, largeur: 17, ligne: 0 },
     { id: 'tache-plan-1', genre: 'tache', etat: 'faite', x: 27, largeur: 17, ligne: 0 },
     ...[0, 1, 2].map((i): ElementBande => ({ id: `agent-a${i}`, genre: 'agent', etat: 'encours', x: 54 + 17 * i, largeur: 17, ligne: 0, teinte: [TEINTES.haiku.O, TEINTES.sonnet.O, TEINTES.fable.O][i] })),
-  ].map(e => ({ ...e, dessin: dessin(e.largeur) }))
+  ] as ElementBande[]).map((e): ElementBande => ({ ...e, dessin: dessin(e.largeur) }))
   const figurants = [TEINTES.haiku.O, TEINTES.sonnet.O, TEINTES.fable.O]
   for (const nom of Object.keys(NUMEROS).filter(n => n !== 'cadre')) {
     for (const variante of [0, 0.55, 0.95]) {
@@ -396,7 +396,7 @@ test('/clawd montre bande : il prend l’orbe (atelier ne la dessine plus), la r
   const { horloge, dernier, tenus } = moteur(on)
   // la bande se dessine sur desktop : la grande scène peut s'y voir
   const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
-  const r = await $.command.run({ command: 'clawd', args: 'montre chipe', origin: COMPOSER })
+  const r = await $.command.run({ command: 'clawd', args: 'montre chipe', origin: COMPOSER } as never)
   expect(r.text).toContain('« chipe »')
   // son coin reste vide (la bande ne bouge pas)
   expect((await dessinDe(ui as never, 'clawd'))?.source).toBe(COIN_VIDE)
@@ -439,7 +439,7 @@ test('/clawd montre bande : il prend l’orbe (atelier ne la dessine plus), la r
 test('🎲 en plein numéro : il rend tout de suite ce qu’il tenait, et rien ne le reprend après', async ($, on) => {
   const { horloge, dernier, tenus } = moteur(on)
   const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
-  await $.command.run({ command: 'clawd', args: 'montre chipe', origin: COMPOSER })
+  await $.command.run({ command: 'clawd', args: 'montre chipe', origin: COMPOSER } as never)
   const prep = prepareNumero('chipe', ELEMENTS, LARGEUR)!
   await horloge.advance(prep.emprunts[0]!.de * 1000 + 1000)
   expect(tenus()).toEqual(['tache-plan-2'])
@@ -449,7 +449,7 @@ test('🎲 en plein numéro : il rend tout de suite ce qu’il tenait, et rien n
   await horloge.advance(prep.duree * 1000)
   expect(tenus()).toEqual([])
   // 🎲 avant même qu'il l'ait prise : il ne la prend plus
-  await $.command.run({ command: 'clawd', args: 'montre chipe', origin: COMPOSER })
+  await $.command.run({ command: 'clawd', args: 'montre chipe', origin: COMPOSER } as never)
   await horloge.advance(2_000)
   await ui.press({ key: 'occupe' })
   await horloge.advance(prep.duree * 1000)
@@ -461,7 +461,7 @@ test('sans atelier qui dessine, il pose lui-même son numéro ; un rechargement 
   const { horloge, dernier, tenus } = moteur(on, null)
   const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
   // pas d'atelier : rien à chiper, il fait le tour de la bande, et le pose lui-même par-dessus
-  const r = await $.command.run({ command: 'clawd', args: 'montre bande', origin: COMPOSER })
+  const r = await $.command.run({ command: 'clawd', args: 'montre bande', origin: COMPOSER } as never)
   expect(r.text).toContain('« tournee »')
   const grande = (await ui.find({ key: 'grande-scene' })) as Noeud
   expect(grande.props).toMatchObject({ position: 'absolute', left: 0, right: 0, bottom: 0 })
@@ -470,7 +470,7 @@ test('sans atelier qui dessine, il pose lui-même son numéro ; un rechargement 
   // à la largeur de la bande en px (120 cases, une de plus : l'app compte les cases entières), pour que le dessin la couvre à l'échelle 1
   expect(dessin.width).toBe(914)
   // un deuxième numéro pendant le premier : non
-  const encore = await $.command.run({ command: 'clawd', args: 'montre cadre', origin: COMPOSER })
+  const encore = await $.command.run({ command: 'clawd', args: 'montre cadre', origin: COMPOSER } as never)
   expect(encore.text).toContain('Il finit d’abord ce qu’il fait')
   await horloge.advance(3_000)
   // le module se recharge (session.start revient) : le numéro laissé en plan s'arrête
@@ -484,7 +484,7 @@ test('sans atelier qui dessine, il pose lui-même son numéro ; un rechargement 
 test('sur le terminal, pas de grande scène : il le dit au lieu de jouer dans le vide', async ($, on) => {
   const { dernier } = moteur(on)
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
-  const r = await $.command.run({ command: 'clawd', args: 'montre bande', origin: COMPOSER })
+  const r = await $.command.run({ command: 'clawd', args: 'montre bande', origin: COMPOSER } as never)
   expect(r.text).toContain('app de bureau')
   expect(dernier('numero')).toBeUndefined()
   await ui.unmount()
@@ -583,7 +583,7 @@ test('la physique : il retombe en chute libre, son ombre reste au sol, un salto 
 test('/clawd montre bousculade : il emprunte d’un coup tout ce qu’il va bousculer, dès que son dessin est là, et rend tout à la fin', async ($, on) => {
   const { horloge, dernier, tenus } = moteur(on)
   const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
-  const r = await $.command.run({ command: 'clawd', args: 'montre bousculade', origin: COMPOSER })
+  const r = await $.command.run({ command: 'clawd', args: 'montre bousculade', origin: COMPOSER } as never)
   expect(r.text).toContain('bousculade')
   const prep = prepareNumero('bousculade', ELEMENTS, LARGEUR)!
   expect(prep.cibles.map(c => c.id)).toEqual(['jauge-5h', 'build', 'tache-plan-1', 'tache-plan-2'])
@@ -604,7 +604,7 @@ test('/clawd montre bousculade : il emprunte d’un coup tout ce qu’il va bous
 test('/clawd montre popcorn : toutes les pastilles prises dès que son dessin est là, rendues ensemble à la fin du dessin', async ($, on) => {
   const { horloge, tenus } = moteur(on)
   const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
-  await $.command.run({ command: 'clawd', args: 'montre popcorn', origin: COMPOSER })
+  await $.command.run({ command: 'clawd', args: 'montre popcorn', origin: COMPOSER } as never)
   const prep = prepareNumero('popcorn', ELEMENTS, LARGEUR)!
   const [a, b, c] = prep.emprunts
   // toutes à la fois, dès que son dessin est là (pas une à une : un original et sa copie l'un sur l'autre se voient)
@@ -627,7 +627,7 @@ test('un numéro trop lourd pour le moteur : il ne le joue pas, et ne réessaie 
   expect(lourds[0]!.dessin!.length).toBeLessThan(20_000)
   const { dernier } = moteur(on, { elements: lourds })
   const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
-  const r = await $.command.run({ command: 'clawd', args: 'montre bousculade', origin: COMPOSER })
+  const r = await $.command.run({ command: 'clawd', args: 'montre bousculade', origin: COMPOSER } as never)
   expect(r.text).toContain('trop lourd')
   expect(dernier('grandeScene')).toBeUndefined()
   expect(dernier('numero')).toBeUndefined()
@@ -642,16 +642,16 @@ test('/clawd montre : il dit pourquoi un numéro ne se joue pas, et ce qui se jo
   ]
   const { horloge, dernier } = moteur(on, { elements: quotas })
   const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
-  const r = await $.command.run({ command: 'clawd', args: 'montre popcorn', origin: COMPOSER })
+  const r = await $.command.run({ command: 'clawd', args: 'montre popcorn', origin: COMPOSER } as never)
   expect(r.text).toContain('Rien à viser pour « popcorn »')
   expect(r.text).toContain('au moins deux pastilles')
   expect(r.text).toContain('Jouables maintenant : tournee, bousculade, inspection.')
   // la bousculade, d'un coup d'épaule dans la conso (à sa hauteur), qu'il saute ensuite
-  const b = await $.command.run({ command: 'clawd', args: 'montre bousculade', origin: COMPOSER })
+  const b = await $.command.run({ command: 'clawd', args: 'montre bousculade', origin: COMPOSER } as never)
   expect(b.text).toContain('« bousculade »')
   expect(prepareNumero('bousculade', quotas, LARGEUR)!.cibles.map(c => c.id)).toEqual(['conso'])
   // pendant ce temps, un autre : il le dit
-  const encore = await $.command.run({ command: 'clawd', args: 'montre tournee', origin: COMPOSER })
+  const encore = await $.command.run({ command: 'clawd', args: 'montre tournee', origin: COMPOSER } as never)
   expect(encore.text).toContain('Il finit d’abord ce qu’il fait')
   await horloge.advance(60_000)
   expect(dernier('grandeScene')).toBeNull()
@@ -661,7 +661,7 @@ test('/clawd montre : il dit pourquoi un numéro ne se joue pas, et ce qui se jo
 test('/clawd voit : ce qu’il voit de la bande, et pourquoi chaque numéro se joue ou non', async ($, on) => {
   moteur(on)
   const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
-  const r = (await $.command.run({ command: 'clawd', args: 'voit', origin: COMPOSER })).text ?? ''
+  const r = (await $.command.run({ command: 'clawd', args: 'voit', origin: COMPOSER } as never)).text ?? ''
   expect(r).toContain('largeur 906 px')
   expect(r).toContain('· jauge-5h (ok) ligne 1, x 0, 108 px')
   expect(r).toContain('· chipe : jouable')
@@ -674,8 +674,8 @@ test('/clawd voit et /clawd montre : le bandeau d’atelier masqué, il le dit, 
   // masqué, atelier publie une bande vide (il est là, rien n’est à viser)
   moteur(on, { lignes: [], elements: [] } as never, undefined, true)
   const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
-  expect((await $.command.run({ command: 'clawd', args: 'voit', origin: COMPOSER })).text).toContain('masqué : tape /atelier')
-  expect((await $.command.run({ command: 'clawd', args: 'montre bousculade', origin: COMPOSER })).text).toContain('le bandeau d’atelier est masqué. Tape /atelier')
+  expect((await $.command.run({ command: 'clawd', args: 'voit', origin: COMPOSER } as never)).text).toContain('masqué : tape /atelier')
+  expect((await $.command.run({ command: 'clawd', args: 'montre bousculade', origin: COMPOSER } as never)).text).toContain('le bandeau d’atelier est masqué. Tape /atelier')
   await ui.unmount()
 })
 
@@ -683,12 +683,12 @@ test('tu lui parles en plein numéro : il ne le coupe pas, le finit et rend tout
   const { horloge, dernier, tenus } = moteur(on)
   on('prompt.submit', ($, e) => ({ text: e.text }))
   const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
-  await $.command.run({ command: 'clawd', args: 'montre bousculade', origin: COMPOSER })
+  await $.command.run({ command: 'clawd', args: 'montre bousculade', origin: COMPOSER } as never)
   const prep = prepareNumero('bousculade', ELEMENTS, LARGEUR)!
   await horloge.set(MAINTENANT + (prep.emprunts[0]!.de + 0.5) * 1000)
   const tenusAvant = tenus().slice().sort()
   expect(tenusAvant.length).toBeGreaterThan(0)
-  await $.prompt.submit({ text: 'tu fais quoi là ?' })
+  await $.prompt.submit({ text: 'tu fais quoi là ?' } as never)
   // une action ne se coupe jamais : le numéro continue, ce qu'il tient aussi
   expect(dernier('numero')).not.toBeNull()
   expect(tenus().slice().sort()).toEqual(tenusAvant)
@@ -782,7 +782,7 @@ test('bousculade d’un quota collé au bord gauche : il ne saute pas hors du de
 test('/clawd voit : atelier chargé, bande vide (rien à montrer) : il le dit, sans parler de bandeau masqué', async ($, on) => {
   moteur(on, { lignes: [], elements: [] } as never)
   const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
-  const t = (await $.command.run({ command: 'clawd', args: 'voit', origin: COMPOSER })).text ?? ''
+  const t = (await $.command.run({ command: 'clawd', args: 'voit', origin: COMPOSER } as never)).text ?? ''
   expect(t).toContain('La bande d’atelier est vide')
   expect(t).not.toContain('masqué')
   await ui.unmount()

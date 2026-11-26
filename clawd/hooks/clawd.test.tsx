@@ -9,6 +9,7 @@ import { activitesAuRepos } from './register'
 import { AU_FEU, bornesScene, placeJouable } from './sprite'
 import { FAMILLES, NUMEROS_D_ICI, SCENES_D_ICI, sesSavoirs } from './savoirs'
 import { PROBLEMES_THEME, THEME_CLAWD } from './theme'
+import { SCENE_FEU } from './fond'
 import { svgMot } from './sprite'
 import { COIN_VIDE, EXEMPLE, MAX_SVG, NUMEROS, departDe, prepareNumero, svgNumero } from './bande'
 import { FAITS, GRADES, gradeDe, nouveauxFaits, prochainGrade } from './grades'
@@ -20,7 +21,7 @@ const BAND = (isWorking = false) =>
   ({
     plugin: 'clawd',
     component: 'AbovePrompt',
-    props: { hasSurvey: false, isWorking, maxRows: 10, bodyColumns: 120, scroll: { offset: 0, bodyRows: 10 }, view: {} },
+    props: { hasSurvey: false, isCollapsed: false, isWorking, maxRows: 10, bodyColumns: 120, scroll: { offset: 0, bodyRows: 10 }, view: {} },
   }) as const
 
 type On = Parameters<Parameters<typeof test>[1] extends infer F ? (F extends ($: never, on: infer O) => unknown ? (o: O) => void : never) : never>[0]
@@ -63,7 +64,7 @@ function moteur(
 }
 
 /** Regarde sa scène seconde après seconde jusqu'à ce que `motif` s'y trouve (une action en cours ne se coupe pas : la réaction attend son tour) */
-async function vuJusqua($: Parameters<Parameters<typeof test>[1]>[0], horloge: { advance: (ms: number) => Promise<void> }, motif: string, secondes = 20) {
+async function vuJusqua($: Parameters<Extract<Parameters<typeof test>[1], (...args: never) => unknown>>[0], horloge: { advance: (ms: number) => Promise<void> }, motif: string, secondes = 20) {
   let s = ''
   for (let i = 0; i <= secondes && !s.includes(motif); i++) {
     if (i) await horloge.advance(1000)
@@ -303,7 +304,7 @@ test('un numéro lancé pendant une scène jouée au milieu de ses cartons part 
   const ici = etatBoulot(10)
   expect(String((await svg(ui as never)).source)).toContain(`<g transform="translate(${ici.x} 0)">`)
   // un numéro (une permission qui attend ne l'empêche pas) : il part de là où il est, ses cartons restent dans son coin
-  await $.command.run({ command: 'clawd', args: 'montre tournee', origin: { kind: 'composer' } })
+  await $.command.run({ command: 'clawd', args: 'montre tournee', origin: { kind: 'composer' } } as never)
   await horloge.advance(100)
   const n = ecrits.filter(x => x.key === 'numero').at(-1)?.value as { depart?: number } | null | undefined
   expect(n?.depart).toBe(departDe(ici.x))
@@ -391,7 +392,7 @@ test('un numéro lancé en pleine balade part de là où il est', { timeoutMs: 3
   })
   const ui = await $.ui.mount({ ...BAND(false), surface: 'desktop' })
   await horloge.advance(4000)
-  await $.command.run({ command: 'clawd', args: 'montre tournee', origin: { kind: 'composer' } })
+  await $.command.run({ command: 'clawd', args: 'montre tournee', origin: { kind: 'composer' } } as never)
   const n = ecrits.filter(x => x.key === 'numero').at(-1)?.value as { depart?: number } | null | undefined
   expect(n?.depart).toBe(departDe(etatScene('balade', 4).x))
   await ui.unmount()
@@ -594,7 +595,7 @@ test('sous-agents : un mini-Clawd chacun, Clawd chef de chantier, ils repartent'
   await ui.unmount()
 
   // terminal : un petit compteur
-  ui = await $.ui.mount({ ...BAND(true), surface: 'terminal' })
+  ui = (await $.ui.mount({ ...BAND(true), surface: 'terminal' })) as never
   expect(await ui.find({ type: 'Text', text: /▪/ })).toBeDefined()
   await ui.unmount()
 })
@@ -717,10 +718,10 @@ test('chaque mini-Clawd prend la couleur du modèle de son sous-agent', async ($
   )
   on('classic.SubagentStart', () => ({}))
   // le modèle peut être connu avant l'arrivée du mini (a1)… ou après (a2)
-  await $.agent.spawn({ prompt: 'fouille le projet', subagentType: 'eclaireur' })
+  await $.agent.spawn({ prompt: 'fouille le projet', subagentType: 'eclaireur' } as never)
   await $.classic.SubagentStart({ agent_id: 'a1', agent_type: 'eclaireur' } as never)
   await $.classic.SubagentStart({ agent_id: 'a2', agent_type: 'relecteur' } as never)
-  await $.agent.spawn({ prompt: 'relis le diff', subagentType: 'relecteur' })
+  await $.agent.spawn({ prompt: 'relis le diff', subagentType: 'relecteur' } as never)
   const ui = await $.ui.mount({ ...BAND(true), surface: 'desktop' })
   expect(await scene(ui as never)).toContain('chef')
   const dessin = await toutDessin(ui as never)
@@ -778,7 +779,7 @@ test('un sous-agent fini : son mini rend son travail au chef, à sa couleur, pui
   on('classic.SubagentStart', () => ({}))
   on('classic.SubagentStop', () => ({}))
   on('tool.call', { tool: 'Grep' }, () => ({ result: { matches: [] }, text: '' }) as never)
-  await $.agent.spawn({ prompt: 'fouille le projet', subagentType: 'Explore' })
+  await $.agent.spawn({ prompt: 'fouille le projet', subagentType: 'Explore' } as never)
   await $.classic.SubagentStart({ agent_id: 'a1', agent_type: 'Explore' } as never)
   await $.classic.SubagentStart({ agent_id: 'a2', agent_type: 'Plan' } as never)
   // l'éclaireur cherche : c'est sa loupe qu'il rapportera
@@ -915,7 +916,7 @@ test('un sous-agent sur un modèle inconnu garde la couleur de Clawd', async ($,
   on('session.model', () => ({ value: 'claude-sonnet-5-5' }))
   on('agent.spawn', () => ({ model: 'modele-maison-7b', agentId: 'a9' }))
   on('classic.SubagentStart', () => ({}))
-  await $.agent.spawn({ prompt: 'aide-moi', subagentType: 'general-purpose' })
+  await $.agent.spawn({ prompt: 'aide-moi', subagentType: 'general-purpose' } as never)
   await $.classic.SubagentStart({ agent_id: 'a9', agent_type: 'general-purpose' } as never)
   const ui = await $.ui.mount({ ...BAND(true), surface: 'desktop' })
   const dessin = String((await svg(ui as never)).source)
@@ -966,17 +967,17 @@ test('une session restée ouverte la nuit : il se réveille à ton premier messa
   stockage.set('journee', '2026-10-14')
   await $.session.start({ cwd: '/projet', surface: 'desktop', isInteractive: true })
   // 4 h 50 : sa nuit n'est pas finie, il te propose plutôt d'aller te coucher (quand son coucou est fini)
-  await $.prompt.submit({ text: 'encore un truc' })
+  await $.prompt.submit({ text: 'encore un truc' } as never)
   expect(await vuJusqua($, horloge, 'nuit')).toContain('nuit')
   let ui = await $.ui.mount({ ...BAND(), surface: 'desktop' })
   await ui.unmount()
   // 5 h 10 : une nouvelle journée commence, il se réveille avec toi
   await horloge.advance(20 * 60_000)
-  await $.prompt.submit({ text: 'bonjour' })
+  await $.prompt.submit({ text: 'bonjour' } as never)
   expect(await vuJusqua($, horloge, 'reveil')).toContain('reveil')
   // le message suivant : il écoute, comme d'habitude
   await horloge.advance(60_000)
-  await $.prompt.submit({ text: 'et ensuite' })
+  await $.prompt.submit({ text: 'et ensuite' } as never)
   expect(await vuJusqua($, horloge, 'ecoute')).toContain('ecoute')
 })
 
@@ -1055,7 +1056,7 @@ test('sa mémoire : il retient le moment fort de sa journée (une délivrance l�
 })
 
 /** Le premier matin d'après `jour` (8 h), avec ce souvenir-là en tête : ce qu'il joue jusqu'à `motif` (ou 40 s) */
-async function auReveil($: Parameters<Parameters<typeof test>[1]>[0], on: On, matin: Date, souvenir: unknown, motif: string) {
+async function auReveil($: Parameters<Extract<Parameters<typeof test>[1], (...args: never) => unknown>>[0], on: On, matin: Date, souvenir: unknown, motif: string) {
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   const { horloge, stockage } = moteur(on, undefined, matin.getTime())
   stockage.set('journee', '2026-10-14')
@@ -1121,7 +1122,7 @@ test('deux heures sans pause : il t’apporte un verre d’eau, une seule fois',
   // un échange toutes les 14 minutes : tu enchaînes sans vraie pause
   const echange = async (attente = 14 * 60_000) => {
     await horloge.advance(attente)
-    await $.prompt.submit({ text: 'la suite' })
+    await $.prompt.submit({ text: 'la suite' } as never)
     await horloge.advance(30_000)
     await $.turn.complete({ answer: 'fait', durationMs: 30_000, isAborted: false, turnId: String(Math.random()) } as never)
   }
@@ -1154,7 +1155,7 @@ test('une vraie pause remet le compteur à zéro ; la séance se reprend d’une
   stockage.set('journee', '2026-10-16')
   const tour = async (attente: number) => {
     await horloge.advance(attente)
-    await $.prompt.submit({ text: 'la suite' })
+    await $.prompt.submit({ text: 'la suite' } as never)
     await $.turn.complete({ answer: 'fait', durationMs: 1000, isAborted: false, turnId: String(Math.random()) } as never)
     const ui = await $.ui.mount({ ...BAND(), surface: 'desktop' })
     const s = await scene(ui as never)
@@ -1546,8 +1547,8 @@ test('un numéro ne se coupe pas non plus : ni par un message, ni par une questi
   })
   const ui = await $.ui.mount({ ...BAND(), surface: 'desktop' })
   const fond = await scene(ui as never)
-  await $.command.run({ command: 'clawd', args: 'montre cadre', origin: { kind: 'composer' } })
-  await $.prompt.submit({ text: 'tu fais quoi ?' })
+  await $.command.run({ command: 'clawd', args: 'montre cadre', origin: { kind: 'composer' } } as never)
+  await $.prompt.submit({ text: 'tu fais quoi ?' } as never)
   const q = $.tool.call({ tool: 'AskUserQuestion', questions: [] } as never)
   await horloge.advance(500)
   // la question est posée : ni sa pancarte ni sa réaction à ton message ne sont venues par-dessus le numéro
@@ -1637,7 +1638,7 @@ test('un numéro lancé en plein déménagement part de là où il en est et y r
   // la même source tant que rien ne change : rien ne redémarre
   expect(String((await svg(ui as never)).source)).toBe(avant)
   // un numéro sur la bande : il part de là où il en est (en px de bande depuis son coin)
-  await $.command.run({ command: 'clawd', args: 'montre tournee', origin: { kind: 'composer' } })
+  await $.command.run({ command: 'clawd', args: 'montre tournee', origin: { kind: 'composer' } } as never)
   await horloge.advance(100)
   const n = ecrits.filter(x => x.key === 'numero').at(-1)?.value as { depart?: number } | null | undefined
   const ici = etatBoulot(10)
@@ -2224,7 +2225,7 @@ test('😎 un vendredi soir au repos, il porte ses lunettes et finit par se dét
 })
 
 /** Tire ses activités au 🎲 jusqu'à tomber sur celle-ci (vrai s'il y arrive en 40 tirages) */
-async function tireJusqua($: Parameters<Parameters<typeof test>[1]>[0], anim: string) {
+async function tireJusqua($: Parameters<Extract<Parameters<typeof test>[1], (...args: never) => unknown>>[0], anim: string) {
   const ui = await $.ui.mount({ ...BAND(), surface: 'desktop' })
   let vu = false
   for (let i = 0; i < 40 && !vu; i++) {
@@ -2391,13 +2392,13 @@ test('🤗 tu reviens après plus de 8 h : il t’a attendu (coucou des deux pat
   expect(await vuJusqua($, horloge, 'coucou')).toContain('coucou')
   // une session ouverte tout l'après-midi, où tu lui parles de temps en temps, n'est pas une absence
   await passe(4 * 3_600_000)
-  await $.prompt.submit({ text: 'encore là' })
+  await $.prompt.submit({ text: 'encore là' } as never)
   await passe(4 * 3_600_000)
-  await $.prompt.submit({ text: 'toujours là' })
+  await $.prompt.submit({ text: 'toujours là' } as never)
   expect(await vuJusqua($, horloge, 'ecoute', 6)).toContain('ecoute')
   // la même session, retrouvée le lendemain à 8 h : il se réveille avec toi, puis te montre qu'il t'a attendu
   await passe(9 * 3_600_000)
-  await $.prompt.submit({ text: 'me revoilà' })
+  await $.prompt.submit({ text: 'me revoilà' } as never)
   expect(await vuJusqua($, horloge, 'reveil', 6)).toContain('reveil')
   expect(await vuJusqua($, horloge, 'attendu', 30)).toContain('attendu')
 })
@@ -2797,10 +2798,10 @@ test('🔥 sa série de jours et ses hauts faits : une semaine de suite, fêtée
   expect(Object.keys(vie.faits).sort()).toEqual(['semaine', 'un-mois'])
   expect(toasts.filter(t => t.startsWith('🏅 Haut fait rare : 🔥 Une semaine de suite ensemble'))).toHaveLength(1)
   await ui.unmount()
-  const r = await $.command.run({ command: 'clawd', args: '', origin: { kind: 'composer' } })
+  const r = await $.command.run({ command: 'clawd', args: '', origin: { kind: 'composer' } } as never)
   expect(r.text).toContain('🔥 7 jours de suite ensemble')
   expect(r.text).toContain('🏅 2 hauts faits sur')
-  const l = await $.command.run({ command: 'clawd', args: 'livret', origin: { kind: 'composer' } })
+  const l = await $.command.run({ command: 'clawd', args: 'livret', origin: { kind: 'composer' } } as never)
   expect(l.text).toContain('📘 Le livret de Clawd')
   expect(l.text).toContain('🔥 Une semaine de suite ensemble · rare · le 2026-10-31')
   // un légendaire pas encore gagné garde son mystère
@@ -3124,6 +3125,12 @@ test('🎨 son thème : sa palette entière dans les deux modes, son terracotta 
   expect(Object.keys(c.inputs.light ?? {}).length).toBeGreaterThan(80)
   expect(Object.keys(c.inputs.dark ?? {}).length).toBeGreaterThan(80)
   for (const couleur of [...Object.values(c.inputs.light ?? {}), ...Object.values(c.inputs.dark ?? {})]) expect(couleur).toMatch(/^#[0-9a-f]{6}$/i)
+  // son feu de camp en fond : en SVG pur, léger, lent, qui se cale tout seul et suit le mode de l'app
+  expect(THEME_CLAWD.backdrop).toEqual({ scene: 'feu' })
+  expect(SCENE_FEU.length).toBeLessThan(131_072)
+  expect(SCENE_FEU).not.toMatch(/<image|<text|href|<!\[CDATA|&/)
+  expect(SCENE_FEU).toContain('prefers-color-scheme: light')
+  for (const [, s] of SCENE_FEU.matchAll(/animation:\w+ ([\d.]+)s/g)) expect(Number(s)).toBeGreaterThanOrEqual(1.5)
   expect(PROBLEMES_THEME.filter(l => l.startsWith('Desktop won’t paint') || l.startsWith("Desktop won't paint"))).toEqual([])
 })
 

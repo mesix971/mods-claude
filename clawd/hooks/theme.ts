@@ -36,6 +36,6 @@ const { theme, problems } = makeColors({
   },
 })
 
-/** Son thème entier, et ce que le système de design en dit (une ligne « Desktop won't paint » : l'app l'ignorerait) */
-export const THEME_CLAWD: ThemeSetArgs = { colors: theme }
+/** Son thème entier (ses couleurs, et son feu de camp en fond : fond.ts), et ce que le système de design en dit (une ligne « Desktop won't paint » : l'app l'ignorerait) */
+export const THEME_CLAWD: ThemeSetArgs = { colors: theme, backdrop: { scene: 'feu' } }
 export const PROBLEMES_THEME: readonly string[] = problems

@@ -43,6 +43,14 @@
 
 ## clawd
 
+- **0.22.0** — 2026-11-26 — Son feu de camp en fond de l'app. Derrière la
+  conversation, une nuit chaude sous les étoiles (un crépuscule crème en
+  mode clair), et son feu épinglé en bas à droite : flammes qui ondulent,
+  braises qui montent, étoiles qui scintillent, le tout lentement. Il tient
+  sur un écran large comme sur un téléphone. `/clawd thème` le retire avec
+  les couleurs. Les tests suivent les types de Claude Code 2.1.331 : la
+  validation stricte y passe.
+
 - **0.21.0** — 2026-11-26 — L'app prend ses couleurs. Un thème « Clawd » sur
   toute l'app (bureau et mobile, Claude Code 2.1.331 ou plus récent) : son
   terracotta en accent, des gris chauds tirés de sa teinte, la nuit au coin

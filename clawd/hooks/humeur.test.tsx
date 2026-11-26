@@ -72,7 +72,7 @@ test('la nuit, l’écart entre deux numéros, et ce qu’il dit de lui', () => 
 const BAND = {
   plugin: 'clawd',
   component: 'AbovePrompt',
-  props: { hasSurvey: false, isWorking: false, maxRows: 10, bodyColumns: 120, scroll: { offset: 0, bodyRows: 10 }, view: {} },
+  props: { hasSurvey: false, isCollapsed: false, isWorking: false, maxRows: 10, bodyColumns: 120, scroll: { offset: 0, bodyRows: 10 }, view: {} },
 } as const
 const SESSION = { cwd: '/projet', surface: 'desktop', isInteractive: true } as const
 type On = Parameters<Parameters<typeof test>[1] extends infer F ? (F extends ($: never, on: infer O) => unknown ? (o: O) => void : never) : never>[0]
@@ -136,7 +136,7 @@ test('la nuit, tu n’es plus là : il dort pour de bon, jusqu’à ton retour',
     expect(await scene(ui as never)).toContain('dodo')
   }
   // tu reviens : il se réveille
-  await $.prompt.submit({ text: 'encore un petit truc avant de dormir' })
+  await $.prompt.submit({ text: 'encore un petit truc avant de dormir' } as never)
   expect(await scene(ui as never)).not.toContain('dodo')
   await ui.unmount()
 })

@@ -281,7 +281,7 @@ test('💭 ses scènes de pensée : sans texte, légères, jouées une fois ; ch
 const BAND = {
   plugin: 'clawd',
   component: 'AbovePrompt',
-  props: { hasSurvey: false, isWorking: false, maxRows: 10, bodyColumns: 120, scroll: { offset: 0, bodyRows: 10 }, view: {} },
+  props: { hasSurvey: false, isCollapsed: false, isWorking: false, maxRows: 10, bodyColumns: 120, scroll: { offset: 0, bodyRows: 10 }, view: {} },
 } as const
 const SESSION = { cwd: '/projet', surface: 'desktop', isInteractive: true } as const
 type On = Parameters<Parameters<typeof test>[1] extends infer F ? (F extends ($: never, on: infer O) => unknown ? (o: O) => void : never) : never>[0]

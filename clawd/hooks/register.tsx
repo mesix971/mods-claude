@@ -23,6 +23,7 @@ import type { Humeur } from './humeur'
 import { A_SA_RAISON, gesteDuFeu } from './conscience'
 import { sesSavoirs } from './savoirs'
 import { THEME_CLAWD } from './theme'
+import { SCENE_FEU } from './fond'
 import { APPELS_A_TOI, ESPRIT_DEPART, SCENE_BESOIN, SCENE_EMOTION, arrivee, colore, comble, emotionDe, envie as envieDe, espritDe, fusionne, jourDe, minuteDuJour, moment, noteVu, parBesoinSeulement, pense, ressent, rythmeDe, vieillit } from './conscience'
 import type { Besoin, Esprit, Rythme, Vecu } from './conscience'
 import { ACTIVITES, BAILLE_S, BONBON_S, CLAWD_TEXTE, DANSES, EMOJI, EN_BULLE, JEUX_CARTONS, RAPPORT_S, SORTIES, TAILLE, TEINTES, avecT0, bulleDedans, dureeBoulot, dureeRetour, dureeScene, estChoregraphie, etatBoulot, etatScene, minisAPart, svgBulle, svgDecor, svgMinis, svgScene, teinte, teinteConnue, tenueDe } from './sprite'
@@ -2565,7 +2566,7 @@ async function bandeDe($: EngineInterface, e: RenderInput<'AbovePrompt'>, next: 
         {EMOJI[bulle ?? anim] !== '' && <Text dimColor>{`${EMOJI[bulle ?? anim]} `}</Text>}
         <Box flexDirection="column">
           {CLAWD_TEXTE.map((l, i) => (
-            <Text key={i} color={couleur.O}>{l}</Text>
+            <Text key={`clawd-${i}`} color={couleur.O}>{l}</Text>
           ))}
         </Box>
         {boutons}
@@ -3130,5 +3131,11 @@ export const register: Register = on => {
   on('ui.render', { component: 'Pane', requestId: CARTE }, async ($, e) => vueCarte($, e, e.props.bodyColumns, false))
 
   on('ui.render', { component: 'AbovePrompt' }, bandeDe)
+  // son feu de camp, en fond de l'app (son thème le demande : fond.ts)
+  on('ui.render', { component: 'Backdrop' }, ($, e, next) => {
+    if (e.props.scene !== 'feu' || (e.surface !== 'desktop' && e.surface !== 'mobile')) return next(e)
+    const { Svg } = $.ui.resolve(e)
+    return <Svg source={SCENE_FEU} alt="Son feu de camp, la nuit, sous les étoiles" isInteractive />
+  })
   on('ui.render', { component: 'AbovePrompt', plugin: 'atelier' }, bandeDe)
 }
