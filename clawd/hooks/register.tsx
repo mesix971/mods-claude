@@ -2263,7 +2263,7 @@ async function poseTheme($: EngineInterface) {
 }
 
 /** /clawd thème : son thème retiré de l'app, ou remis (ton choix est gardé d'une session à l'autre) */
-async function basculeTheme($: EngineInterface) {
+export async function basculeTheme($: EngineInterface) {
   try {
     const retire = (await $.store.get('theme')) === false
     await $.store.set('theme', retire)
