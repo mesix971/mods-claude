@@ -43,6 +43,12 @@
 
 ## clawd
 
+- **0.21.0** — 2026-11-26 — L'app prend ses couleurs. Un thème « Clawd » sur
+  toute l'app (bureau et mobile, Claude Code 2.1.331 ou plus récent) : son
+  terracotta en accent, des gris chauds tirés de sa teinte, la nuit au coin
+  du feu en sombre, du papier crème en clair. Posé à l'ouverture d'une
+  session ; `/clawd thème` le retire ou le remet, et ton choix est gardé.
+
 - **0.20.0** — 2026-11-22 — Son feu au naturel, et tout ce qu'il sait dans sa carte.
   - **Son feu** : plus de quota (une activité sur trois, c'était trop). Il
     sait que son feu est là et s'en sert pour une raison : une bûche quand il

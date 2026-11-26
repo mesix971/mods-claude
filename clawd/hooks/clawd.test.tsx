@@ -8,6 +8,7 @@ import { auraDe } from './register'
 import { activitesAuRepos } from './register'
 import { AU_FEU, bornesScene, placeJouable } from './sprite'
 import { FAMILLES, NUMEROS_D_ICI, SCENES_D_ICI, sesSavoirs } from './savoirs'
+import { PROBLEMES_THEME, THEME_CLAWD } from './theme'
 import { svgMot } from './sprite'
 import { COIN_VIDE, EXEMPLE, MAX_SVG, NUMEROS, departDe, prepareNumero, svgNumero } from './bande'
 import { FAITS, GRADES, gradeDe, nouveauxFaits, prochainGrade } from './grades'
@@ -3115,6 +3116,15 @@ test('💬 son mot de la nuit se lit en entier (sa carte, ses mots) ; là où l�
   expect(await texteVu(ui, 'fin.')).toBeUndefined()
   expect(await ui.find({ key: 'ranger-carte' })).toBeUndefined()
   await ui.unmount()
+})
+
+test('🎨 son thème : sa palette entière dans les deux modes, son terracotta en accent, et rien que l’app refuserait de peindre', () => {
+  const c = THEME_CLAWD.colors!
+  expect(c.label).toBe('Clawd')
+  expect(Object.keys(c.inputs.light ?? {}).length).toBeGreaterThan(80)
+  expect(Object.keys(c.inputs.dark ?? {}).length).toBeGreaterThan(80)
+  for (const couleur of [...Object.values(c.inputs.light ?? {}), ...Object.values(c.inputs.dark ?? {})]) expect(couleur).toMatch(/^#[0-9a-f]{6}$/i)
+  expect(PROBLEMES_THEME.filter(l => l.startsWith('Desktop won’t paint') || l.startsWith("Desktop won't paint"))).toEqual([])
 })
 
 test('🎓 sans leçon du soir (la version publique) : l’onglet montre tout ce qu’il sait faire, par famille, et le rejoue', async ($, on) => {

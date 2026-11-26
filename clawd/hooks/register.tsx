@@ -22,6 +22,7 @@ import { HUMEUR_DEPART, choisit, decrit as decritHumeur, ecartRepos, estHumeur, 
 import type { Humeur } from './humeur'
 import { A_SA_RAISON, gesteDuFeu } from './conscience'
 import { sesSavoirs } from './savoirs'
+import { THEME_CLAWD } from './theme'
 import { APPELS_A_TOI, ESPRIT_DEPART, SCENE_BESOIN, SCENE_EMOTION, arrivee, colore, comble, emotionDe, envie as envieDe, espritDe, fusionne, jourDe, minuteDuJour, moment, noteVu, parBesoinSeulement, pense, ressent, rythmeDe, vieillit } from './conscience'
 import type { Besoin, Esprit, Rythme, Vecu } from './conscience'
 import { ACTIVITES, BAILLE_S, BONBON_S, CLAWD_TEXTE, DANSES, EMOJI, EN_BULLE, JEUX_CARTONS, RAPPORT_S, SORTIES, TAILLE, TEINTES, avecT0, bulleDedans, dureeBoulot, dureeRetour, dureeScene, estChoregraphie, etatBoulot, etatScene, minisAPart, svgBulle, svgDecor, svgMinis, svgScene, teinte, teinteConnue, tenueDe } from './sprite'
@@ -1420,9 +1421,10 @@ async function commandeDeBase($: EngineInterface, args: string) {
   }
   if (/^voi[st]/i.test(args)) return voit($)
   if (/^livret/i.test(args)) return livret($)
+  if (/^th[èe]me/i.test(args)) return basculeTheme($)
   if (/^carte/i.test(args)) return ouvreCarteParCommande($, 'carte')
   if (/^mots?$/i.test(args)) return ouvreCarteParCommande($, 'mots')
-  return [`${await sonNiveau($)}`, `🧠 En ce moment, ${decritHumeur(humeurActuelle(), (await read($, dort)) === true)}.`, `💭 ${await saPensee($)}`, '/clawd montre <numéro | bande | scène> · /clawd voit · /clawd livret · /clawd carte · /clawd mots'].join('\n')
+  return [`${await sonNiveau($)}`, `🧠 En ce moment, ${decritHumeur(humeurActuelle(), (await read($, dort)) === true)}.`, `💭 ${await saPensee($)}`, '/clawd montre <numéro | bande | scène> · /clawd voit · /clawd livret · /clawd carte · /clawd mots · /clawd thème'].join('\n')
 }
 
 // ------------------------------------------------------------- sa carte
@@ -2247,6 +2249,32 @@ function geste(g: 'caresse' | 'zappe', anim: ClawdAnim) {
 // au-dessus, ce sont ses lignes qui passent à gauche), et sa propre rangée s'efface dès qu'il y a sa place. Sans
 // atelier, il garde la sienne. Deux crochets (le sien, celui de la rangée d'atelier) plutôt qu'un filtre à deux
 // noms : un moteur d'avant 2.1.325, sans rangées (le contrôle du matin), ne reconnaît que le premier.
+/**
+ * Son thème sur toute l'app (theme.ts : son terracotta, des gris chauds), posé
+ * à l'ouverture d'une session sauf si tu l'as retiré (/clawd thème). Un moteur
+ * sans thèmes, ou une surface qui n'en peint pas : rien ne change.
+ */
+async function poseTheme($: EngineInterface) {
+  try {
+    if ((await $.store.get('theme')) !== false) await $.theme.set(THEME_CLAWD)
+  } catch {
+    // pas de thème ici : l'app garde le sien
+  }
+}
+
+/** /clawd thème : son thème retiré de l'app, ou remis (ton choix est gardé d'une session à l'autre) */
+async function basculeTheme($: EngineInterface) {
+  try {
+    const retire = (await $.store.get('theme')) === false
+    await $.store.set('theme', retire)
+    if (retire) await $.theme.set(THEME_CLAWD)
+    else await $.theme.clear()
+    return retire ? '🎨 Son thème est remis sur l’app.' : '🎨 Son thème est retiré : l’app reprend le sien. /clawd thème le remet.'
+  } catch {
+    return '🎨 Pas de thème ici : cette version de l’app n’en dessine pas.'
+  }
+}
+
 async function bandeDe($: EngineInterface, e: RenderInput<'AbovePrompt'>, next: (e: RenderInput<'AbovePrompt'>) => Promise<RenderElement>): Promise<RenderElement> {
   if (e.plugin === 'atelier') chezAtelier = true
   else if (chezAtelier) return next(e)
@@ -2551,6 +2579,8 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const ran = await next(e)
     derniereActivite = await $.clock.now()
+    // son thème sur l'app (sans l'attendre : un thème qui tarde ne retient pas son réveil)
+    void poseTheme($)
     // ses scènes repartent de zéro (les minuteurs de l'ancien module n'existent plus)
     await reinitialiseScenes($)
     // les échecs d'une session d'avant ne privent pas celle-ci de ses fêtes
@@ -3087,7 +3117,7 @@ export const register: Register = on => {
   if (commandePublique.active) {
     on('session.start', { cwd: /^/ }, async ($, e, next) => {
       await $.command
-        .register({ name: 'clawd', description: 'Clawd : son niveau, ou montre <numéro | bande | scène> · voit · livret · carte · mots', argumentHint: '[montre <numéro | bande | scène> | voit | livret | carte | mots]' })
+        .register({ name: 'clawd', description: 'Clawd : son niveau, ou montre <numéro | bande | scène> · voit · livret · carte · mots · thème', argumentHint: '[montre <numéro | bande | scène> | voit | livret | carte | mots]' })
         .catch(() => {})
       return next(e)
     })
